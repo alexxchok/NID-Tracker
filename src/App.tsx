@@ -82,6 +82,12 @@ function Dashboard({ userEmail, onSignOut }) {
 
   useEffect(() => { fetchCases(); }, []);
 
+  const cleanVal = (val) => {
+    if (val === undefined || val === null) return null;
+    const str = String(val).trim();
+    return str === '' ? null : str;
+  };
+
   const formatDateString = (dateStr) => {
     if (!dateStr) return null;
     
@@ -123,6 +129,12 @@ function Dashboard({ userEmail, onSignOut }) {
     
     // If it's garbage (like "04:59:57"), return null instead of crashing
     return null;
+  };
+
+  const chunkArray = (array, size) => {
+    const result = [];
+    for (let i = 0; i < array.length; i += size) result.push(array.slice(i, i + size));
+    return result;
   };
 
   // --- MASTER EXCEL UPLOADER ---
