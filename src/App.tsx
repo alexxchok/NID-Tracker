@@ -84,40 +84,45 @@ function Dashboard({ userEmail, onSignOut }) {
 
   const formatDateString = (dateStr) => {
     if (!dateStr) return null;
-    // Handle Excel serial dates
+    
+    // Handle Excel serial numbers
     if (typeof dateStr === 'number') {
       const utc_days = Math.floor(dateStr - 25569);
       const utc_value = utc_days * 86400;        
       const date_info = new Date(utc_value * 1000);
-      return `${date_info.getFullYear()}-${String(date_info.getMonth() + 1).padStart(2, '0')}-${String(date_info.getDate()).padStart(2, '0')}`;
-    }
-    
-    const cleanStr = String(dateStr).replace(/-/g, '/');
-    const parts = cleanStr.split('/');
-    if (parts.length === 3) {
-      let [p1, p2, p3] = parts.map(p => parseInt(p, 10));
-      if (p3 < 100) p3 = 2000 + p3;
-      let dateObj = new Date(p3, p2 - 1, p1);
-      if (p2 > 12 && p1 <= 12) dateObj = new Date(p3, p1 - 1, p2);
-      if (!isNaN(dateObj.getTime())) {
-        return `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}-${String(dateObj.getDate()).padStart(2, '0')}`;
+      if (!isNaN(date_info.getTime())) {
+        return `${date_info.getFullYear()}-${String(date_info.getMonth() + 1).padStart(2, '0')}-${String(date_info.getDate()).padStart(2, '0')}`;
       }
     }
-    const fallbackDate = new Date(dateStr);
-    if (!isNaN(fallbackDate.getTime())) return fallbackDate.toISOString().split('T')[0];
+    
+    const cleanStr = String(dateStr).trim();
+    
+    // Try standard YYYY-MM-DD or MM/DD/YYYY
+    const parts = cleanStr.split(/[-/]/);
+    if (parts.length === 3) {
+      let [p1, p2, p3] = parts.map(p => parseInt(p, 10));
+      if (!isNaN(p1) && !isNaN(p2) && !isNaN(p3)) {
+        if (p3 < 100) p3 = 2000 + p3;
+        let dateObj = new Date(p3, p2 - 1, p1);
+        if (p2 > 12 && p1 <= 12) dateObj = new Date(p3, p1 - 1, p2);
+        if (!isNaN(dateObj.getTime())) {
+          return `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}-${String(dateObj.getDate()).padStart(2, '0')}`;
+        }
+      }
+    }
+    
+    // Fallback to Date object
+    const fallbackDate = new Date(cleanStr);
+    if (!isNaN(fallbackDate.getTime())) {
+      // Ensure we only return the date part, and it's a valid year
+      const year = fallbackDate.getFullYear();
+      if (year > 1900 && year < 2100) {
+        return `${year}-${String(fallbackDate.getMonth() + 1).padStart(2, '0')}-${String(fallbackDate.getDate()).padStart(2, '0')}`;
+      }
+    }
+    
+    // If it's garbage (like "04:59:57"), return null instead of crashing
     return null;
-  };
-
-  const chunkArray = (array, size) => {
-    const result = [];
-    for (let i = 0; i < array.length; i += size) result.push(array.slice(i, i + size));
-    return result;
-  };
-
-  const cleanVal = (val) => {
-    if (val === undefined || val === null) return null;
-    const str = String(val).trim();
-    return str === '' ? null : str;
   };
 
   // --- MASTER EXCEL UPLOADER ---
