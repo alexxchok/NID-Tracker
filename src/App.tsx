@@ -61,20 +61,22 @@ function Dashboard({ userEmail, onSignOut }) {
   const [cases, setCases] = useState([]);
   const [loading, setLoading] = useState(true);
   
-  const [uploading, setUploading] = useState(false);
-  const [uploadMessage, setUploadMessage] = useState('');
+  const [uploadingDA, setUploadingDA] = useState(false);
+  const [uploadMessageDA, setUploadMessageDA] = useState('');
+
+  // NEW: SLA Tracker Upload State
+  const [uploadingSLA, setUploadingSLA] = useState(false);
+  const [uploadMessageSLA, setUploadMessageSLA] = useState('');
 
   const [selectedCase, setSelectedCase] = useState(null);
   const [daList, setDaList] = useState([]);
 
-  // Search & Pagination State
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 25;
 
   const fetchCases = async () => {
     setLoading(true);
-    // NEW: Fetch respondent_name and respondent_id so we can search them
     const { data, error } = await supabase.from('cases').select('*, disciplinary_actions(respondent_name, respondent_id)').order('sla_due_date', { ascending: true });
     if (error) console.error('Error fetching cases:', error);
     else setCases(data);
@@ -113,18 +115,19 @@ function Dashboard({ userEmail, onSignOut }) {
     return str === '' ? null : str;
   };
 
-  const handleFileUpload = (e) => {
+  // --- DA Uploader (Same as before) ---
+  const handleFileUploadDA = (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    setUploading(true);
-    setUploadMessage('1/4 Reading file...');
+    setUploadingDA(true);
+    setUploadMessageDA('1/4 Reading file...');
 
     Papa.parse(file, {
       header: true,
       skipEmptyLines: true,
       complete: async (results) => {
         try {
-          setUploadMessage('2/4 Formatting & sanitizing data...');
+          setUploadMessageDA('2/4 Formatting & sanitizing data...');
           const rawData = results.data;
           let daDataToInsert = rawData.map(row => {
             const getVal = (searchStrings) => {
@@ -164,12 +167,12 @@ function Dashboard({ userEmail, onSignOut }) {
           const finalDataToInsert = Array.from(uniqueMap.values());
 
           if (finalDataToInsert.length === 0) {
-            setUploadMessage('❌ Error: Found 0 valid rows.');
-            setUploading(false);
+            setUploadMessageDA('❌ Error: Found 0 valid rows.');
+            setUploadingDA(false);
             return;
           }
 
-          setUploadMessage('3/4 Fetching existing cases...');
+          setUploadMessageDA('3/4 Fetching existing cases...');
           const { data: existingCases, error: fetchErr } = await supabase.from('cases').select('case_number');
           if (fetchErr) throw new Error(fetchErr.message);
           const existingSet = new Set(existingCases.map(c => c.case_number));
@@ -185,14 +188,14 @@ function Dashboard({ userEmail, onSignOut }) {
             for (let chunk of missingChunks) {
               const { error: insertErr } = await supabase.from('cases').insert(chunk);
               if (insertErr) {
-                setUploadMessage(`❌ CRITICAL ERROR creating cases: ${insertErr.message}`);
-                setUploading(false);
+                setUploadMessageDA(`❌ CRITICAL ERROR creating cases: ${insertErr.message}`);
+                setUploadingDA(false);
                 return;
               }
             }
           }
 
-          setUploadMessage('4/4 Uploading respondents (batch mode)...');
+          setUploadMessageDA('4/4 Uploading respondents (batch mode)...');
           const daChunks = chunkArray(finalDataToInsert, 100);
           let errorCount = 0;
           let firstError = null;
@@ -204,18 +207,100 @@ function Dashboard({ userEmail, onSignOut }) {
             }
           }
 
-          if (errorCount > 0) setUploadMessage(`⚠️ Completed with ${errorCount} chunk errors. First error: ${firstError}`);
-          else setUploadMessage(`✅ Success! Processed ${finalDataToInsert.length} actions & auto-created ${missingCases.length} missing cases.`);
+          if (errorCount > 0) setUploadMessageDA(`⚠️ Completed with ${errorCount} chunk errors. First error: ${firstError}`);
+          else setUploadMessageDA(`✅ Success! Processed ${finalDataToInsert.length} actions & auto-created ${missingCases.length} missing cases.`);
           fetchCases(); 
-          setUploading(false);
+          setUploadingDA(false);
         } catch (err) {
-          setUploadMessage(`❌ Unexpected Error: ${err.message}`);
-          setUploading(false);
+          setUploadMessageDA(`❌ Unexpected Error: ${err.message}`);
+          setUploadingDA(false);
         }
       },
       error: (err) => {
-        setUploadMessage(`❌ File Read Error: ${err.message}`);
-        setUploading(false);
+        setUploadMessageDA(`❌ File Read Error: ${err.message}`);
+        setUploadingDA(false);
+      }
+    });
+  };
+
+  // --- NEW: SLA Tracker Uploader ---
+  const handleFileUploadSLA = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setUploadingSLA(true);
+    setUploadMessageSLA('1/3 Reading file...');
+
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: async (results) => {
+        try {
+          setUploadMessageSLA('2/3 Formatting data...');
+          const rawData = results.data;
+          
+          let casesToUpsert = rawData.map(row => {
+            const getVal = (searchStrings) => {
+              for (let key in row) {
+                const cleanKey = key.trim().toLowerCase();
+                for (let search of searchStrings) {
+                  if (cleanKey === search.toLowerCase()) return row[key];
+                }
+              }
+              return null;
+            };
+
+            const caseNum = cleanVal(getVal(["CASE NUMBER", "Case Number", "CXN No"]));
+            if (!caseNum) return null;
+
+            return {
+              case_number: caseNum,
+              created_on: formatDateString(cleanVal(getVal(["CREATED ON", "Created On"]))),
+              sla_due_date: formatDateString(cleanVal(getVal(["CASE DUE DATE / SLA DATE", "SLA Date", "Due Date"]))),
+              country: cleanVal(getVal(["COUNTRY", "Country"])),
+              pic: cleanVal(getVal(["PIC"])),
+              priority: cleanVal(getVal(["PRIORITY", "Priority"])),
+              case_status: cleanVal(getVal(["CASE STATUS", "Status"])) || 'IN PROGRESS',
+              stage: cleanVal(getVal(["STAGE OF CASE", "Stage"])),
+              date_completed: formatDateString(cleanVal(getVal(["DATE COMPLETED / CANCELLED", "Date Completed"]))),
+              remarks: cleanVal(getVal(["REMARKS", "Remarks"]))
+            };
+          }).filter(item => item.case_number); 
+
+          if (casesToUpsert.length === 0) {
+            setUploadMessageSLA('❌ Error: Found 0 valid rows. Check column headers.');
+            setUploadingSLA(false);
+            return;
+          }
+
+          setUploadMessageSLA(`3/3 Updating ${casesToUpsert.length} cases in database...`);
+          
+          const chunks = chunkArray(casesToUpsert, 100);
+          let errorCount = 0;
+          let firstError = null;
+
+          for (let chunk of chunks) {
+            const { error } = await supabase.from('cases').upsert(chunk, { onConflict: 'case_number' });
+            if (error) {
+              errorCount++;
+              if (!firstError) firstError = error.message;
+            }
+          }
+
+          if (errorCount > 0) {
+            setUploadMessageSLA(`⚠️ Completed with ${errorCount} chunk errors. First error: ${firstError}`);
+          } else {
+            setUploadMessageSLA(`✅ Success! Updated ${casesToUpsert.length} SLA cases.`);
+          }
+          fetchCases(); 
+          setUploadingSLA(false);
+        } catch (err) {
+          setUploadMessageSLA(`❌ Unexpected Error: ${err.message}`);
+          setUploadingSLA(false);
+        }
+      },
+      error: (err) => {
+        setUploadMessageSLA(`❌ File Read Error: ${err.message}`);
+        setUploadingSLA(false);
       }
     });
   };
@@ -239,27 +324,19 @@ function Dashboard({ userEmail, onSignOut }) {
     return Math.ceil((new Date(dueDate) - today) / (1000 * 60 * 60 * 24));
   };
 
-  // NEW: Deep Search Logic (Checks Case details AND Respondent details)
   const filteredCases = cases.filter(c => {
     if (!searchTerm) return true;
     const search = searchTerm.toLowerCase();
-    
-    // 1. Check main case fields
     const matchCase = c.case_number?.toLowerCase().includes(search);
     const matchPic = c.pic?.toLowerCase().includes(search);
     const matchCountry = c.country?.toLowerCase().includes(search);
-    
-    // 2. Check inside the Respondents list
     const matchRespondent = c.disciplinary_actions?.some(da => 
       da.respondent_name?.toLowerCase().includes(search) || 
       da.respondent_id?.toLowerCase().includes(search)
     );
-
-    // If any of these are true, keep the case in the list
     return matchCase || matchPic || matchCountry || matchRespondent;
   });
 
-  // Pagination Logic
   const totalPages = Math.ceil(filteredCases.length / pageSize);
   const currentCases = filteredCases.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
@@ -285,11 +362,22 @@ function Dashboard({ userEmail, onSignOut }) {
         <div style={{ background: 'white', padding: '20px', borderRadius: '8px', flex: 1, boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}><h3 style={{ margin: 0, color: '#6b7280', fontSize: '14px' }}>OUT OF SLA</h3><p style={{ fontSize: '28px', fontWeight: 'bold', margin: '5px 0 0 0', color: '#ef4444' }}>{outOfSla}</p></div>
       </div>
 
-      <div style={{ background: 'white', padding: '20px', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', marginBottom: '30px' }}>
-        <h2 style={{ marginTop: 0, color: '#1f2937' }}>📤 Upload Raw Data (D365 Export)</h2>
-        <p style={{ color: '#6b7280', fontSize: '14px' }}>Upload your raw CSV export. The system will auto-create missing cases, calculate Action Days, and prevent duplicates.</p>
-        <input type="file" accept=".csv" onChange={handleFileUpload} disabled={uploading} style={{ marginBottom: '10px' }} />
-        {uploadMessage && <p style={{ fontWeight: 'bold', color: uploadMessage.includes('Error') || uploadMessage.includes('errors') ? '#ef4444' : '#10b981' }}>{uploadMessage}</p>}
+      <div style={{ display: 'flex', gap: '20px', marginBottom: '30px' }}>
+        {/* DA Uploader */}
+        <div style={{ background: 'white', padding: '20px', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', flex: 1 }}>
+          <h2 style={{ marginTop: 0, color: '#1f2937', fontSize: '18px' }}>📤 Upload Disciplinary Actions (D365)</h2>
+          <p style={{ color: '#6b7280', fontSize: '13px' }}>Uploads respondents & auto-creates missing cases.</p>
+          <input type="file" accept=".csv" onChange={handleFileUploadDA} disabled={uploadingDA} style={{ marginBottom: '10px', fontSize: '12px' }} />
+          {uploadMessageDA && <p style={{ fontWeight: 'bold', fontSize: '12px', color: uploadMessageDA.includes('Error') || uploadMessageDA.includes('errors') ? '#ef4444' : '#10b981' }}>{uploadMessageDA}</p>}
+        </div>
+
+        {/* NEW: SLA Tracker Uploader */}
+        <div style={{ background: 'white', padding: '20px', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', flex: 1 }}>
+          <h2 style={{ marginTop: 0, color: '#1f2937', fontSize: '18px' }}>📋 Upload SLA Tracker (Main Cases)</h2>
+          <p style={{ color: '#6b7280', fontSize: '13px' }}>Updates PICs, SLA Dates, Priorities & Stages.</p>
+          <input type="file" accept=".csv" onChange={handleFileUploadSLA} disabled={uploadingSLA} style={{ marginBottom: '10px', fontSize: '12px' }} />
+          {uploadMessageSLA && <p style={{ fontWeight: 'bold', fontSize: '12px', color: uploadMessageSLA.includes('Error') || uploadMessageSLA.includes('errors') ? '#ef4444' : '#10b981' }}>{uploadMessageSLA}</p>}
+        </div>
       </div>
 
       <div style={{ background: 'white', padding: '20px', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
@@ -312,22 +400,24 @@ function Dashboard({ userEmail, onSignOut }) {
               <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                 <thead>
                   <tr style={{ borderBottom: '2px solid #e5e7eb', backgroundColor: '#f9fafb' }}>
-                    <th style={{ padding: '12px' }}>Case Number</th><th style={{ padding: '12px' }}>Status</th><th style={{ padding: '12px' }}>SLA Status</th><th style={{ padding: '12px' }}># Resp</th><th style={{ padding: '12px' }}>Last Modified By</th><th style={{ padding: '12px' }}>Actions</th>
+                    <th style={{ padding: '12px' }}>Case Number</th><th style={{ padding: '12px' }}>PIC</th><th style={{ padding: '12px' }}>Priority</th><th style={{ padding: '12px' }}>Status</th><th style={{ padding: '12px' }}>Stage</th><th style={{ padding: '12px' }}>SLA Due</th><th style={{ padding: '12px' }}>SLA Status</th><th style={{ padding: '12px' }}># Resp</th><th style={{ padding: '12px' }}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {currentCases.map((c, index) => {
                     const slaDays = calculateSlaDays(c.sla_due_date);
-                    // NEW: Calculate count directly from the array length
                     const respondentCount = c.disciplinary_actions?.length || 0;
                     return (
                       <React.Fragment key={index}>
                         <tr style={{ borderBottom: selectedCase === c.case_number ? 'none' : '1px solid #e5e7eb', cursor: 'pointer', backgroundColor: selectedCase === c.case_number ? '#eff6ff' : 'white' }}>
                           <td style={{ padding: '12px', fontWeight: 'bold', whiteSpace: 'nowrap' }}>{c.case_number}</td>
+                          <td style={{ padding: '12px', whiteSpace: 'nowrap' }}>{c.pic || '—'}</td>
+                          <td style={{ padding: '12px', fontWeight: 'bold', color: c.priority === 'High' ? '#ef4444' : c.priority === 'Medium' ? '#f59e0b' : '#6b7280' }}>{c.priority || '—'}</td>
                           <td style={{ padding: '12px' }}><span style={{ padding: '4px 8px', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold', backgroundColor: c.case_status === 'IN PROGRESS' ? '#fef3c7' : '#d1fae5', color: c.case_status === 'IN PROGRESS' ? '#92400e' : '#065f46' }}>{c.case_status}</span></td>
+                          <td style={{ padding: '12px' }}>{c.stage || '—'}</td>
+                          <td style={{ padding: '12px', whiteSpace: 'nowrap' }}>{c.sla_due_date}</td>
                           <td style={{ padding: '12px', fontWeight: 'bold', color: slaDays < 0 ? '#ef4444' : '#10b981', whiteSpace: 'nowrap' }}>{c.case_status !== 'IN PROGRESS' ? '—' : slaDays < 0 ? `🔴 ${Math.abs(slaDays)}d` : `🟢 ${slaDays}d`}</td>
                           <td style={{ padding: '12px', textAlign: 'center', fontWeight: 'bold', color: respondentCount > 0 ? '#3b82f6' : '#d1d5db' }}>{respondentCount}</td>
-                          <td style={{ padding: '12px', fontSize: '12px', color: '#6b7280' }}>{c.modified_by_email || '—'}</td>
                           <td style={{ padding: '12px', display: 'flex', gap: '8px' }}>
                             <button onClick={() => handleCaseClick(c.case_number)} style={{ backgroundColor: '#6b7280', color: 'white', padding: '6px 12px', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>{selectedCase === c.case_number ? 'Hide' : 'Expand'}</button>
                             {c.case_status === 'IN PROGRESS' && <button onClick={() => handleUpdateStatus(c.case_number, 'COMPLETED')} style={{ backgroundColor: '#10b981', color: 'white', padding: '6px 12px', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>✓</button>}
@@ -336,7 +426,7 @@ function Dashboard({ userEmail, onSignOut }) {
                         
                         {selectedCase === c.case_number && (
                           <tr>
-                            <td colSpan="6" style={{ padding: '20px', backgroundColor: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
+                            <td colSpan="9" style={{ padding: '20px', backgroundColor: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
                               <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '15px', backgroundColor: 'white' }}>
                                 <h3 style={{ marginTop: 0, color: '#1f2937' }}>⚖️ Disciplinary Actions (Respondents)</h3>
                                 {daList.length === 0 ? <p style={{ color: '#6b7280', fontStyle: 'italic' }}>No respondents linked.</p> : (
