@@ -89,8 +89,6 @@ function Dashboard({ userEmail, onSignOut }) {
 
   const formatDateString = (dateStr) => {
     if (!dateStr) return null;
-    
-    // Handle Excel serial numbers
     if (typeof dateStr === 'number') {
       const utc_days = Math.floor(dateStr - 25569);
       const utc_value = utc_days * 86400;        
@@ -99,10 +97,7 @@ function Dashboard({ userEmail, onSignOut }) {
         return `${date_info.getFullYear()}-${String(date_info.getMonth() + 1).padStart(2, '0')}-${String(date_info.getDate()).padStart(2, '0')}`;
       }
     }
-    
-    // Strip time part if it exists (e.g., "1/30/23 12:00 AM" -> "1/30/23")
     const cleanStr = String(dateStr).trim().split(' ')[0];
-    
     const parts = cleanStr.split(/[-/]/);
     if (parts.length === 3) {
       let [p1, p2, p3] = parts.map(p => parseInt(p, 10));
@@ -115,7 +110,6 @@ function Dashboard({ userEmail, onSignOut }) {
         }
       }
     }
-    
     const fallbackDate = new Date(cleanStr);
     if (!isNaN(fallbackDate.getTime())) {
       const year = fallbackDate.getFullYear();
@@ -130,6 +124,21 @@ function Dashboard({ userEmail, onSignOut }) {
     const result = [];
     for (let i = 0; i < array.length; i += size) result.push(array.slice(i, i + size));
     return result;
+  };
+
+  // Helper to find a sheet by scanning headers
+  const findSheetByHeader = (wb, headerSearch) => {
+    for (let name of wb.SheetNames) {
+      const ws = wb.Sheets[name];
+      const json = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
+      if (json.length > 0) {
+        const headers = json[0].map(h => String(h || '').trim().toLowerCase());
+        if (headers.some(h => h.includes(headerSearch.toLowerCase()))) {
+          return name;
+        }
+      }
+    }
+    return null;
   };
 
   // --- MASTER EXCEL UPLOADER ---
@@ -175,10 +184,10 @@ function Dashboard({ userEmail, onSignOut }) {
         // --- 2. PROCESS RAW_DATA / DISCIPLINARY ACTIONS (RESPONDENTS) ---
         let daDataToInsert = [];
         
-        // Explicitly look for Raw_Data first!
-        let daSheetName = wb.SheetNames.find(name => name.trim().toLowerCase() === 'raw_data');
-        if (!daSheetName) daSheetName = wb.SheetNames.find(name => name.trim().toLowerCase() === 'raw data');
-        if (!daSheetName) daSheetName = wb.SheetNames.find(name => name.trim().toLowerCase() === 'disciplinary actions_tracker');
+        // BULLETPROOF: Scan ALL sheets to find the one with "Action Taken 1"
+        let daSheetName = findSheetByHeader(wb, "Action Taken 1");
+        // If not found, fallback to looking for "Current Action"
+        if (!daSheetName) daSheetName = findSheetByHeader(wb, "Current Action");
         
         if (daSheetName) {
           const ws = wb.Sheets[daSheetName];
@@ -356,7 +365,7 @@ function Dashboard({ userEmail, onSignOut }) {
 
       <div style={{ background: 'white', padding: '20px', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', marginBottom: '30px' }}>
         <h2 style={{ marginTop: 0, color: '#1f2937', fontSize: '18px' }}>📤 Master Excel Uploader</h2>
-        <p style={{ color: '#6b7280', fontSize: '13px' }}>Upload your Excel workbook (.xlsx). The system will automatically read the <b>SLA_Tracker</b> and <b>Raw_Data</b> sheets and sync them to the cloud.</p>
+        <p style={{ color: '#6b7280', fontSize: '13px' }}>Upload your Excel workbook (.xlsx). The system will automatically scan for the sheets containing your Cases and Disciplinary Actions and sync them to the cloud.</p>
         <input type="file" accept=".xlsx, .xls" onChange={handleMasterUpload} disabled={uploading} style={{ marginBottom: '10px', fontSize: '12px' }} />
         {uploadMessage && <p style={{ fontWeight: 'bold', fontSize: '12px', color: uploadMessage.includes('Error') || uploadMessage.includes('errors') ? '#ef4444' : '#10b981' }}>{uploadMessage}</p>}
       </div>
