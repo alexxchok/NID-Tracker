@@ -127,6 +127,21 @@ function Dashboard({ userEmail, onSignOut }) {
     return result;
   };
 
+  // Helper to find a sheet by checking if it contains a specific header
+  const findSheetByHeader = (wb, headerSearch) => {
+    for (let name of wb.SheetNames) {
+      const ws = wb.Sheets[name];
+      const json = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
+      if (json.length > 0) {
+        const headers = json[0].map(h => String(h || '').trim().toLowerCase());
+        if (headers.some(h => h.includes(headerSearch.toLowerCase()))) {
+          return name;
+        }
+      }
+    }
+    return null;
+  };
+
   // --- MASTER EXCEL UPLOADER ---
   const handleMasterUpload = (e) => {
     const file = e.target.files[0];
@@ -167,10 +182,13 @@ function Dashboard({ userEmail, onSignOut }) {
           }).filter(Boolean);
         }
 
-        // --- 2. PROCESS RAW_DATA OR DISCIPLINARY ACTIONS (RESPONDENTS) ---
+        // --- 2. PROCESS RAW_DATA / DISCIPLINARY ACTIONS (RESPONDENTS) ---
         let daDataToInsert = [];
-        // Look for Raw_Data first, then fallback to Disciplinary Actions_Tracker
-        const daSheetName = wb.SheetNames.find(name => name.trim().toLowerCase() === 'raw_data') || wb.SheetNames.find(name => name.trim().toLowerCase() === 'disciplinary actions_tracker');
+        
+        // Smartly find the sheet containing "Action Taken 1" or "Current Action"
+        let daSheetName = findSheetByHeader(wb, "Action Taken 1");
+        if (!daSheetName) daSheetName = findSheetByHeader(wb, "Current Action");
+        if (!daSheetName) daSheetName = wb.SheetNames.find(name => name.trim().toLowerCase() === 'disciplinary actions_tracker');
         
         if (daSheetName) {
           const ws = wb.Sheets[daSheetName];
@@ -190,9 +208,9 @@ function Dashboard({ userEmail, onSignOut }) {
                 history.push({ step: i, action: action, date: date });
               }
             }
-            // If no history found in Action Taken 1-4, fallback to Current/Previous Action
+            // Fallback to Current/Previous Action if Action Taken 1-4 is missing
             if (history.length === 0) {
-                const currAction = cleanVal(getVal(["Current Action", "Action Taken 1"]));
+                const currAction = cleanVal(getVal(["Current Action"]));
                 const currDate = formatDateString(cleanVal(getVal(["Current Action (Execution Date)", "Execution Date"])));
                 if (currAction) history.push({ step: 1, action: currAction, date: currDate });
                 
@@ -201,7 +219,7 @@ function Dashboard({ userEmail, onSignOut }) {
                 if (prevAction) history.push({ step: 2, action: prevAction, date: prevDate });
             }
 
-            // Determine the latest action for the main 'current_action' field
+            // Determine the latest action
             const latestAction = history.length > 0 ? history[history.length - 1].action : null;
             const latestDate = history.length > 0 ? history[history.length - 1].date : null;
             
@@ -351,7 +369,7 @@ function Dashboard({ userEmail, onSignOut }) {
 
       <div style={{ background: 'white', padding: '20px', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', marginBottom: '30px' }}>
         <h2 style={{ marginTop: 0, color: '#1f2937', fontSize: '18px' }}>📤 Master Excel Uploader</h2>
-        <p style={{ color: '#6b7280', fontSize: '13px' }}>Upload your Excel workbook (.xlsx). The system will automatically read the <b>SLA_Tracker</b> and <b>Raw_Data</b> (or Disciplinary Actions_Tracker) sheets and sync them to the cloud.</p>
+        <p style={{ color: '#6b7280', fontSize: '13px' }}>Upload your Excel workbook (.xlsx). The system will automatically scan for the sheets containing your Cases and Disciplinary Actions and sync them to the cloud.</p>
         <input type="file" accept=".xlsx, .xls" onChange={handleMasterUpload} disabled={uploading} style={{ marginBottom: '10px', fontSize: '12px' }} />
         {uploadMessage && <p style={{ fontWeight: 'bold', fontSize: '12px', color: uploadMessage.includes('Error') || uploadMessage.includes('errors') ? '#ef4444' : '#10b981' }}>{uploadMessage}</p>}
       </div>
