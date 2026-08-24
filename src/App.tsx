@@ -66,12 +66,10 @@ function Dashboard({ userEmail, onSignOut }) {
   const [uploadingSLA, setUploadingSLA] = useState(false);
   const [uploadMessageSLA, setUploadMessageSLA] = useState('');
 
-  // Expanded Row State
   const [selectedCase, setSelectedCase] = useState(null);
   const [daList, setDaList] = useState([]);
-  const [wipList, setWipList] = useState([]); // NEW: WIP List
+  const [wipList, setWipList] = useState([]);
 
-  // NEW: Add Case Form State
   const [showCaseForm, setShowCaseForm] = useState(false);
   const [newCaseNum, setNewCaseNum] = useState('');
   const [newPic, setNewPic] = useState('');
@@ -81,11 +79,10 @@ function Dashboard({ userEmail, onSignOut }) {
   const [newStatus, setNewStatus] = useState('IN PROGRESS');
   const [newStage, setNewStage] = useState('Stage 1');
 
-  // NEW: WIP Form State
+  const [showWipForm, setShowWipForm] = useState(false);
+  const [wipActionType, setWipActionType] = useState('Email Sent');
   const [wipDesc, setWipDesc] = useState('');
   const [wipDateSent, setWipDateSent] = useState(new Date().toISOString().split('T')[0]);
-  const [wipDueDate, setWipDueDate] = useState('');
-  const [wipStatus, setWipStatus] = useState('Pending');
 
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -141,14 +138,25 @@ function Dashboard({ userEmail, onSignOut }) {
       header: true, skipEmptyLines: true,
       complete: async (results) => {
         try {
-          setUploadMessageDA('2/4 Formatting & sanitizing data...');
+          setUploadMessageDA('2/4 Formatting data...');
           let daDataToInsert = results.data.map(row => {
-            const getVal = (searchStrings) => { for (let key in row) { const cl = key.trim().toLowerCase(); for (let s of searchStrings) { if (cl === s.toLowerCase()) return row[key]; } } return null; };
-            const caseNum = cleanVal(getVal(["CXN No"])); const respId = cleanVal(getVal(["Respondents' IR ID No"])); 
-            const execDate = formatDateString(cleanVal(getVal(["Date of execution 1"]))); 
+            const getVal = (searchStrings) => { for (let key in row) { const cl = key.trim().toLowerCase(); for (let s of searchStrings) { if (cl.includes(s.toLowerCase())) return row[key]; } } return null; };
+            const caseNum = cleanVal(getVal(["CXN No", "CXN #"]));
+            const respId = cleanVal(getVal(["Respondents' IR ID No", "Respondent ID"])); 
+            const execDate = formatDateString(cleanVal(getVal(["Date of execution 1", "Execution Date"]))); 
             let actionDays = null;
             if (execDate) { const today = new Date(); const exec = new Date(execDate); if (!isNaN(exec.getTime())) actionDays = Math.floor((today - exec) / (1000 * 60 * 60 * 24)); }
-            return { case_number: caseNum, complainant_name: cleanVal(getVal(["Complainant's Name and IR ID No"])), respondent_name: cleanVal(getVal(["Respondent's Name"])), respondent_id: respId, current_action: cleanVal(getVal(["Action Taken 1"])), execution_date: execDate, remarks: cleanVal(getVal(["Remarks"])), action_days: actionDays, unique_key: caseNum && respId ? `${caseNum}|${respId}` : null };
+            return {
+              case_number: caseNum,
+              complainant_name: cleanVal(getVal(["Complainant's Name and IR ID No", "Complainant Name"])),
+              respondent_name: cleanVal(getVal(["Respondent's Name"])),
+              respondent_id: respId,
+              current_action: cleanVal(getVal(["Action Taken 1", "Current Action"])), 
+              execution_date: execDate,
+              remarks: cleanVal(getVal(["Remarks"])),
+              action_days: actionDays,
+              unique_key: caseNum && respId ? `${caseNum}|${respId}` : null
+            };
           }).filter(item => item && item.case_number && item.unique_key); 
 
           const uniqueMap = new Map();
@@ -157,9 +165,8 @@ function Dashboard({ userEmail, onSignOut }) {
 
           if (finalDataToInsert.length === 0) { setUploadMessageDA('❌ Error: Found 0 valid rows.'); setUploadingDA(false); return; }
 
-          setUploadMessageDA('3/4 Fetching existing cases...');
-          const { data: existingCases, error: fetchErr } = await supabase.from('cases').select('case_number');
-          if (fetchErr) throw new Error(fetchErr.message);
+          setUploadMessageDA('3/4 Checking existing cases...');
+          const { data: existingCases } = await supabase.from('cases').select('case_number');
           const existingSet = new Set(existingCases.map(c => c.case_number));
           const uniqueCaseNumbers = [...new Set(finalDataToInsert.map(item => item.case_number))];
           const missingCases = uniqueCaseNumbers.filter(cn => !existingSet.has(cn)).map(cn => {
@@ -170,20 +177,21 @@ function Dashboard({ userEmail, onSignOut }) {
           if (missingCases.length > 0) {
             const missingChunks = chunkArray(missingCases, 100);
             for (let chunk of missingChunks) {
-              const { error: insertErr } = await supabase.from('cases').insert(chunk);
-              if (insertErr) { setUploadMessageDA(`❌ CRITICAL ERROR creating cases: ${insertErr.message}`); setUploadingDA(false); return; }
+              const { error: insertErr } = await supabase.from('cases').upsert(chunk, { onConflict: 'case_number', ignoreDuplicates: true });
+              if (insertErr) { setUploadMessageDA(`❌ Error creating cases: ${insertErr.message}`); setUploadingDA(false); return; }
             }
           }
 
-          setUploadMessageDA('4/4 Uploading respondents (batch mode)...');
+          setUploadMessageDA('4/4 Uploading respondents...');
           const daChunks = chunkArray(finalDataToInsert, 100);
           let errorCount = 0; let firstError = null;
           for (let chunk of daChunks) {
             const { error } = await supabase.from('disciplinary_actions').upsert(chunk, { onConflict: 'unique_key' });
             if (error) { errorCount++; if (!firstError) firstError = error.message; }
           }
-          if (errorCount > 0) setUploadMessageDA(`⚠️ Completed with ${errorCount} chunk errors. First error: ${firstError}`);
-          else setUploadMessageDA(`✅ Success! Processed ${finalDataToInsert.length} actions & auto-created ${missingCases.length} missing cases.`);
+
+          if (errorCount > 0) setUploadMessageDA(`⚠️ Completed with ${errorCount} errors. First: ${firstError}`);
+          else setUploadMessageDA(`✅ Success! Processed ${finalDataToInsert.length} actions & auto-created ${missingCases.length} cases.`);
           fetchCases(); setUploadingDA(false);
         } catch (err) { setUploadMessageDA(`❌ Unexpected Error: ${err.message}`); setUploadingDA(false); }
       },
@@ -204,31 +212,31 @@ function Dashboard({ userEmail, onSignOut }) {
           setUploadMessageSLA('2/3 Formatting data...');
           let casesToUpsert = results.data.map(row => {
             const getVal = (searchStrings) => { for (let key in row) { const cl = key.trim().toLowerCase(); for (let s of searchStrings) { if (cl.includes(s.toLowerCase())) return row[key]; } } return null; };
-            const caseNum = cleanVal(getVal(["CASE NUMBER", "Case Number", "CXN No", "Case #", "CXN #"]));
+            const caseNum = cleanVal(getVal(["CASE NUMBER", "Case Number", "CXN No"]));
             if (!caseNum) return null;
             return {
               case_number: caseNum,
               created_on: formatDateString(cleanVal(getVal(["CREATED ON", "Created On"]))),
-              sla_due_date: formatDateString(cleanVal(getVal(["CASE DUE DATE / SLA DATE", "SLA Date", "Due Date"]))),
+              sla_due_date: formatDateString(cleanVal(getVal(["CASE DUE DATE", "SLA Date", "Due Date"]))),
               country: cleanVal(getVal(["COUNTRY", "Country"])),
               pic: cleanVal(getVal(["PIC"])),
               priority: cleanVal(getVal(["PRIORITY", "Priority"])),
               case_status: cleanVal(getVal(["CASE STATUS", "Status"])) || 'IN PROGRESS',
               stage: cleanVal(getVal(["STAGE OF CASE", "Stage"])),
-              date_completed: formatDateString(cleanVal(getVal(["DATE COMPLETED / CANCELLED", "Date Completed"]))),
+              date_completed: formatDateString(cleanVal(getVal(["DATE COMPLETED", "Date Completed"]))),
               remarks: cleanVal(getVal(["REMARKS", "Remarks"]))
             };
           }).filter(item => item && item.case_number); 
 
-          if (casesToUpsert.length === 0) { setUploadMessageSLA('❌ Error: Found 0 valid rows. Make sure you saved as CSV UTF-8.'); setUploadingSLA(false); return; }
-          setUploadMessageSLA(`3/3 Updating ${casesToUpsert.length} cases in database...`);
+          if (casesToUpsert.length === 0) { setUploadMessageSLA('❌ Error: Found 0 valid rows.'); setUploadingSLA(false); return; }
+          setUploadMessageSLA(`3/3 Updating ${casesToUpsert.length} cases...`);
           const chunks = chunkArray(casesToUpsert, 100);
           let errorCount = 0; let firstError = null;
           for (let chunk of chunks) {
             const { error } = await supabase.from('cases').upsert(chunk, { onConflict: 'case_number' });
             if (error) { errorCount++; if (!firstError) firstError = error.message; }
           }
-          if (errorCount > 0) setUploadMessageSLA(`⚠️ Completed with ${errorCount} chunk errors. First error: ${firstError}`);
+          if (errorCount > 0) setUploadMessageSLA(`⚠️ Completed with ${errorCount} errors. First: ${firstError}`);
           else setUploadMessageSLA(`✅ Success! Updated ${casesToUpsert.length} SLA cases.`);
           fetchCases(); setUploadingSLA(false);
         } catch (err) { setUploadMessageSLA(`❌ Unexpected Error: ${err.message}`); setUploadingSLA(false); }
@@ -237,12 +245,9 @@ function Dashboard({ userEmail, onSignOut }) {
     });
   };
 
-  // NEW: Add Case manually
   const handleAddCase = async (e) => {
-    e.preventDefault();
-    const { error } = await supabase.from('cases').insert([{ 
-      case_number: newCaseNum, pic: newPic, country: newCountry, case_status: newStatus, sla_due_date: newSlaDate, priority: newPriority, stage: newStage, created_on: new Date().toISOString().split('T')[0]
-    }]);
+    e.preventDefault(); 
+    const { error } = await supabase.from('cases').insert([{ case_number: newCaseNum, pic: newPic, country: newCountry, case_status: newStatus, sla_due_date: newSlaDate, priority: newPriority, stage: newStage, created_on: new Date().toISOString().split('T')[0] }]);
     if (error) alert('Error saving case: ' + error.message);
     else {
       setShowCaseForm(false);
@@ -251,12 +256,12 @@ function Dashboard({ userEmail, onSignOut }) {
     }
   };
 
-  // NEW: Expand case and fetch DA + WIP
   const handleCaseClick = async (caseNum) => {
     if (selectedCase === caseNum) { setSelectedCase(null); return; }
     setSelectedCase(caseNum);
+    setShowWipForm(false);
     const { data: daData } = await supabase.from('disciplinary_actions').select('*').eq('case_number', caseNum);
-    const { data: wipData } = await supabase.from('wip_tracker').select('*').eq('case_number', caseNum).order('date_sent', { ascending: false });
+    const { data: wipData } = await supabase.from('wip_actions').select('*').eq('case_number', caseNum).order('date_sent', { ascending: false });
     setDaList(daData || []);
     setWipList(wipData || []);
   };
@@ -267,22 +272,56 @@ function Dashboard({ userEmail, onSignOut }) {
     else fetchCases();
   };
 
-  // NEW: Add WIP Action
   const handleAddWIP = async (e) => {
     e.preventDefault();
-    const { error } = await supabase.from('wip_tracker').insert([{ 
+    // Fetch mapping rule for this action type
+    const { data: rule } = await supabase.from('mapping_rules').select('*').eq('action_type', wipActionType).single();
+    
+    let stageToAssign = rule?.default_stage || null;
+    let slaDays = rule?.default_sla_days || 2;
+
+    // Ambiguous action logic
+    if (rule && rule.initial_stage && rule.concluding_stage) {
+        const currentCase = cases.find(c => c.case_number === selectedCase);
+        const currentStageNum = parseInt(currentCase?.stage?.replace('Stage ', '') || '0', 10);
+        if (currentStageNum >= 6) {
+            stageToAssign = rule.concluding_stage;
+        } else {
+            stageToAssign = rule.initial_stage;
+        }
+    }
+
+    let expiryDate = null;
+    if (wipDateSent) {
+        let d = new Date(wipDateSent);
+        d.setDate(d.getDate() + slaDays); // Simplified: adding calendar days. Working days logic can be added later.
+        expiryDate = d.toISOString().split('T')[0];
+    }
+
+    const { error } = await supabase.from('wip_actions').insert([{ 
       case_number: selectedCase, 
-      action_description: wipDesc, 
+      action_type: wipActionType, 
+      description: wipDesc, 
+      stage_auto: stageToAssign,
       date_sent: wipDateSent, 
-      due_date: wipDueDate, 
-      status: wipStatus,
+      sla_days: slaDays,
+      expiry_date: expiryDate,
+      status: 'Pending',
       pic: userEmail 
     }]);
+    
     if (error) alert('Error logging WIP: ' + error.message);
     else {
-      setWipDesc(''); setWipDueDate(''); setWipStatus('Pending');
-      const { data } = await supabase.from('wip_tracker').select('*').eq('case_number', selectedCase).order('date_sent', { ascending: false });
+      setWipDesc(''); 
+      setShowWipForm(false);
+      const { data } = await supabase.from('wip_actions').select('*').eq('case_number', selectedCase).order('date_sent', { ascending: false });
       setWipList(data);
+      
+      // Auto-update case stage if mapped
+      if (stageToAssign) {
+        await supabase.from('cases').update({ stage: stageToAssign, modified_by_email: userEmail }).eq('case_number', selectedCase);
+        fetchCases();
+      }
     }
   };
 
@@ -309,6 +348,8 @@ function Dashboard({ userEmail, onSignOut }) {
   const inProgress = cases.filter(c => c.case_status === 'IN PROGRESS').length;
   const completed = cases.filter(c => c.case_status === 'COMPLETED').length;
   const outOfSla = cases.filter(c => calculateSlaDays(c.sla_due_date) < 0 && c.case_status === 'IN PROGRESS').length;
+
+  const stages = Array.from({length: 10}, (_, i) => `Stage ${i + 1}`);
 
   return (
     <div style={{ padding: '24px', fontFamily: 'Arial, sans-serif', backgroundColor: '#f3f4f6', minHeight: '100vh' }}>
@@ -345,13 +386,11 @@ function Dashboard({ userEmail, onSignOut }) {
       <div style={{ background: 'white', padding: '20px', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
           <h2 style={{ marginTop: 0, color: '#1f2937' }}>📋 SLA Case Tracker</h2>
-          {/* NEW: Add New Case Button */}
           <button onClick={() => setShowCaseForm(!showCaseForm)} style={{ backgroundColor: '#3b82f6', color: 'white', padding: '10px 16px', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}>
             {showCaseForm ? 'Close Form' : '+ Add New Case'}
           </button>
         </div>
 
-        {/* NEW: Add Case Form */}
         {showCaseForm && (
           <form onSubmit={handleAddCase} style={{ background: '#f9fafb', padding: '20px', borderRadius: '8px', marginBottom: '20px', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', alignItems: 'end' }}>
             <div><label style={{ fontSize: '12px', color: '#6b7280' }}>Case Number</label><input type="text" value={newCaseNum} onChange={(e) => setNewCaseNum(e.target.value)} required style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '4px' }} /></div>
@@ -360,7 +399,7 @@ function Dashboard({ userEmail, onSignOut }) {
             <div><label style={{ fontSize: '12px', color: '#6b7280' }}>SLA Due Date</label><input type="date" value={newSlaDate} onChange={(e) => setNewSlaDate(e.target.value)} required style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '4px' }} /></div>
             <div><label style={{ fontSize: '12px', color: '#6b7280' }}>Priority</label><select value={newPriority} onChange={(e) => setNewPriority(e.target.value)} style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '4px' }}><option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option></select></div>
             <div><label style={{ fontSize: '12px', color: '#6b7280' }}>Status</label><select value={newStatus} onChange={(e) => setNewStatus(e.target.value)} style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '4px' }}><option value="IN PROGRESS">IN PROGRESS</option><option value="COMPLETED">COMPLETED</option></select></div>
-            <div><label style={{ fontSize: '12px', color: '#6b7280' }}>Stage</label><select value={newStage} onChange={(e) => setNewStage(e.target.value)} style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '4px' }}><option value="Stage 1">Stage 1</option><option value="Stage 2">Stage 2</option><option value="Stage 3">Stage 3</option></select></div>
+            <div><label style={{ fontSize: '12px', color: '#6b7280' }}>Stage</label><select value={newStage} onChange={(e) => setNewStage(e.target.value)} style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '4px' }}>{stages.map(s => <option key={s} value={s}>{s}</option>)}</select></div>
             <button type="submit" style={{ backgroundColor: '#10b981', color: 'white', padding: '10px 16px', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}>Save Case</button>
           </form>
         )}
@@ -379,12 +418,13 @@ function Dashboard({ userEmail, onSignOut }) {
               <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                 <thead>
                   <tr style={{ borderBottom: '2px solid #e5e7eb', backgroundColor: '#f9fafb' }}>
-                    <th style={{ padding: '12px' }}>Case Number</th><th style={{ padding: '12px' }}>PIC</th><th style={{ padding: '12px' }}>Priority</th><th style={{ padding: '12px' }}>Status</th><th style={{ padding: '12px' }}>Stage</th><th style={{ padding: '12px' }}>SLA Due</th><th style={{ padding: '12px' }}>SLA Status</th><th style={{ padding: '12px' }}>Actions</th>
+                    <th style={{ padding: '12px' }}>Case Number</th><th style={{ padding: '12px' }}>PIC</th><th style={{ padding: '12px' }}>Priority</th><th style={{ padding: '12px' }}>Status</th><th style={{ padding: '12px' }}>Stage</th><th style={{ padding: '12px' }}>SLA Due</th><th style={{ padding: '12px' }}>SLA Status</th><th style={{ padding: '12px' }}># Resp</th><th style={{ padding: '12px' }}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {currentCases.map((c, index) => {
                     const slaDays = calculateSlaDays(c.sla_due_date);
+                    const respondentCount = c.disciplinary_actions?.length || 0;
                     return (
                       <React.Fragment key={index}>
                         <tr style={{ borderBottom: selectedCase === c.case_number ? 'none' : '1px solid #e5e7eb', cursor: 'pointer', backgroundColor: selectedCase === c.case_number ? '#eff6ff' : 'white' }}>
@@ -395,6 +435,7 @@ function Dashboard({ userEmail, onSignOut }) {
                           <td style={{ padding: '12px' }}>{c.stage || '—'}</td>
                           <td style={{ padding: '12px', whiteSpace: 'nowrap' }}>{c.sla_due_date}</td>
                           <td style={{ padding: '12px', fontWeight: 'bold', color: slaDays < 0 ? '#ef4444' : '#10b981', whiteSpace: 'nowrap' }}>{c.case_status !== 'IN PROGRESS' ? '—' : slaDays < 0 ? `🔴 ${Math.abs(slaDays)}d` : `🟢 ${slaDays}d`}</td>
+                          <td style={{ padding: '12px', textAlign: 'center', fontWeight: 'bold', color: respondentCount > 0 ? '#3b82f6' : '#d1d5db' }}>{respondentCount}</td>
                           <td style={{ padding: '12px', display: 'flex', gap: '8px' }}>
                             <button onClick={() => handleCaseClick(c.case_number)} style={{ backgroundColor: '#6b7280', color: 'white', padding: '6px 12px', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>{selectedCase === c.case_number ? 'Hide' : 'Expand'}</button>
                             {c.case_status === 'IN PROGRESS' && <button onClick={() => handleUpdateStatus(c.case_number, 'COMPLETED')} style={{ backgroundColor: '#10b981', color: 'white', padding: '6px 12px', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>✓</button>}
@@ -403,31 +444,48 @@ function Dashboard({ userEmail, onSignOut }) {
                         
                         {selectedCase === c.case_number && (
                           <tr>
-                            <td colSpan="8" style={{ padding: '20px', backgroundColor: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
+                            <td colSpan="9" style={{ padding: '20px', backgroundColor: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
                               
                               {/* WIP TRACKER SECTION */}
                               <div style={{ marginBottom: '30px', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '15px', backgroundColor: 'white' }}>
-                                <h3 style={{ marginTop: 0, color: '#1f2937' }}>⏳ WIP Tracker (Daily Actions)</h3>
-                                <form onSubmit={handleAddWIP} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr auto', gap: '10px', marginBottom: '15px', alignItems: 'end' }}>
-                                  <div><label style={{ fontSize: '11px', color: '#6b7280' }}>Action Description</label><input type="text" placeholder="e.g. Sent email to IR" value={wipDesc} onChange={(e) => setWipDesc(e.target.value)} required style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '4px' }} /></div>
-                                  <div><label style={{ fontSize: '11px', color: '#6b7280' }}>Date Sent</label><input type="date" value={wipDateSent} onChange={(e) => setWipDateSent(e.target.value)} style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '4px' }} /></div>
-                                  <div><label style={{ fontSize: '11px', color: '#6b7280' }}>Due Date</label><input type="date" value={wipDueDate} onChange={(e) => setWipDueDate(e.target.value)} style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '4px' }} /></div>
-                                  <div><label style={{ fontSize: '11px', color: '#6b7280' }}>Status</label><select value={wipStatus} onChange={(e) => setWipStatus(e.target.value)} style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '4px' }}><option value="Pending">Pending</option><option value="Done">Done</option></select></div>
-                                  <button type="submit" style={{ backgroundColor: '#8b5cf6', color: 'white', padding: '8px 16px', border: 'none', borderRadius: '4px', cursor: 'pointer', height: '35px' }}>Log Action</button>
-                                </form>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                  <h3 style={{ marginTop: 0, color: '#1f2937' }}>⏳ WIP Tracker</h3>
+                                  <button onClick={() => setShowWipForm(!showWipForm)} style={{ backgroundColor: '#8b5cf6', color: 'white', padding: '6px 12px', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>{showWipForm ? 'Cancel' : '+ Log WIP Action'}</button>
+                                </div>
+                                
+                                {showWipForm && (
+                                  <form onSubmit={handleAddWIP} style={{ display: 'grid', gridTemplateColumns: '2fr 3fr 1fr 1fr auto', gap: '10px', marginBottom: '15px', alignItems: 'end' }}>
+                                    <div>
+                                      <label style={{ fontSize: '11px', color: '#6b7280' }}>Action Type</label>
+                                      <select value={wipActionType} onChange={(e) => setWipActionType(e.target.value)} style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '4px' }}>
+                                        <option>Email Sent</option>
+                                        <option>Issue suspension notice (VO SUSPENDED + ISSUED)</option>
+                                        <option>Send recom. case summary to Cres (Initial DA)</option>
+                                        <option>Send recom. to CLO for approval</option>
+                                        <option>Draft case summary</option>
+                                        <option>Issue SCO (Show Cause Order)</option>
+                                      </select>
+                                    </div>
+                                    <div><label style={{ fontSize: '11px', color: '#6b7280' }}>Description</label><input type="text" value={wipDesc} onChange={(e) => setWipDesc(e.target.value)} required style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '4px' }} /></div>
+                                    <div><label style={{ fontSize: '11px', color: '#6b7280' }}>Date Sent</label><input type="date" value={wipDateSent} onChange={(e) => setWipDateSent(e.target.value)} style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '4px' }} /></div>
+                                    <div></div>
+                                    <button type="submit" style={{ backgroundColor: '#10b981', color: 'white', padding: '8px 16px', border: 'none', borderRadius: '4px', cursor: 'pointer', height: '35px' }}>Log Action</button>
+                                  </form>
+                                )}
+
                                 {wipList.length === 0 ? <p style={{ color: '#6b7280', fontStyle: 'italic' }}>No WIP actions logged.</p> : (
                                   <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-                                    <thead><tr style={{ borderBottom: '2px solid #e5e7eb', backgroundColor: '#f9fafb' }}><th style={{ padding: '8px' }}>Date Sent</th><th style={{ padding: '8px' }}>Description</th><th style={{ padding: '8px' }}>Due Date</th><th style={{ padding: '8px' }}>SLA</th><th style={{ padding: '8px' }}>Status</th></tr></thead>
+                                    <thead><tr style={{ borderBottom: '2px solid #e5e7eb', backgroundColor: '#f9fafb' }}><th style={{ padding: '8px' }}>Date</th><th style={{ padding: '8px' }}>Action Type</th><th style={{ padding: '8px' }}>Description</th><th style={{ padding: '8px' }}>Stage</th><th style={{ padding: '8px' }}>Expiry</th></tr></thead>
                                     <tbody>
                                       {wipList.map((w, i) => {
-                                        const wipSla = calculateSlaDays(w.due_date);
+                                        const wipSla = calculateSlaDays(w.expiry_date);
                                         return (
                                           <tr key={i} style={{ borderBottom: '1px solid #f3f4f6' }}>
                                             <td style={{ padding: '8px', fontSize: '12px' }}>{w.date_sent}</td>
-                                            <td style={{ padding: '8px', fontSize: '14px' }}>{w.action_description}</td>
-                                            <td style={{ padding: '8px', fontSize: '12px' }}>{w.due_date}</td>
-                                            <td style={{ padding: '8px', fontSize: '12px', fontWeight: 'bold', color: w.status === 'Done' ? '#6b7280' : (wipSla < 0 ? '#ef4444' : '#10b981') }}>{w.status === 'Done' ? '—' : (wipSla < 0 ? `🔴 ${Math.abs(wipSla)}d` : `🟢 ${wipSla}d`)}</td>
-                                            <td style={{ padding: '8px' }}><span style={{ fontSize: '11px', padding: '2px 6px', borderRadius: '4px', backgroundColor: w.status === 'Done' ? '#d1fae5' : '#fef3c7', color: w.status === 'Done' ? '#065f46' : '#92400e' }}>{w.status}</span></td>
+                                            <td style={{ padding: '8px', fontSize: '14px' }}>{w.action_type}</td>
+                                            <td style={{ padding: '8px', fontSize: '14px' }}>{w.description}</td>
+                                            <td style={{ padding: '8px' }}><span style={{ fontSize: '11px', padding: '2px 6px', borderRadius: '4px', backgroundColor: '#dbeafe', color: '#1e40af' }}>{w.stage_auto || '—'}</span></td>
+                                            <td style={{ padding: '8px', fontSize: '12px', fontWeight: 'bold', color: wipSla < 0 ? '#ef4444' : '#10b981' }}>{w.expiry_date ? (wipSla < 0 ? `🔴 ${Math.abs(wipSla)}d` : `🟢 ${wipSla}d`) : '—'}</td>
                                           </tr>
                                         );
                                       })}
