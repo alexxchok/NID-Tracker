@@ -1,7 +1,7 @@
 // @ts-nocheck
 import React, { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import Papa from 'papaparse';
+import * as XLSX from 'xlsx';
 
 const supabaseUrl = 'https://yymvagbwxdaxrldrhmtm.supabase.co';
 const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl5bXZhZ2J3eGRheHJsZHJobXRtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY2OTEyMjcsImV4cCI6MjEwMjI2NzIyN30.W6WFGXzR7gMU0ln-vfMIJlsxwctWqnCv5Cb7qW8UXXY';
@@ -61,28 +61,12 @@ function Dashboard({ userEmail, onSignOut }) {
   const [cases, setCases] = useState([]);
   const [loading, setLoading] = useState(true);
   
-  const [uploadingDA, setUploadingDA] = useState(false);
-  const [uploadMessageDA, setUploadMessageDA] = useState('');
-  const [uploadingSLA, setUploadingSLA] = useState(false);
-  const [uploadMessageSLA, setUploadMessageSLA] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const [uploadMessage, setUploadMessage] = useState('');
 
   const [selectedCase, setSelectedCase] = useState(null);
   const [daList, setDaList] = useState([]);
   const [wipList, setWipList] = useState([]);
-
-  const [showCaseForm, setShowCaseForm] = useState(false);
-  const [newCaseNum, setNewCaseNum] = useState('');
-  const [newPic, setNewPic] = useState('');
-  const [newCountry, setNewCountry] = useState('');
-  const [newSlaDate, setNewSlaDate] = useState('');
-  const [newPriority, setNewPriority] = useState('Medium');
-  const [newStatus, setNewStatus] = useState('IN PROGRESS');
-  const [newStage, setNewStage] = useState('Stage 1');
-
-  const [showWipForm, setShowWipForm] = useState(false);
-  const [wipActionType, setWipActionType] = useState('Email Sent');
-  const [wipDesc, setWipDesc] = useState('');
-  const [wipDateSent, setWipDateSent] = useState(new Date().toISOString().split('T')[0]);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -99,8 +83,16 @@ function Dashboard({ userEmail, onSignOut }) {
   useEffect(() => { fetchCases(); }, []);
 
   const formatDateString = (dateStr) => {
-    if (!dateStr || typeof dateStr !== 'string') return null;
-    const cleanStr = dateStr.replace(/-/g, '/');
+    if (!dateStr) return null;
+    // Handle Excel serial dates
+    if (typeof dateStr === 'number') {
+      const utc_days = Math.floor(dateStr - 25569);
+      const utc_value = utc_days * 86400;        
+      const date_info = new Date(utc_value * 1000);
+      return `${date_info.getFullYear()}-${String(date_info.getMonth() + 1).padStart(2, '0')}-${String(date_info.getDate()).padStart(2, '0')}`;
+    }
+    
+    const cleanStr = String(dateStr).replace(/-/g, '/');
     const parts = cleanStr.split('/');
     if (parts.length === 3) {
       let [p1, p2, p3] = parts.map(p => parseInt(p, 10));
@@ -128,138 +120,132 @@ function Dashboard({ userEmail, onSignOut }) {
     return str === '' ? null : str;
   };
 
-  // --- DA Uploader ---
-  const handleFileUploadDA = (e) => {
+  // --- MASTER EXCEL UPLOADER ---
+  const handleMasterUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    setUploadingDA(true);
-    setUploadMessageDA('1/4 Reading file...');
-    Papa.parse(file, {
-      header: true, skipEmptyLines: true,
-      complete: async (results) => {
-        try {
-          setUploadMessageDA('2/4 Formatting data...');
-          let daDataToInsert = results.data.map(row => {
-            const getVal = (searchStrings) => { for (let key in row) { const cl = key.trim().toLowerCase(); for (let s of searchStrings) { if (cl.includes(s.toLowerCase())) return row[key]; } } return null; };
-            const caseNum = cleanVal(getVal(["CXN No", "CXN #"]));
-            const respId = cleanVal(getVal(["Respondents' IR ID No", "Respondent ID"])); 
-            const execDate = formatDateString(cleanVal(getVal(["Date of execution 1", "Execution Date"]))); 
-            let actionDays = null;
-            if (execDate) { const today = new Date(); const exec = new Date(execDate); if (!isNaN(exec.getTime())) actionDays = Math.floor((today - exec) / (1000 * 60 * 60 * 24)); }
-            return {
-              case_number: caseNum,
-              complainant_name: cleanVal(getVal(["Complainant's Name and IR ID No", "Complainant Name"])),
-              respondent_name: cleanVal(getVal(["Respondent's Name"])),
-              respondent_id: respId,
-              current_action: cleanVal(getVal(["Action Taken 1", "Current Action"])), 
-              execution_date: execDate,
-              remarks: cleanVal(getVal(["Remarks"])),
-              action_days: actionDays,
-              unique_key: caseNum && respId ? `${caseNum}|${respId}` : null
-            };
-          }).filter(item => item && item.case_number && item.unique_key); 
+    setUploading(true);
+    setUploadMessage('1/5 Reading Excel file...');
 
-          const uniqueMap = new Map();
-          daDataToInsert.forEach(item => uniqueMap.set(item.unique_key, item));
-          const finalDataToInsert = Array.from(uniqueMap.values());
-
-          if (finalDataToInsert.length === 0) { setUploadMessageDA('❌ Error: Found 0 valid rows.'); setUploadingDA(false); return; }
-
-          setUploadMessageDA('3/4 Checking existing cases...');
-          const { data: existingCases } = await supabase.from('cases').select('case_number');
-          const existingSet = new Set(existingCases.map(c => c.case_number));
-          const uniqueCaseNumbers = [...new Set(finalDataToInsert.map(item => item.case_number))];
-          const missingCases = uniqueCaseNumbers.filter(cn => !existingSet.has(cn)).map(cn => {
-            const today = new Date(); const slaDate = new Date(today.setDate(today.getDate() + 30)).toISOString().split('T')[0];
-            return { case_number: cn, case_status: 'IN PROGRESS', sla_due_date: slaDate, created_on: new Date().toISOString().split('T')[0], priority: 'Medium', stage: 'Stage 1' };
-          });
-
-          if (missingCases.length > 0) {
-            const missingChunks = chunkArray(missingCases, 100);
-            for (let chunk of missingChunks) {
-              const { error: insertErr } = await supabase.from('cases').upsert(chunk, { onConflict: 'case_number', ignoreDuplicates: true });
-              if (insertErr) { setUploadMessageDA(`❌ Error creating cases: ${insertErr.message}`); setUploadingDA(false); return; }
-            }
-          }
-
-          setUploadMessageDA('4/4 Uploading respondents...');
-          const daChunks = chunkArray(finalDataToInsert, 100);
-          let errorCount = 0; let firstError = null;
-          for (let chunk of daChunks) {
-            const { error } = await supabase.from('disciplinary_actions').upsert(chunk, { onConflict: 'unique_key' });
-            if (error) { errorCount++; if (!firstError) firstError = error.message; }
-          }
-
-          if (errorCount > 0) setUploadMessageDA(`⚠️ Completed with ${errorCount} errors. First: ${firstError}`);
-          else setUploadMessageDA(`✅ Success! Processed ${finalDataToInsert.length} actions & auto-created ${missingCases.length} cases.`);
-          fetchCases(); setUploadingDA(false);
-        } catch (err) { setUploadMessageDA(`❌ Unexpected Error: ${err.message}`); setUploadingDA(false); }
-      },
-      error: (err) => { setUploadMessageDA(`❌ File Read Error: ${err.message}`); setUploadingDA(false); }
-    });
-  };
-
-  // --- SLA Tracker Uploader ---
-  const handleFileUploadSLA = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    setUploadingSLA(true);
-    setUploadMessageSLA('1/3 Reading file...');
-    Papa.parse(file, {
-      header: true, skipEmptyLines: true, delimiter: "",
-      complete: async (results) => {
-        try {
-          setUploadMessageSLA('2/3 Formatting data...');
-          let casesToUpsert = results.data.map(row => {
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const data = new Uint8Array(e.target.result);
+        const wb = XLSX.read(data, { type: 'array', cellDates: false });
+        
+        setUploadMessage('2/5 Extracting sheets...');
+        
+        // --- 1. PROCESS SLA_TRACKER (CASES) ---
+        let casesToUpsert = [];
+        if (wb.SheetNames.includes('SLA_Tracker')) {
+          const ws = wb.Sheets['SLA_Tracker'];
+          const json = XLSX.utils.sheet_to_json(ws, { defval: null });
+          casesToUpsert = json.map(row => {
             const getVal = (searchStrings) => { for (let key in row) { const cl = key.trim().toLowerCase(); for (let s of searchStrings) { if (cl.includes(s.toLowerCase())) return row[key]; } } return null; };
             const caseNum = cleanVal(getVal(["CASE NUMBER", "Case Number", "CXN No"]));
             if (!caseNum) return null;
             return {
               case_number: caseNum,
               created_on: formatDateString(cleanVal(getVal(["CREATED ON", "Created On"]))),
-              sla_due_date: formatDateString(cleanVal(getVal(["CASE DUE DATE", "SLA Date", "Due Date"]))),
-              country: cleanVal(getVal(["COUNTRY", "Country"])),
+              sla_due_date: formatDateString(cleanVal(getVal(["CASE DUE DATE", "SLA DATE", "Due Date"]))),
+              country: cleanVal(getVal(["COUNTRY"])),
               pic: cleanVal(getVal(["PIC"])),
-              priority: cleanVal(getVal(["PRIORITY", "Priority"])),
+              priority: cleanVal(getVal(["PRIORITY"])) || 'Medium',
               case_status: cleanVal(getVal(["CASE STATUS", "Status"])) || 'IN PROGRESS',
-              stage: cleanVal(getVal(["STAGE OF CASE", "Stage"])),
-              date_completed: formatDateString(cleanVal(getVal(["DATE COMPLETED", "Date Completed"]))),
-              remarks: cleanVal(getVal(["REMARKS", "Remarks"]))
+              stage: cleanVal(getVal(["STAGE OF CASE", "STAGE OF CASE"])),
+              date_completed: formatDateString(cleanVal(getVal(["DATE COMPLETED", "DATE COMPLETED / CANCELLED"]))),
+              remarks: cleanVal(getVal(["REMARKS"]))
             };
-          }).filter(item => item && item.case_number); 
+          }).filter(Boolean);
+        }
 
-          if (casesToUpsert.length === 0) { setUploadMessageSLA('❌ Error: Found 0 valid rows.'); setUploadingSLA(false); return; }
-          setUploadMessageSLA(`3/3 Updating ${casesToUpsert.length} cases...`);
+        // --- 2. PROCESS DISCIPLINARY ACTIONS (RESPONDENTS) ---
+        let daDataToInsert = [];
+        if (wb.SheetNames.includes('Disciplinary Actions_Tracker')) {
+          const ws = wb.Sheets['Disciplinary Actions_Tracker'];
+          const json = XLSX.utils.sheet_to_json(ws, { defval: null });
+          daDataToInsert = json.map(row => {
+            const getVal = (searchStrings) => { for (let key in row) { const cl = key.trim().toLowerCase(); for (let s of searchStrings) { if (cl.includes(s.toLowerCase())) return row[key]; } } return null; };
+            const caseNum = cleanVal(getVal(["CXN #", "CXN No"]));
+            const respId = cleanVal(getVal(["Respondent ID#", "Respondent ID No", "Respondents' IR ID No"])); 
+            const execDate = formatDateString(cleanVal(getVal(["Current Action (Execution Date)", "Execution Date", "Date of execution 1"]))); 
+            let actionDays = null;
+            if (execDate) { const today = new Date(); const exec = new Date(execDate); if (!isNaN(exec.getTime())) actionDays = Math.floor((today - exec) / (1000 * 60 * 60 * 24)); }
+            return {
+              case_number: caseNum,
+              complainant_name: cleanVal(getVal(["Complainant Name"])),
+              respondent_name: cleanVal(getVal(["Respondent Name", "Respondent's Name"])),
+              respondent_id: respId,
+              current_action: cleanVal(getVal(["Current Action", "Action Taken 1"])), 
+              execution_date: execDate,
+              remarks: cleanVal(getVal(["Remarks"])),
+              action_days: actionDays,
+              unique_key: caseNum && respId ? `${caseNum}|${respId}` : null
+            };
+          }).filter(item => item && item.case_number && item.unique_key);
+        }
+
+        if (casesToUpsert.length === 0 && daDataToInsert.length === 0) {
+          setUploadMessage('❌ Error: No valid data found in SLA_Tracker or Disciplinary Actions_Tracker sheets.');
+          setUploading(false);
+          return;
+        }
+
+        setUploadMessage('3/5 Syncing Cases...');
+        if (casesToUpsert.length > 0) {
           const chunks = chunkArray(casesToUpsert, 100);
-          let errorCount = 0; let firstError = null;
           for (let chunk of chunks) {
-            const { error } = await supabase.from('cases').upsert(chunk, { onConflict: 'case_number' });
-            if (error) { errorCount++; if (!firstError) firstError = error.message; }
+            await supabase.from('cases').upsert(chunk, { onConflict: 'case_number' });
           }
-          if (errorCount > 0) setUploadMessageSLA(`⚠️ Completed with ${errorCount} errors. First: ${firstError}`);
-          else setUploadMessageSLA(`✅ Success! Updated ${casesToUpsert.length} SLA cases.`);
-          fetchCases(); setUploadingSLA(false);
-        } catch (err) { setUploadMessageSLA(`❌ Unexpected Error: ${err.message}`); setUploadingSLA(false); }
-      },
-      error: (err) => { setUploadMessageSLA(`❌ File Read Error: ${err.message}`); setUploadingSLA(false); }
-    });
-  };
+        }
 
-  const handleAddCase = async (e) => {
-    e.preventDefault(); 
-    const { error } = await supabase.from('cases').insert([{ case_number: newCaseNum, pic: newPic, country: newCountry, case_status: newStatus, sla_due_date: newSlaDate, priority: newPriority, stage: newStage, created_on: new Date().toISOString().split('T')[0] }]);
-    if (error) alert('Error saving case: ' + error.message);
-    else {
-      setShowCaseForm(false);
-      setNewCaseNum(''); setNewPic(''); setNewCountry(''); setNewStatus('IN PROGRESS'); setNewSlaDate(''); setNewPriority('Medium'); setNewStage('Stage 1');
-      fetchCases(); 
-    }
+        setUploadMessage('4/5 Ensuring parent cases exist for Respondents...');
+        const { data: existingCases } = await supabase.from('cases').select('case_number');
+        const existingSet = new Set(existingCases.map(c => c.case_number));
+        const uniqueDA_caseNums = [...new Set(daDataToInsert.map(item => item.case_number))];
+        const missingCases = uniqueDA_caseNums.filter(cn => !existingSet.has(cn) && !casesToUpsert.some(c => c.case_number === cn)).map(cn => {
+            const today = new Date(); const slaDate = new Date(today.setDate(today.getDate() + 30)).toISOString().split('T')[0];
+            return { case_number: cn, case_status: 'IN PROGRESS', sla_due_date: slaDate, created_on: new Date().toISOString().split('T')[0], priority: 'Medium', stage: 'Stage 1' };
+        });
+        if (missingCases.length > 0) {
+          const missingChunks = chunkArray(missingCases, 100);
+          for (let chunk of missingChunks) {
+            await supabase.from('cases').upsert(chunk, { onConflict: 'case_number', ignoreDuplicates: true });
+          }
+        }
+
+        setUploadMessage('5/5 Uploading Respondents...');
+        const uniqueMap = new Map();
+        daDataToInsert.forEach(item => uniqueMap.set(item.unique_key, item));
+        const finalDataToInsert = Array.from(uniqueMap.values());
+
+        let errorCount = 0; let firstError = null;
+        const daChunks = chunkArray(finalDataToInsert, 100);
+        for (let chunk of daChunks) {
+          const { error } = await supabase.from('disciplinary_actions').upsert(chunk, { onConflict: 'unique_key' });
+          if (error) { errorCount++; if (!firstError) firstError = error.message; }
+        }
+
+        let finalMsg = `✅ Sync Complete! `;
+        if (casesToUpsert.length > 0) finalMsg += `Updated ${casesToUpsert.length} Cases. `;
+        if (finalDataToInsert.length > 0) finalMsg += `Processed ${finalDataToInsert.length} Respondents. `;
+        if (missingCases.length > 0) finalMsg += `Auto-created ${missingCases.length} missing Cases. `;
+        if (errorCount > 0) finalMsg = `⚠️ Completed with ${errorCount} errors. First: ${firstError}`;
+
+        setUploadMessage(finalMsg);
+        fetchCases(); 
+        setUploading(false);
+      } catch (err) {
+        setUploadMessage(`❌ Unexpected Error: ${err.message}`);
+        setUploading(false);
+      }
+    };
+    reader.readAsArrayBuffer(file);
   };
 
   const handleCaseClick = async (caseNum) => {
     if (selectedCase === caseNum) { setSelectedCase(null); return; }
     setSelectedCase(caseNum);
-    setShowWipForm(false);
     const { data: daData } = await supabase.from('disciplinary_actions').select('*').eq('case_number', caseNum);
     const { data: wipData } = await supabase.from('wip_actions').select('*').eq('case_number', caseNum).order('date_sent', { ascending: false });
     setDaList(daData || []);
@@ -270,59 +256,6 @@ function Dashboard({ userEmail, onSignOut }) {
     const { error } = await supabase.from('cases').update({ case_status: newStatus, modified_by_email: userEmail }).eq('case_number', caseNum);
     if (error) alert('Error updating status: ' + error.message);
     else fetchCases();
-  };
-
-  const handleAddWIP = async (e) => {
-    e.preventDefault();
-    // Fetch mapping rule for this action type
-    const { data: rule } = await supabase.from('mapping_rules').select('*').eq('action_type', wipActionType).single();
-    
-    let stageToAssign = rule?.default_stage || null;
-    let slaDays = rule?.default_sla_days || 2;
-
-    // Ambiguous action logic
-    if (rule && rule.initial_stage && rule.concluding_stage) {
-        const currentCase = cases.find(c => c.case_number === selectedCase);
-        const currentStageNum = parseInt(currentCase?.stage?.replace('Stage ', '') || '0', 10);
-        if (currentStageNum >= 6) {
-            stageToAssign = rule.concluding_stage;
-        } else {
-            stageToAssign = rule.initial_stage;
-        }
-    }
-
-    let expiryDate = null;
-    if (wipDateSent) {
-        let d = new Date(wipDateSent);
-        d.setDate(d.getDate() + slaDays); // Simplified: adding calendar days. Working days logic can be added later.
-        expiryDate = d.toISOString().split('T')[0];
-    }
-
-    const { error } = await supabase.from('wip_actions').insert([{ 
-      case_number: selectedCase, 
-      action_type: wipActionType, 
-      description: wipDesc, 
-      stage_auto: stageToAssign,
-      date_sent: wipDateSent, 
-      sla_days: slaDays,
-      expiry_date: expiryDate,
-      status: 'Pending',
-      pic: userEmail 
-    }]);
-    
-    if (error) alert('Error logging WIP: ' + error.message);
-    else {
-      setWipDesc(''); 
-      setShowWipForm(false);
-      const { data } = await supabase.from('wip_actions').select('*').eq('case_number', selectedCase).order('date_sent', { ascending: false });
-      setWipList(data);
-      
-      // Auto-update case stage if mapped
-      if (stageToAssign) {
-        await supabase.from('cases').update({ stage: stageToAssign, modified_by_email: userEmail }).eq('case_number', selectedCase);
-        fetchCases();
-      }
-    }
   };
 
   const calculateSlaDays = (dueDate) => {
@@ -349,8 +282,6 @@ function Dashboard({ userEmail, onSignOut }) {
   const completed = cases.filter(c => c.case_status === 'COMPLETED').length;
   const outOfSla = cases.filter(c => calculateSlaDays(c.sla_due_date) < 0 && c.case_status === 'IN PROGRESS').length;
 
-  const stages = Array.from({length: 10}, (_, i) => `Stage ${i + 1}`);
-
   return (
     <div style={{ padding: '24px', fontFamily: 'Arial, sans-serif', backgroundColor: '#f3f4f6', minHeight: '100vh' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
@@ -368,41 +299,15 @@ function Dashboard({ userEmail, onSignOut }) {
         <div style={{ background: 'white', padding: '20px', borderRadius: '8px', flex: 1, boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}><h3 style={{ margin: 0, color: '#6b7280', fontSize: '14px' }}>OUT OF SLA</h3><p style={{ fontSize: '28px', fontWeight: 'bold', margin: '5px 0 0 0', color: '#ef4444' }}>{outOfSla}</p></div>
       </div>
 
-      <div style={{ display: 'flex', gap: '20px', marginBottom: '30px' }}>
-        <div style={{ background: 'white', padding: '20px', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', flex: 1 }}>
-          <h2 style={{ marginTop: 0, color: '#1f2937', fontSize: '18px' }}>📤 Upload Disciplinary Actions (D365)</h2>
-          <p style={{ color: '#6b7280', fontSize: '13px' }}>Uploads respondents & auto-creates missing cases.</p>
-          <input type="file" accept=".csv" onChange={handleFileUploadDA} disabled={uploadingDA} style={{ marginBottom: '10px', fontSize: '12px' }} />
-          {uploadMessageDA && <p style={{ fontWeight: 'bold', fontSize: '12px', color: uploadMessageDA.includes('Error') || uploadMessageDA.includes('errors') ? '#ef4444' : '#10b981' }}>{uploadMessageDA}</p>}
-        </div>
-        <div style={{ background: 'white', padding: '20px', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', flex: 1 }}>
-          <h2 style={{ marginTop: 0, color: '#1f2937', fontSize: '18px' }}>📋 Upload SLA Tracker (Main Cases)</h2>
-          <p style={{ color: '#6b7280', fontSize: '13px' }}>Updates PICs, SLA Dates, Priorities & Stages.</p>
-          <input type="file" accept=".csv" onChange={handleFileUploadSLA} disabled={uploadingSLA} style={{ marginBottom: '10px', fontSize: '12px' }} />
-          {uploadMessageSLA && <p style={{ fontWeight: 'bold', fontSize: '12px', color: uploadMessageSLA.includes('Error') || uploadMessageSLA.includes('errors') ? '#ef4444' : '#10b981' }}>{uploadMessageSLA}</p>}
-        </div>
+      <div style={{ background: 'white', padding: '20px', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', marginBottom: '30px' }}>
+        <h2 style={{ marginTop: 0, color: '#1f2937', fontSize: '18px' }}>📤 Master Excel Uploader</h2>
+        <p style={{ color: '#6b7280', fontSize: '13px' }}>Upload your Excel workbook (.xlsx). The system will automatically read the <b>SLA_Tracker</b> and <b>Disciplinary Actions_Tracker</b> sheets and sync them to the cloud.</p>
+        <input type="file" accept=".xlsx, .xls" onChange={handleMasterUpload} disabled={uploading} style={{ marginBottom: '10px', fontSize: '12px' }} />
+        {uploadMessage && <p style={{ fontWeight: 'bold', fontSize: '12px', color: uploadMessage.includes('Error') || uploadMessage.includes('errors') ? '#ef4444' : '#10b981' }}>{uploadMessage}</p>}
       </div>
 
       <div style={{ background: 'white', padding: '20px', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-          <h2 style={{ marginTop: 0, color: '#1f2937' }}>📋 SLA Case Tracker</h2>
-          <button onClick={() => setShowCaseForm(!showCaseForm)} style={{ backgroundColor: '#3b82f6', color: 'white', padding: '10px 16px', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}>
-            {showCaseForm ? 'Close Form' : '+ Add New Case'}
-          </button>
-        </div>
-
-        {showCaseForm && (
-          <form onSubmit={handleAddCase} style={{ background: '#f9fafb', padding: '20px', borderRadius: '8px', marginBottom: '20px', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', alignItems: 'end' }}>
-            <div><label style={{ fontSize: '12px', color: '#6b7280' }}>Case Number</label><input type="text" value={newCaseNum} onChange={(e) => setNewCaseNum(e.target.value)} required style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '4px' }} /></div>
-            <div><label style={{ fontSize: '12px', color: '#6b7280' }}>PIC</label><input type="text" value={newPic} onChange={(e) => setNewPic(e.target.value)} style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '4px' }} /></div>
-            <div><label style={{ fontSize: '12px', color: '#6b7280' }}>Country</label><input type="text" value={newCountry} onChange={(e) => setNewCountry(e.target.value)} required style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '4px' }} /></div>
-            <div><label style={{ fontSize: '12px', color: '#6b7280' }}>SLA Due Date</label><input type="date" value={newSlaDate} onChange={(e) => setNewSlaDate(e.target.value)} required style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '4px' }} /></div>
-            <div><label style={{ fontSize: '12px', color: '#6b7280' }}>Priority</label><select value={newPriority} onChange={(e) => setNewPriority(e.target.value)} style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '4px' }}><option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option></select></div>
-            <div><label style={{ fontSize: '12px', color: '#6b7280' }}>Status</label><select value={newStatus} onChange={(e) => setNewStatus(e.target.value)} style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '4px' }}><option value="IN PROGRESS">IN PROGRESS</option><option value="COMPLETED">COMPLETED</option></select></div>
-            <div><label style={{ fontSize: '12px', color: '#6b7280' }}>Stage</label><select value={newStage} onChange={(e) => setNewStage(e.target.value)} style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '4px' }}>{stages.map(s => <option key={s} value={s}>{s}</option>)}</select></div>
-            <button type="submit" style={{ backgroundColor: '#10b981', color: 'white', padding: '10px 16px', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}>Save Case</button>
-          </form>
-        )}
+        <h2 style={{ marginTop: 0, color: '#1f2937' }}>📋 SLA Case Tracker</h2>
         
         <input 
           type="text" 
@@ -445,56 +350,6 @@ function Dashboard({ userEmail, onSignOut }) {
                         {selectedCase === c.case_number && (
                           <tr>
                             <td colSpan="9" style={{ padding: '20px', backgroundColor: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
-                              
-                              {/* WIP TRACKER SECTION */}
-                              <div style={{ marginBottom: '30px', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '15px', backgroundColor: 'white' }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                  <h3 style={{ marginTop: 0, color: '#1f2937' }}>⏳ WIP Tracker</h3>
-                                  <button onClick={() => setShowWipForm(!showWipForm)} style={{ backgroundColor: '#8b5cf6', color: 'white', padding: '6px 12px', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>{showWipForm ? 'Cancel' : '+ Log WIP Action'}</button>
-                                </div>
-                                
-                                {showWipForm && (
-                                  <form onSubmit={handleAddWIP} style={{ display: 'grid', gridTemplateColumns: '2fr 3fr 1fr 1fr auto', gap: '10px', marginBottom: '15px', alignItems: 'end' }}>
-                                    <div>
-                                      <label style={{ fontSize: '11px', color: '#6b7280' }}>Action Type</label>
-                                      <select value={wipActionType} onChange={(e) => setWipActionType(e.target.value)} style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '4px' }}>
-                                        <option>Email Sent</option>
-                                        <option>Issue suspension notice (VO SUSPENDED + ISSUED)</option>
-                                        <option>Send recom. case summary to Cres (Initial DA)</option>
-                                        <option>Send recom. to CLO for approval</option>
-                                        <option>Draft case summary</option>
-                                        <option>Issue SCO (Show Cause Order)</option>
-                                      </select>
-                                    </div>
-                                    <div><label style={{ fontSize: '11px', color: '#6b7280' }}>Description</label><input type="text" value={wipDesc} onChange={(e) => setWipDesc(e.target.value)} required style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '4px' }} /></div>
-                                    <div><label style={{ fontSize: '11px', color: '#6b7280' }}>Date Sent</label><input type="date" value={wipDateSent} onChange={(e) => setWipDateSent(e.target.value)} style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '4px' }} /></div>
-                                    <div></div>
-                                    <button type="submit" style={{ backgroundColor: '#10b981', color: 'white', padding: '8px 16px', border: 'none', borderRadius: '4px', cursor: 'pointer', height: '35px' }}>Log Action</button>
-                                  </form>
-                                )}
-
-                                {wipList.length === 0 ? <p style={{ color: '#6b7280', fontStyle: 'italic' }}>No WIP actions logged.</p> : (
-                                  <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-                                    <thead><tr style={{ borderBottom: '2px solid #e5e7eb', backgroundColor: '#f9fafb' }}><th style={{ padding: '8px' }}>Date</th><th style={{ padding: '8px' }}>Action Type</th><th style={{ padding: '8px' }}>Description</th><th style={{ padding: '8px' }}>Stage</th><th style={{ padding: '8px' }}>Expiry</th></tr></thead>
-                                    <tbody>
-                                      {wipList.map((w, i) => {
-                                        const wipSla = calculateSlaDays(w.expiry_date);
-                                        return (
-                                          <tr key={i} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                                            <td style={{ padding: '8px', fontSize: '12px' }}>{w.date_sent}</td>
-                                            <td style={{ padding: '8px', fontSize: '14px' }}>{w.action_type}</td>
-                                            <td style={{ padding: '8px', fontSize: '14px' }}>{w.description}</td>
-                                            <td style={{ padding: '8px' }}><span style={{ fontSize: '11px', padding: '2px 6px', borderRadius: '4px', backgroundColor: '#dbeafe', color: '#1e40af' }}>{w.stage_auto || '—'}</span></td>
-                                            <td style={{ padding: '8px', fontSize: '12px', fontWeight: 'bold', color: wipSla < 0 ? '#ef4444' : '#10b981' }}>{w.expiry_date ? (wipSla < 0 ? `🔴 ${Math.abs(wipSla)}d` : `🟢 ${wipSla}d`) : '—'}</td>
-                                          </tr>
-                                        );
-                                      })}
-                                    </tbody>
-                                  </table>
-                                )}
-                              </div>
-
-                              {/* DA SECTION */}
                               <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '15px', backgroundColor: 'white' }}>
                                 <h3 style={{ marginTop: 0, color: '#1f2937' }}>⚖️ Disciplinary Actions (Respondents)</h3>
                                 {daList.length === 0 ? <p style={{ color: '#6b7280', fontStyle: 'italic' }}>No respondents linked.</p> : (
@@ -513,7 +368,6 @@ function Dashboard({ userEmail, onSignOut }) {
                                   </table>
                                 )}
                               </div>
-
                             </td>
                           </tr>
                         )}
