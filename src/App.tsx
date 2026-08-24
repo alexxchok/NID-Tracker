@@ -125,8 +125,8 @@ function Dashboard({ userEmail, onSignOut }) {
     Papa.parse(file, {
       header: true,
       skipEmptyLines: true,
+      delimiter: "", // <--- ADD THIS LINE
       complete: async (results) => {
-        try {
           setUploadMessageDA('2/4 Formatting & sanitizing data...');
           const rawData = results.data;
           let daDataToInsert = rawData.map(row => {
