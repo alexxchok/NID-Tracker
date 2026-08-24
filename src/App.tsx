@@ -67,14 +67,15 @@ function Dashboard({ userEmail, onSignOut }) {
   const [selectedCase, setSelectedCase] = useState(null);
   const [daList, setDaList] = useState([]);
 
-  // NEW: Search & Pagination State
+  // Search & Pagination State
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
-  const pageSize = 25; // Show 25 cases per page
+  const pageSize = 25;
 
   const fetchCases = async () => {
     setLoading(true);
-    const { data, error } = await supabase.from('cases').select('*, disciplinary_actions(count)').order('sla_due_date', { ascending: true });
+    // NEW: Fetch respondent_name and respondent_id so we can search them
+    const { data, error } = await supabase.from('cases').select('*, disciplinary_actions(respondent_name, respondent_id)').order('sla_due_date', { ascending: true });
     if (error) console.error('Error fetching cases:', error);
     else setCases(data);
     setLoading(false);
@@ -238,16 +239,27 @@ function Dashboard({ userEmail, onSignOut }) {
     return Math.ceil((new Date(dueDate) - today) / (1000 * 60 * 60 * 24));
   };
 
-  // NEW: Filter cases based on Search Term
+  // NEW: Deep Search Logic (Checks Case details AND Respondent details)
   const filteredCases = cases.filter(c => {
     if (!searchTerm) return true;
     const search = searchTerm.toLowerCase();
-    return c.case_number?.toLowerCase().includes(search) || 
-           c.pic?.toLowerCase().includes(search) || 
-           c.country?.toLowerCase().includes(search);
+    
+    // 1. Check main case fields
+    const matchCase = c.case_number?.toLowerCase().includes(search);
+    const matchPic = c.pic?.toLowerCase().includes(search);
+    const matchCountry = c.country?.toLowerCase().includes(search);
+    
+    // 2. Check inside the Respondents list
+    const matchRespondent = c.disciplinary_actions?.some(da => 
+      da.respondent_name?.toLowerCase().includes(search) || 
+      da.respondent_id?.toLowerCase().includes(search)
+    );
+
+    // If any of these are true, keep the case in the list
+    return matchCase || matchPic || matchCountry || matchRespondent;
   });
 
-  // NEW: Pagination Logic
+  // Pagination Logic
   const totalPages = Math.ceil(filteredCases.length / pageSize);
   const currentCases = filteredCases.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
@@ -283,14 +295,13 @@ function Dashboard({ userEmail, onSignOut }) {
       <div style={{ background: 'white', padding: '20px', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
         <h2 style={{ marginTop: 0, color: '#1f2937' }}>📋 SLA Case Tracker</h2>
         
-        {/* NEW: Search Bar */}
         <input 
           type="text" 
-          placeholder="Search by Case#, PIC, or Country..." 
+          placeholder="Search by Case#, PIC, Country, Respondent Name, or ID..." 
           value={searchTerm}
           onChange={(e) => {
             setSearchTerm(e.target.value);
-            setCurrentPage(1); // Reset to first page on search
+            setCurrentPage(1);
           }}
           style={{ width: '100%', padding: '10px', marginBottom: '20px', border: '1px solid #d1d5db', borderRadius: '6px', boxSizing: 'border-box' }}
         />
@@ -305,10 +316,10 @@ function Dashboard({ userEmail, onSignOut }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {/* NEW: Mapping over currentCases (the paginated slice) instead of all cases */}
                   {currentCases.map((c, index) => {
                     const slaDays = calculateSlaDays(c.sla_due_date);
-                    const respondentCount = c.disciplinary_actions?.[0]?.count || 0;
+                    // NEW: Calculate count directly from the array length
+                    const respondentCount = c.disciplinary_actions?.length || 0;
                     return (
                       <React.Fragment key={index}>
                         <tr style={{ borderBottom: selectedCase === c.case_number ? 'none' : '1px solid #e5e7eb', cursor: 'pointer', backgroundColor: selectedCase === c.case_number ? '#eff6ff' : 'white' }}>
@@ -354,7 +365,6 @@ function Dashboard({ userEmail, onSignOut }) {
               </table>
             </div>
 
-            {/* NEW: Pagination Controls */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '20px' }}>
               <button 
                 onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} 
