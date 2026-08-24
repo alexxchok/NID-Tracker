@@ -90,8 +90,6 @@ function Dashboard({ userEmail, onSignOut }) {
 
   const formatDateString = (dateStr) => {
     if (!dateStr) return null;
-    
-    // Handle Excel serial numbers
     if (typeof dateStr === 'number') {
       const utc_days = Math.floor(dateStr - 25569);
       const utc_value = utc_days * 86400;        
@@ -100,10 +98,7 @@ function Dashboard({ userEmail, onSignOut }) {
         return `${date_info.getFullYear()}-${String(date_info.getMonth() + 1).padStart(2, '0')}-${String(date_info.getDate()).padStart(2, '0')}`;
       }
     }
-    
     const cleanStr = String(dateStr).trim();
-    
-    // Try standard YYYY-MM-DD or MM/DD/YYYY
     const parts = cleanStr.split(/[-/]/);
     if (parts.length === 3) {
       let [p1, p2, p3] = parts.map(p => parseInt(p, 10));
@@ -116,18 +111,13 @@ function Dashboard({ userEmail, onSignOut }) {
         }
       }
     }
-    
-    // Fallback to Date object
     const fallbackDate = new Date(cleanStr);
     if (!isNaN(fallbackDate.getTime())) {
-      // Ensure we only return the date part, and it's a valid year
       const year = fallbackDate.getFullYear();
       if (year > 1900 && year < 2100) {
         return `${year}-${String(fallbackDate.getMonth() + 1).padStart(2, '0')}-${String(fallbackDate.getDate()).padStart(2, '0')}`;
       }
     }
-    
-    // If it's garbage (like "04:59:57"), return null instead of crashing
     return null;
   };
 
@@ -188,15 +178,23 @@ function Dashboard({ userEmail, onSignOut }) {
             const caseNum = cleanVal(getVal(["CXN #", "CXN No"]));
             const respId = cleanVal(getVal(["Respondent ID#", "Respondent ID No", "Respondents' IR ID No"])); 
             const execDate = formatDateString(cleanVal(getVal(["Current Action (Execution Date)", "Execution Date", "Date of execution 1"]))); 
+            const prevDate = formatDateString(cleanVal(getVal(["(Previous Action (Execution Date)", "Previous Action (Execution Date)"])));
+            
             let actionDays = null;
             if (execDate) { const today = new Date(); const exec = new Date(execDate); if (!isNaN(exec.getTime())) actionDays = Math.floor((today - exec) / (1000 * 60 * 60 * 24)); }
+            
             return {
               case_number: caseNum,
               complainant_name: cleanVal(getVal(["Complainant Name"])),
+              complainant_id: cleanVal(getVal(["Complainant ID#"])),
+              complainant_country: cleanVal(getVal(["Complainant Country"])),
               respondent_name: cleanVal(getVal(["Respondent Name", "Respondent's Name"])),
               respondent_id: respId,
+              respondent_country: cleanVal(getVal(["Respondent Country"])),
               current_action: cleanVal(getVal(["Current Action", "Action Taken 1"])), 
               execution_date: execDate,
+              previous_action: cleanVal(getVal(["Previous Action"])),
+              previous_action_date: prevDate,
               remarks: cleanVal(getVal(["Remarks"])),
               action_days: actionDays,
               unique_key: caseNum && respId ? `${caseNum}|${respId}` : null
@@ -373,14 +371,47 @@ function Dashboard({ userEmail, onSignOut }) {
                                 <h3 style={{ marginTop: 0, color: '#1f2937' }}>⚖️ Disciplinary Actions (Respondents)</h3>
                                 {daList.length === 0 ? <p style={{ color: '#6b7280', fontStyle: 'italic' }}>No respondents linked.</p> : (
                                   <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-                                    <thead><tr style={{ borderBottom: '2px solid #e5e7eb' }}><th style={{ padding: '8px' }}>Name</th><th style={{ padding: '8px' }}>Action</th><th style={{ padding: '8px' }}>Days</th><th style={{ padding: '8px' }}>Remarks</th></tr></thead>
+                                    <thead>
+                                      <tr style={{ borderBottom: '2px solid #e5e7eb', backgroundColor: '#f9fafb' }}>
+                                        <th style={{ padding: '8px' }}>Complainant Details</th>
+                                        <th style={{ padding: '8px' }}>Respondent Details</th>
+                                        <th style={{ padding: '8px' }}>Action Timeline</th>
+                                        <th style={{ padding: '8px' }}>Remarks</th>
+                                      </tr>
+                                    </thead>
                                     <tbody>
                                       {daList.map((da, i) => (
-                                        <tr key={i} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                                          <td style={{ padding: '8px' }}>{da.respondent_name}</td>
-                                          <td style={{ padding: '8px' }}><span style={{ fontWeight: 'bold', color: da.current_action === 'Terminated' ? '#ef4444' : da.current_action === 'Suspended' ? '#f59e0b' : '#10b981' }}>{da.current_action}</span></td>
-                                          <td style={{ padding: '8px', fontWeight: 'bold' }}>{da.action_days ? `${da.action_days}d` : '—'}</td>
-                                          <td style={{ padding: '8px', fontSize: '12px', color: '#6b7280' }}>{da.remarks || '—'}</td>
+                                        <tr key={i} style={{ borderBottom: '1px solid #f3f4f6', verticalAlign: 'top' }}>
+                                          <td style={{ padding: '8px' }}>
+                                            <div style={{ fontWeight: 'bold' }}>{da.complainant_name || '—'}</div>
+                                            <div style={{ fontSize: '12px', color: '#6b7280' }}>ID: {da.complainant_id || '—'}</div>
+                                            <div style={{ fontSize: '12px', color: '#6b7280' }}>{da.complainant_country || ''}</div>
+                                          </td>
+                                          <td style={{ padding: '8px' }}>
+                                            <div style={{ fontWeight: 'bold' }}>{da.respondent_name || '—'}</div>
+                                            <div style={{ fontSize: '12px', color: '#6b7280' }}>ID: {da.respondent_id || '—'}</div>
+                                            <div style={{ fontSize: '12px', color: '#6b7280' }}>{da.respondent_country || ''}</div>
+                                          </td>
+                                          <td style={{ padding: '8px' }}>
+                                            {da.previous_action && (
+                                              <div style={{ marginBottom: '8px', paddingBottom: '8px', borderBottom: '1px dashed #e5e7eb' }}>
+                                                <span style={{ fontSize: '11px', color: '#9ca3af' }}>PREVIOUS</span><br/>
+                                                <span style={{ fontWeight: 'bold', color: '#f59e0b' }}>{da.previous_action}</span>
+                                                <span style={{ fontSize: '12px', color: '#6b7280', marginLeft: '8px' }}>{da.previous_action_date || 'No date'}</span>
+                                              </div>
+                                            )}
+                                            {da.current_action && (
+                                              <div>
+                                                <span style={{ fontSize: '11px', color: '#9ca3af' }}>CURRENT</span><br/>
+                                                <span style={{ fontWeight: 'bold', color: da.current_action === 'Terminated' ? '#ef4444' : da.current_action === 'Suspended' ? '#f59e0b' : '#10b981' }}>{da.current_action}</span>
+                                                <span style={{ fontSize: '12px', color: '#6b7280', marginLeft: '8px' }}>{da.execution_date || 'No date'}</span>
+                                                {da.action_days != null && (
+                                                  <span style={{ fontSize: '11px', color: '#9ca3af', marginLeft: '8px' }}>({da.action_days}d ago)</span>
+                                                )}
+                                              </div>
+                                            )}
+                                          </td>
+                                          <td style={{ padding: '8px', fontSize: '12px', color: '#6b7280', maxWidth: '300px' }}>{da.remarks || '—'}</td>
                                         </tr>
                                       ))}
                                     </tbody>
