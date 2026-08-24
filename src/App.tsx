@@ -137,8 +137,9 @@ function Dashboard({ userEmail, onSignOut }) {
         
         // --- 1. PROCESS SLA_TRACKER (CASES) ---
         let casesToUpsert = [];
-        if (wb.SheetNames.includes('SLA_Tracker')) {
-          const ws = wb.Sheets['SLA_Tracker'];
+        const slaSheetName = wb.SheetNames.find(name => name.trim().toLowerCase() === 'sla_tracker');
+        if (slaSheetName) {
+          const ws = wb.Sheets[slaSheetName];
           const json = XLSX.utils.sheet_to_json(ws, { defval: null });
           casesToUpsert = json.map(row => {
             const getVal = (searchStrings) => { for (let key in row) { const cl = key.trim().toLowerCase(); for (let s of searchStrings) { if (cl.includes(s.toLowerCase())) return row[key]; } } return null; };
@@ -161,8 +162,9 @@ function Dashboard({ userEmail, onSignOut }) {
 
         // --- 2. PROCESS DISCIPLINARY ACTIONS (RESPONDENTS) ---
         let daDataToInsert = [];
-        if (wb.SheetNames.includes('Disciplinary Actions_Tracker')) {
-          const ws = wb.Sheets['Disciplinary Actions_Tracker'];
+        const daSheetName = wb.SheetNames.find(name => name.trim().toLowerCase() === 'disciplinary actions_tracker');
+        if (daSheetName) {
+          const ws = wb.Sheets[daSheetName];
           const json = XLSX.utils.sheet_to_json(ws, { defval: null });
           daDataToInsert = json.map(row => {
             const getVal = (searchStrings) => { for (let key in row) { const cl = key.trim().toLowerCase(); for (let s of searchStrings) { if (cl.includes(s.toLowerCase())) return row[key]; } } return null; };
