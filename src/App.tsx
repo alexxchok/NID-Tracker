@@ -64,7 +64,6 @@ function Dashboard({ userEmail, onSignOut }) {
   const [uploadingDA, setUploadingDA] = useState(false);
   const [uploadMessageDA, setUploadMessageDA] = useState('');
 
-  // NEW: SLA Tracker Upload State
   const [uploadingSLA, setUploadingSLA] = useState(false);
   const [uploadMessageSLA, setUploadMessageSLA] = useState('');
 
@@ -115,7 +114,7 @@ function Dashboard({ userEmail, onSignOut }) {
     return str === '' ? null : str;
   };
 
-  // --- DA Uploader (Same as before) ---
+  // --- DA Uploader ---
   const handleFileUploadDA = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -125,8 +124,8 @@ function Dashboard({ userEmail, onSignOut }) {
     Papa.parse(file, {
       header: true,
       skipEmptyLines: true,
-      delimiter: "", // <--- ADD THIS LINE
       complete: async (results) => {
+        try {
           setUploadMessageDA('2/4 Formatting & sanitizing data...');
           const rawData = results.data;
           let daDataToInsert = rawData.map(row => {
@@ -160,7 +159,7 @@ function Dashboard({ userEmail, onSignOut }) {
               action_days: actionDays,
               unique_key: caseNum && respId ? `${caseNum}|${respId}` : null
             };
-          }).filter(item => item.case_number && item.unique_key); 
+          }).filter(item => item && item.case_number && item.unique_key); 
 
           const uniqueMap = new Map();
           daDataToInsert.forEach(item => uniqueMap.set(item.unique_key, item));
@@ -223,7 +222,7 @@ function Dashboard({ userEmail, onSignOut }) {
     });
   };
 
-  // --- NEW: SLA Tracker Uploader ---
+  // --- SLA Tracker Uploader ---
   const handleFileUploadSLA = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -233,20 +232,17 @@ function Dashboard({ userEmail, onSignOut }) {
     Papa.parse(file, {
       header: true,
       skipEmptyLines: true,
+      delimiter: "", // Auto-detect delimiter
       complete: async (results) => {
         try {
           setUploadMessageSLA('2/3 Formatting data...');
           const rawData = results.data;
           
-          // NEW: Debug variable to see headers
-          let debugHeadersSLA = rawData.length > 0 ? Object.keys(rawData[0]) : [];
-
           let casesToUpsert = rawData.map(row => {
             const getVal = (searchStrings) => {
               for (let key in row) {
                 const cleanKey = key.trim().toLowerCase();
                 for (let search of searchStrings) {
-                  // Changed to 'includes' for more forgiving matching
                   if (cleanKey.includes(search.toLowerCase())) return row[key];
                 }
               }
@@ -271,7 +267,7 @@ function Dashboard({ userEmail, onSignOut }) {
           }).filter(item => item && item.case_number); 
 
           if (casesToUpsert.length === 0) {
-            setUploadMessageSLA(`❌ Error: Found 0 valid rows. DEBUG HEADERS: ${debugHeadersSLA.join(' | ')}`);
+            setUploadMessageSLA('❌ Error: Found 0 valid rows. Make sure you saved as CSV UTF-8.');
             setUploadingSLA(false);
             return;
           }
@@ -367,7 +363,6 @@ function Dashboard({ userEmail, onSignOut }) {
       </div>
 
       <div style={{ display: 'flex', gap: '20px', marginBottom: '30px' }}>
-        {/* DA Uploader */}
         <div style={{ background: 'white', padding: '20px', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', flex: 1 }}>
           <h2 style={{ marginTop: 0, color: '#1f2937', fontSize: '18px' }}>📤 Upload Disciplinary Actions (D365)</h2>
           <p style={{ color: '#6b7280', fontSize: '13px' }}>Uploads respondents & auto-creates missing cases.</p>
@@ -375,7 +370,6 @@ function Dashboard({ userEmail, onSignOut }) {
           {uploadMessageDA && <p style={{ fontWeight: 'bold', fontSize: '12px', color: uploadMessageDA.includes('Error') || uploadMessageDA.includes('errors') ? '#ef4444' : '#10b981' }}>{uploadMessageDA}</p>}
         </div>
 
-        {/* NEW: SLA Tracker Uploader */}
         <div style={{ background: 'white', padding: '20px', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', flex: 1 }}>
           <h2 style={{ marginTop: 0, color: '#1f2937', fontSize: '18px' }}>📋 Upload SLA Tracker (Main Cases)</h2>
           <p style={{ color: '#6b7280', fontSize: '13px' }}>Updates PICs, SLA Dates, Priorities & Stages.</p>
