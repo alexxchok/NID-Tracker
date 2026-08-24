@@ -264,7 +264,7 @@ function Dashboard({ userEmail, onSignOut }) {
               date_completed: formatDateString(cleanVal(getVal(["DATE COMPLETED / CANCELLED", "Date Completed"]))),
               remarks: cleanVal(getVal(["REMARKS", "Remarks"]))
             };
-          }).filter(item => item.case_number); 
+          }).filter(item => item && item.case_number); 
 
           if (casesToUpsert.length === 0) {
             setUploadMessageSLA('❌ Error: Found 0 valid rows. Check column headers.');
