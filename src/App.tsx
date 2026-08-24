@@ -238,18 +238,22 @@ function Dashboard({ userEmail, onSignOut }) {
           setUploadMessageSLA('2/3 Formatting data...');
           const rawData = results.data;
           
+          // NEW: Debug variable to see headers
+          let debugHeadersSLA = rawData.length > 0 ? Object.keys(rawData[0]) : [];
+
           let casesToUpsert = rawData.map(row => {
             const getVal = (searchStrings) => {
               for (let key in row) {
                 const cleanKey = key.trim().toLowerCase();
                 for (let search of searchStrings) {
-                  if (cleanKey === search.toLowerCase()) return row[key];
+                  // Changed to 'includes' for more forgiving matching
+                  if (cleanKey.includes(search.toLowerCase())) return row[key];
                 }
               }
               return null;
             };
 
-            const caseNum = cleanVal(getVal(["CASE NUMBER", "Case Number", "CXN No"]));
+            const caseNum = cleanVal(getVal(["CASE NUMBER", "Case Number", "CXN No", "Case #", "CXN #"]));
             if (!caseNum) return null;
 
             return {
@@ -267,7 +271,7 @@ function Dashboard({ userEmail, onSignOut }) {
           }).filter(item => item && item.case_number); 
 
           if (casesToUpsert.length === 0) {
-            setUploadMessageSLA('❌ Error: Found 0 valid rows. Check column headers.');
+            setUploadMessageSLA(`❌ Error: Found 0 valid rows. DEBUG HEADERS: ${debugHeadersSLA.join(' | ')}`);
             setUploadingSLA(false);
             return;
           }
