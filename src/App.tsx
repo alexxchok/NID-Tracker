@@ -167,34 +167,58 @@ function Dashboard({ userEmail, onSignOut }) {
           }).filter(Boolean);
         }
 
-        // --- 2. PROCESS DISCIPLINARY ACTIONS (RESPONDENTS) ---
+        // --- 2. PROCESS RAW_DATA OR DISCIPLINARY ACTIONS (RESPONDENTS) ---
         let daDataToInsert = [];
-        const daSheetName = wb.SheetNames.find(name => name.trim().toLowerCase() === 'disciplinary actions_tracker');
+        // Look for Raw_Data first, then fallback to Disciplinary Actions_Tracker
+        const daSheetName = wb.SheetNames.find(name => name.trim().toLowerCase() === 'raw_data') || wb.SheetNames.find(name => name.trim().toLowerCase() === 'disciplinary actions_tracker');
+        
         if (daSheetName) {
           const ws = wb.Sheets[daSheetName];
           const json = XLSX.utils.sheet_to_json(ws, { defval: null });
           daDataToInsert = json.map(row => {
             const getVal = (searchStrings) => { for (let key in row) { const cl = key.trim().toLowerCase(); for (let s of searchStrings) { if (cl.includes(s.toLowerCase())) return row[key]; } } return null; };
-            const caseNum = cleanVal(getVal(["CXN #", "CXN No"]));
+            const caseNum = cleanVal(getVal(["CXN No", "CXN #"]));
             const respId = cleanVal(getVal(["Respondent ID#", "Respondent ID No", "Respondents' IR ID No"])); 
-            const execDate = formatDateString(cleanVal(getVal(["Current Action (Execution Date)", "Execution Date", "Date of execution 1"]))); 
-            const prevDate = formatDateString(cleanVal(getVal(["(Previous Action (Execution Date)", "Previous Action (Execution Date)"])));
+            
+            // Build Action History Timeline
+            let history = [];
+            for (let i = 1; i <= 4; i++) {
+              const action = cleanVal(getVal([`Action Taken ${i}`]));
+              const dateStr = cleanVal(getVal([`Date of execution ${i}`]));
+              const date = formatDateString(dateStr);
+              if (action) {
+                history.push({ step: i, action: action, date: date });
+              }
+            }
+            // If no history found in Action Taken 1-4, fallback to Current/Previous Action
+            if (history.length === 0) {
+                const currAction = cleanVal(getVal(["Current Action", "Action Taken 1"]));
+                const currDate = formatDateString(cleanVal(getVal(["Current Action (Execution Date)", "Execution Date"])));
+                if (currAction) history.push({ step: 1, action: currAction, date: currDate });
+                
+                const prevAction = cleanVal(getVal(["Previous Action"]));
+                const prevDate = formatDateString(cleanVal(getVal(["(Previous Action (Execution Date)", "Previous Action (Execution Date)"])));
+                if (prevAction) history.push({ step: 2, action: prevAction, date: prevDate });
+            }
+
+            // Determine the latest action for the main 'current_action' field
+            const latestAction = history.length > 0 ? history[history.length - 1].action : null;
+            const latestDate = history.length > 0 ? history[history.length - 1].date : null;
             
             let actionDays = null;
-            if (execDate) { const today = new Date(); const exec = new Date(execDate); if (!isNaN(exec.getTime())) actionDays = Math.floor((today - exec) / (1000 * 60 * 60 * 24)); }
+            if (latestDate) { const today = new Date(); const exec = new Date(latestDate); if (!isNaN(exec.getTime())) actionDays = Math.floor((today - exec) / (1000 * 60 * 60 * 24)); }
             
             return {
               case_number: caseNum,
-              complainant_name: cleanVal(getVal(["Complainant Name"])),
+              complainant_name: cleanVal(getVal(["Complainant Name", "Complainant's Name and IR ID No"])),
               complainant_id: cleanVal(getVal(["Complainant ID#"])),
               complainant_country: cleanVal(getVal(["Complainant Country"])),
               respondent_name: cleanVal(getVal(["Respondent Name", "Respondent's Name"])),
               respondent_id: respId,
-              respondent_country: cleanVal(getVal(["Respondent Country"])),
-              current_action: cleanVal(getVal(["Current Action", "Action Taken 1"])), 
-              execution_date: execDate,
-              previous_action: cleanVal(getVal(["Previous Action"])),
-              previous_action_date: prevDate,
+              respondent_country: cleanVal(getVal(["Respondent Country", "Country"])),
+              current_action: latestAction, 
+              execution_date: latestDate,
+              action_history: history.length > 0 ? history : null,
               remarks: cleanVal(getVal(["Remarks"])),
               action_days: actionDays,
               unique_key: caseNum && respId ? `${caseNum}|${respId}` : null
@@ -203,7 +227,7 @@ function Dashboard({ userEmail, onSignOut }) {
         }
 
         if (casesToUpsert.length === 0 && daDataToInsert.length === 0) {
-          setUploadMessage('❌ Error: No valid data found in SLA_Tracker or Disciplinary Actions_Tracker sheets.');
+          setUploadMessage('❌ Error: No valid data found in SLA_Tracker or Raw_Data sheets.');
           setUploading(false);
           return;
         }
@@ -299,6 +323,15 @@ function Dashboard({ userEmail, onSignOut }) {
   const completed = cases.filter(c => c.case_status === 'COMPLETED').length;
   const outOfSla = cases.filter(c => calculateSlaDays(c.sla_due_date) < 0 && c.case_status === 'IN PROGRESS').length;
 
+  const getActionColor = (action) => {
+    if (!action) return '#6b7280';
+    const lower = action.toLowerCase();
+    if (lower.includes('terminat')) return '#ef4444';
+    if (lower.includes('suspend')) return '#f59e0b';
+    if (lower.includes('release') || lower.includes('issued warning')) return '#10b981';
+    return '#3b82f6';
+  };
+
   return (
     <div style={{ padding: '24px', fontFamily: 'Arial, sans-serif', backgroundColor: '#f3f4f6', minHeight: '100vh' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
@@ -318,7 +351,7 @@ function Dashboard({ userEmail, onSignOut }) {
 
       <div style={{ background: 'white', padding: '20px', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', marginBottom: '30px' }}>
         <h2 style={{ marginTop: 0, color: '#1f2937', fontSize: '18px' }}>📤 Master Excel Uploader</h2>
-        <p style={{ color: '#6b7280', fontSize: '13px' }}>Upload your Excel workbook (.xlsx). The system will automatically read the <b>SLA_Tracker</b> and <b>Disciplinary Actions_Tracker</b> sheets and sync them to the cloud.</p>
+        <p style={{ color: '#6b7280', fontSize: '13px' }}>Upload your Excel workbook (.xlsx). The system will automatically read the <b>SLA_Tracker</b> and <b>Raw_Data</b> (or Disciplinary Actions_Tracker) sheets and sync them to the cloud.</p>
         <input type="file" accept=".xlsx, .xls" onChange={handleMasterUpload} disabled={uploading} style={{ marginBottom: '10px', fontSize: '12px' }} />
         {uploadMessage && <p style={{ fontWeight: 'bold', fontSize: '12px', color: uploadMessage.includes('Error') || uploadMessage.includes('errors') ? '#ef4444' : '#10b981' }}>{uploadMessage}</p>}
       </div>
@@ -370,52 +403,51 @@ function Dashboard({ userEmail, onSignOut }) {
                               <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '15px', backgroundColor: 'white' }}>
                                 <h3 style={{ marginTop: 0, color: '#1f2937' }}>⚖️ Disciplinary Actions (Respondents)</h3>
                                 {daList.length === 0 ? <p style={{ color: '#6b7280', fontStyle: 'italic' }}>No respondents linked.</p> : (
-                                  <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-                                    <thead>
-                                      <tr style={{ borderBottom: '2px solid #e5e7eb', backgroundColor: '#f9fafb' }}>
-                                        <th style={{ padding: '8px' }}>Complainant Details</th>
-                                        <th style={{ padding: '8px' }}>Respondent Details</th>
-                                        <th style={{ padding: '8px' }}>Action Timeline</th>
-                                        <th style={{ padding: '8px' }}>Remarks</th>
-                                      </tr>
-                                    </thead>
-                                    <tbody>
-                                      {daList.map((da, i) => (
-                                        <tr key={i} style={{ borderBottom: '1px solid #f3f4f6', verticalAlign: 'top' }}>
-                                          <td style={{ padding: '8px' }}>
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                                    {daList.map((da, i) => (
+                                      <div key={i} style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '15px', backgroundColor: '#fcfcfc' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px', paddingBottom: '15px', borderBottom: '1px solid #e5e7eb' }}>
+                                          <div>
+                                            <div style={{ fontSize: '12px', color: '#9ca3af', marginBottom: '4px' }}>COMPLAINANT</div>
                                             <div style={{ fontWeight: 'bold' }}>{da.complainant_name || '—'}</div>
-                                            <div style={{ fontSize: '12px', color: '#6b7280' }}>ID: {da.complainant_id || '—'}</div>
-                                            <div style={{ fontSize: '12px', color: '#6b7280' }}>{da.complainant_country || ''}</div>
-                                          </td>
-                                          <td style={{ padding: '8px' }}>
+                                            <div style={{ fontSize: '12px', color: '#6b7280' }}>ID: {da.complainant_id || '—'} | {da.complainant_country || ''}</div>
+                                          </div>
+                                          <div style={{ textAlign: 'right' }}>
+                                            <div style={{ fontSize: '12px', color: '#9ca3af', marginBottom: '4px' }}>RESPONDENT</div>
                                             <div style={{ fontWeight: 'bold' }}>{da.respondent_name || '—'}</div>
-                                            <div style={{ fontSize: '12px', color: '#6b7280' }}>ID: {da.respondent_id || '—'}</div>
-                                            <div style={{ fontSize: '12px', color: '#6b7280' }}>{da.respondent_country || ''}</div>
-                                          </td>
-                                          <td style={{ padding: '8px' }}>
-                                            {da.previous_action && (
-                                              <div style={{ marginBottom: '8px', paddingBottom: '8px', borderBottom: '1px dashed #e5e7eb' }}>
-                                                <span style={{ fontSize: '11px', color: '#9ca3af' }}>PREVIOUS</span><br/>
-                                                <span style={{ fontWeight: 'bold', color: '#f59e0b' }}>{da.previous_action}</span>
-                                                <span style={{ fontSize: '12px', color: '#6b7280', marginLeft: '8px' }}>{da.previous_action_date || 'No date'}</span>
+                                            <div style={{ fontSize: '12px', color: '#6b7280' }}>ID: {da.respondent_id || '—'} | {da.respondent_country || ''}</div>
+                                          </div>
+                                        </div>
+                                        
+                                        <div style={{ fontSize: '12px', color: '#9ca3af', marginBottom: '8px' }}>ACTION TIMELINE</div>
+                                        {da.action_history && da.action_history.length > 0 ? (
+                                          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                            {da.action_history.map((h, idx) => (
+                                              <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                                <div style={{ width: '24px', height: '24px', borderRadius: '50%', backgroundColor: '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 'bold', color: '#6b7280', flexShrink: 0 }}>{h.step}</div>
+                                                <div style={{ flex: 1 }}>
+                                                  <span style={{ fontWeight: 'bold', color: getActionColor(h.action) }}>{h.action || '—'}</span>
+                                                  <span style={{ fontSize: '12px', color: '#6b7280', marginLeft: '8px' }}>{h.date || 'No date'}</span>
+                                                </div>
                                               </div>
-                                            )}
-                                            {da.current_action && (
-                                              <div>
-                                                <span style={{ fontSize: '11px', color: '#9ca3af' }}>CURRENT</span><br/>
-                                                <span style={{ fontWeight: 'bold', color: da.current_action === 'Terminated' ? '#ef4444' : da.current_action === 'Suspended' ? '#f59e0b' : '#10b981' }}>{da.current_action}</span>
-                                                <span style={{ fontSize: '12px', color: '#6b7280', marginLeft: '8px' }}>{da.execution_date || 'No date'}</span>
-                                                {da.action_days != null && (
-                                                  <span style={{ fontSize: '11px', color: '#9ca3af', marginLeft: '8px' }}>({da.action_days}d ago)</span>
-                                                )}
-                                              </div>
-                                            )}
-                                          </td>
-                                          <td style={{ padding: '8px', fontSize: '12px', color: '#6b7280', maxWidth: '300px' }}>{da.remarks || '—'}</td>
-                                        </tr>
-                                      ))}
-                                    </tbody>
-                                  </table>
+                                            ))}
+                                          </div>
+                                        ) : (
+                                          <div style={{ fontSize: '14px', color: '#6b7280' }}>
+                                            <span style={{ fontWeight: 'bold', color: getActionColor(da.current_action) }}>{da.current_action || '—'}</span>
+                                            <span style={{ fontSize: '12px', color: '#6b7280', marginLeft: '8px' }}>{da.execution_date || 'No date'}</span>
+                                          </div>
+                                        )}
+                                        
+                                        {da.remarks && (
+                                          <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '1px dashed #e5e7eb' }}>
+                                            <div style={{ fontSize: '12px', color: '#9ca3af', marginBottom: '4px' }}>REMARKS</div>
+                                            <div style={{ fontSize: '13px', color: '#4b5563' }}>{da.remarks}</div>
+                                          </div>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
                                 )}
                               </div>
                             </td>
