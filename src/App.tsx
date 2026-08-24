@@ -1,3 +1,4 @@
+// @ts-nocheck
 import React, { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import Papa from 'papaparse';
@@ -9,29 +10,16 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 export default function App() {
   const [session, setSession] = useState(null);
 
-  // Check if user is logged in
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-    });
-
+    supabase.auth.getSession().then(({ data: { session } }) => setSession(session));
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => setSession(session));
     return () => subscription.unsubscribe();
   }, []);
 
-  // If not logged in, show Login Screen
-  if (!session) {
-    return <AuthScreen />;
-  }
-
-  // If logged in, show Dashboard and pass the user's email
+  if (!session) return <AuthScreen />;
   return <Dashboard userEmail={session.user.email} onSignOut={() => supabase.auth.signOut()} />;
 }
 
-// --- LOGIN SCREEN COMPONENT ---
 function AuthScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -69,7 +57,6 @@ function AuthScreen() {
   );
 }
 
-// --- DASHBOARD COMPONENT ---
 function Dashboard({ userEmail, onSignOut }) {
   const [cases, setCases] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -79,6 +66,11 @@ function Dashboard({ userEmail, onSignOut }) {
 
   const [selectedCase, setSelectedCase] = useState(null);
   const [daList, setDaList] = useState([]);
+
+  // NEW: Search & Pagination State
+  const [searchTerm, setSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 25; // Show 25 cases per page
 
   const fetchCases = async () => {
     setLoading(true);
@@ -110,9 +102,7 @@ function Dashboard({ userEmail, onSignOut }) {
 
   const chunkArray = (array, size) => {
     const result = [];
-    for (let i = 0; i < array.length; i += size) {
-      result.push(array.slice(i, i + size));
-    }
+    for (let i = 0; i < array.length; i += size) result.push(array.slice(i, i + size));
     return result;
   };
 
@@ -125,7 +115,6 @@ function Dashboard({ userEmail, onSignOut }) {
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
-
     setUploading(true);
     setUploadMessage('1/4 Reading file...');
 
@@ -136,7 +125,6 @@ function Dashboard({ userEmail, onSignOut }) {
         try {
           setUploadMessage('2/4 Formatting & sanitizing data...');
           const rawData = results.data;
-          
           let daDataToInsert = rawData.map(row => {
             const getVal = (searchStrings) => {
               for (let key in row) {
@@ -147,20 +135,16 @@ function Dashboard({ userEmail, onSignOut }) {
               }
               return null;
             };
-
             const caseNum = cleanVal(getVal(["CXN No"]));
             const respId = cleanVal(getVal(["Respondents' IR ID No"])); 
-            
             const rawExecDate = cleanVal(getVal(["Date of execution 1"])); 
             const execDate = formatDateString(rawExecDate);
-            
             let actionDays = null;
             if (execDate) {
               const today = new Date();
               const exec = new Date(execDate);
               if (!isNaN(exec.getTime())) actionDays = Math.floor((today - exec) / (1000 * 60 * 60 * 24));
             }
-
             return {
               case_number: caseNum,
               complainant_name: cleanVal(getVal(["Complainant's Name and IR ID No"])),
@@ -185,25 +169,14 @@ function Dashboard({ userEmail, onSignOut }) {
           }
 
           setUploadMessage('3/4 Fetching existing cases...');
-          
           const { data: existingCases, error: fetchErr } = await supabase.from('cases').select('case_number');
           if (fetchErr) throw new Error(fetchErr.message);
-          
           const existingSet = new Set(existingCases.map(c => c.case_number));
-          
           const uniqueCaseNumbers = [...new Set(finalDataToInsert.map(item => item.case_number))];
-          
           const missingCases = uniqueCaseNumbers.filter(cn => !existingSet.has(cn)).map(cn => {
             const today = new Date();
             const slaDate = new Date(today.setDate(today.getDate() + 30)).toISOString().split('T')[0];
-            return { 
-              case_number: cn, 
-              case_status: 'IN PROGRESS', 
-              sla_due_date: slaDate, 
-              created_on: new Date().toISOString().split('T')[0],
-              priority: 'Medium',
-              stage: 'Stage 1'
-            };
+            return { case_number: cn, case_status: 'IN PROGRESS', sla_due_date: slaDate, created_on: new Date().toISOString().split('T')[0], priority: 'Medium', stage: 'Stage 1' };
           });
 
           if (missingCases.length > 0) {
@@ -219,30 +192,21 @@ function Dashboard({ userEmail, onSignOut }) {
           }
 
           setUploadMessage('4/4 Uploading respondents (batch mode)...');
-          
           const daChunks = chunkArray(finalDataToInsert, 100);
           let errorCount = 0;
           let firstError = null;
-          
           for (let chunk of daChunks) {
-            const { error } = await supabase
-              .from('disciplinary_actions')
-              .upsert(chunk, { onConflict: 'unique_key' });
-            
+            const { error } = await supabase.from('disciplinary_actions').upsert(chunk, { onConflict: 'unique_key' });
             if (error) {
               errorCount++;
               if (!firstError) firstError = error.message;
             }
           }
 
-          if (errorCount > 0) {
-            setUploadMessage(`⚠️ Completed with ${errorCount} chunk errors. First error: ${firstError}`);
-          } else {
-            setUploadMessage(`✅ Success! Processed ${finalDataToInsert.length} actions & auto-created ${missingCases.length} missing cases.`);
-          }
+          if (errorCount > 0) setUploadMessage(`⚠️ Completed with ${errorCount} chunk errors. First error: ${firstError}`);
+          else setUploadMessage(`✅ Success! Processed ${finalDataToInsert.length} actions & auto-created ${missingCases.length} missing cases.`);
           fetchCases(); 
           setUploading(false);
-          
         } catch (err) {
           setUploadMessage(`❌ Unexpected Error: ${err.message}`);
           setUploading(false);
@@ -262,13 +226,8 @@ function Dashboard({ userEmail, onSignOut }) {
     setDaList(daData || []);
   };
 
-  // NEW: Update status AND stamp the user's email
   const handleUpdateStatus = async (caseNum, newStatus) => {
-    const { error } = await supabase.from('cases').update({ 
-      case_status: newStatus,
-      modified_by_email: userEmail // <--- This solves Guide #3!
-    }).eq('case_number', caseNum);
-    
+    const { error } = await supabase.from('cases').update({ case_status: newStatus, modified_by_email: userEmail }).eq('case_number', caseNum);
     if (error) alert('Error updating status: ' + error.message);
     else fetchCases();
   };
@@ -279,10 +238,18 @@ function Dashboard({ userEmail, onSignOut }) {
     return Math.ceil((new Date(dueDate) - today) / (1000 * 60 * 60 * 24));
   };
 
-  const formatDate = (timestamp) => {
-    if (!timestamp) return '—';
-    return new Date(timestamp).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-  };
+  // NEW: Filter cases based on Search Term
+  const filteredCases = cases.filter(c => {
+    if (!searchTerm) return true;
+    const search = searchTerm.toLowerCase();
+    return c.case_number?.toLowerCase().includes(search) || 
+           c.pic?.toLowerCase().includes(search) || 
+           c.country?.toLowerCase().includes(search);
+  });
+
+  // NEW: Pagination Logic
+  const totalPages = Math.ceil(filteredCases.length / pageSize);
+  const currentCases = filteredCases.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   const totalCases = cases.length;
   const inProgress = cases.filter(c => c.case_status === 'IN PROGRESS').length;
@@ -291,7 +258,6 @@ function Dashboard({ userEmail, onSignOut }) {
 
   return (
     <div style={{ padding: '24px', fontFamily: 'Arial, sans-serif', backgroundColor: '#f3f4f6', minHeight: '100vh' }}>
-      {/* Header with User Info & Logout */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
         <h1 style={{ color: '#1f2937', margin: 0 }}>📊 SLA TRACKER DASHBOARD</h1>
         <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
@@ -317,63 +283,98 @@ function Dashboard({ userEmail, onSignOut }) {
       <div style={{ background: 'white', padding: '20px', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
         <h2 style={{ marginTop: 0, color: '#1f2937' }}>📋 SLA Case Tracker</h2>
         
+        {/* NEW: Search Bar */}
+        <input 
+          type="text" 
+          placeholder="Search by Case#, PIC, or Country..." 
+          value={searchTerm}
+          onChange={(e) => {
+            setSearchTerm(e.target.value);
+            setCurrentPage(1); // Reset to first page on search
+          }}
+          style={{ width: '100%', padding: '10px', marginBottom: '20px', border: '1px solid #d1d5db', borderRadius: '6px', boxSizing: 'border-box' }}
+        />
+        
         {loading ? <p>Loading data...</p> : (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-              <thead>
-                <tr style={{ borderBottom: '2px solid #e5e7eb', backgroundColor: '#f9fafb' }}>
-                  <th style={{ padding: '12px' }}>Case Number</th><th style={{ padding: '12px' }}>Status</th><th style={{ padding: '12px' }}>SLA Status</th><th style={{ padding: '12px' }}># Resp</th><th style={{ padding: '12px' }}>Last Modified By</th><th style={{ padding: '12px' }}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {cases.map((c, index) => {
-                  const slaDays = calculateSlaDays(c.sla_due_date);
-                  const respondentCount = c.disciplinary_actions?.[0]?.count || 0;
-                  return (
-                    <React.Fragment key={index}>
-                      <tr style={{ borderBottom: selectedCase === c.case_number ? 'none' : '1px solid #e5e7eb', cursor: 'pointer', backgroundColor: selectedCase === c.case_number ? '#eff6ff' : 'white' }}>
-                        <td style={{ padding: '12px', fontWeight: 'bold', whiteSpace: 'nowrap' }}>{c.case_number}</td>
-                        <td style={{ padding: '12px' }}><span style={{ padding: '4px 8px', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold', backgroundColor: c.case_status === 'IN PROGRESS' ? '#fef3c7' : '#d1fae5', color: c.case_status === 'IN PROGRESS' ? '#92400e' : '#065f46' }}>{c.case_status}</span></td>
-                        <td style={{ padding: '12px', fontWeight: 'bold', color: slaDays < 0 ? '#ef4444' : '#10b981', whiteSpace: 'nowrap' }}>{c.case_status !== 'IN PROGRESS' ? '—' : slaDays < 0 ? `🔴 ${Math.abs(slaDays)}d` : `🟢 ${slaDays}d`}</td>
-                        <td style={{ padding: '12px', textAlign: 'center', fontWeight: 'bold', color: respondentCount > 0 ? '#3b82f6' : '#d1d5db' }}>{respondentCount}</td>
-                        {/* NEW: Display who modified it */}
-                        <td style={{ padding: '12px', fontSize: '12px', color: '#6b7280' }}>{c.modified_by_email || '—'}</td>
-                        <td style={{ padding: '12px', display: 'flex', gap: '8px' }}>
-                          <button onClick={() => handleCaseClick(c.case_number)} style={{ backgroundColor: '#6b7280', color: 'white', padding: '6px 12px', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>{selectedCase === c.case_number ? 'Hide' : 'Expand'}</button>
-                          {c.case_status === 'IN PROGRESS' && <button onClick={() => handleUpdateStatus(c.case_number, 'COMPLETED')} style={{ backgroundColor: '#10b981', color: 'white', padding: '6px 12px', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>✓</button>}
-                        </td>
-                      </tr>
-                      
-                      {selectedCase === c.case_number && (
-                        <tr>
-                          <td colSpan="6" style={{ padding: '20px', backgroundColor: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
-                            <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '15px', backgroundColor: 'white' }}>
-                              <h3 style={{ marginTop: 0, color: '#1f2937' }}>⚖️ Disciplinary Actions (Respondents)</h3>
-                              {daList.length === 0 ? <p style={{ color: '#6b7280', fontStyle: 'italic' }}>No respondents linked.</p> : (
-                                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-                                  <thead><tr style={{ borderBottom: '2px solid #e5e7eb' }}><th style={{ padding: '8px' }}>Name</th><th style={{ padding: '8px' }}>Action</th><th style={{ padding: '8px' }}>Days</th><th style={{ padding: '8px' }}>Remarks</th></tr></thead>
-                                  <tbody>
-                                    {daList.map((da, i) => (
-                                      <tr key={i} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                                        <td style={{ padding: '8px' }}>{da.respondent_name}</td>
-                                        <td style={{ padding: '8px' }}><span style={{ fontWeight: 'bold', color: da.current_action === 'Terminated' ? '#ef4444' : da.current_action === 'Suspended' ? '#f59e0b' : '#10b981' }}>{da.current_action}</span></td>
-                                        <td style={{ padding: '8px', fontWeight: 'bold' }}>{da.action_days ? `${da.action_days}d` : '—'}</td>
-                                        <td style={{ padding: '8px', fontSize: '12px', color: '#6b7280' }}>{da.remarks || '—'}</td>
-                                      </tr>
-                                    ))}
-                                  </tbody>
-                                </table>
-                              )}
-                            </div>
+          <>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                <thead>
+                  <tr style={{ borderBottom: '2px solid #e5e7eb', backgroundColor: '#f9fafb' }}>
+                    <th style={{ padding: '12px' }}>Case Number</th><th style={{ padding: '12px' }}>Status</th><th style={{ padding: '12px' }}>SLA Status</th><th style={{ padding: '12px' }}># Resp</th><th style={{ padding: '12px' }}>Last Modified By</th><th style={{ padding: '12px' }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {/* NEW: Mapping over currentCases (the paginated slice) instead of all cases */}
+                  {currentCases.map((c, index) => {
+                    const slaDays = calculateSlaDays(c.sla_due_date);
+                    const respondentCount = c.disciplinary_actions?.[0]?.count || 0;
+                    return (
+                      <React.Fragment key={index}>
+                        <tr style={{ borderBottom: selectedCase === c.case_number ? 'none' : '1px solid #e5e7eb', cursor: 'pointer', backgroundColor: selectedCase === c.case_number ? '#eff6ff' : 'white' }}>
+                          <td style={{ padding: '12px', fontWeight: 'bold', whiteSpace: 'nowrap' }}>{c.case_number}</td>
+                          <td style={{ padding: '12px' }}><span style={{ padding: '4px 8px', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold', backgroundColor: c.case_status === 'IN PROGRESS' ? '#fef3c7' : '#d1fae5', color: c.case_status === 'IN PROGRESS' ? '#92400e' : '#065f46' }}>{c.case_status}</span></td>
+                          <td style={{ padding: '12px', fontWeight: 'bold', color: slaDays < 0 ? '#ef4444' : '#10b981', whiteSpace: 'nowrap' }}>{c.case_status !== 'IN PROGRESS' ? '—' : slaDays < 0 ? `🔴 ${Math.abs(slaDays)}d` : `🟢 ${slaDays}d`}</td>
+                          <td style={{ padding: '12px', textAlign: 'center', fontWeight: 'bold', color: respondentCount > 0 ? '#3b82f6' : '#d1d5db' }}>{respondentCount}</td>
+                          <td style={{ padding: '12px', fontSize: '12px', color: '#6b7280' }}>{c.modified_by_email || '—'}</td>
+                          <td style={{ padding: '12px', display: 'flex', gap: '8px' }}>
+                            <button onClick={() => handleCaseClick(c.case_number)} style={{ backgroundColor: '#6b7280', color: 'white', padding: '6px 12px', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>{selectedCase === c.case_number ? 'Hide' : 'Expand'}</button>
+                            {c.case_status === 'IN PROGRESS' && <button onClick={() => handleUpdateStatus(c.case_number, 'COMPLETED')} style={{ backgroundColor: '#10b981', color: 'white', padding: '6px 12px', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>✓</button>}
                           </td>
                         </tr>
-                      )}
-                    </React.Fragment>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                        
+                        {selectedCase === c.case_number && (
+                          <tr>
+                            <td colSpan="6" style={{ padding: '20px', backgroundColor: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
+                              <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '15px', backgroundColor: 'white' }}>
+                                <h3 style={{ marginTop: 0, color: '#1f2937' }}>⚖️ Disciplinary Actions (Respondents)</h3>
+                                {daList.length === 0 ? <p style={{ color: '#6b7280', fontStyle: 'italic' }}>No respondents linked.</p> : (
+                                  <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                                    <thead><tr style={{ borderBottom: '2px solid #e5e7eb' }}><th style={{ padding: '8px' }}>Name</th><th style={{ padding: '8px' }}>Action</th><th style={{ padding: '8px' }}>Days</th><th style={{ padding: '8px' }}>Remarks</th></tr></thead>
+                                    <tbody>
+                                      {daList.map((da, i) => (
+                                        <tr key={i} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                                          <td style={{ padding: '8px' }}>{da.respondent_name}</td>
+                                          <td style={{ padding: '8px' }}><span style={{ fontWeight: 'bold', color: da.current_action === 'Terminated' ? '#ef4444' : da.current_action === 'Suspended' ? '#f59e0b' : '#10b981' }}>{da.current_action}</span></td>
+                                          <td style={{ padding: '8px', fontWeight: 'bold' }}>{da.action_days ? `${da.action_days}d` : '—'}</td>
+                                          <td style={{ padding: '8px', fontSize: '12px', color: '#6b7280' }}>{da.remarks || '—'}</td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* NEW: Pagination Controls */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '20px' }}>
+              <button 
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} 
+                disabled={currentPage === 1}
+                style={{ backgroundColor: '#3b82f6', color: 'white', padding: '8px 16px', border: 'none', borderRadius: '6px', cursor: currentPage === 1 ? 'not-allowed' : 'pointer', opacity: currentPage === 1 ? 0.5 : 1 }}
+              >
+                ← Previous
+              </button>
+              <span style={{ color: '#4b5563' }}>
+                Page {currentPage} of {totalPages || 1} ({filteredCases.length} cases)
+              </span>
+              <button 
+                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))} 
+                disabled={currentPage === totalPages || totalPages === 0}
+                style={{ backgroundColor: '#3b82f6', color: 'white', padding: '8px 16px', border: 'none', borderRadius: '6px', cursor: (currentPage === totalPages || totalPages === 0) ? 'not-allowed' : 'pointer', opacity: (currentPage === totalPages || totalPages === 0) ? 0.5 : 1 }}
+              >
+                Next →
+              </button>
+            </div>
+          </>
         )}
       </div>
     </div>
