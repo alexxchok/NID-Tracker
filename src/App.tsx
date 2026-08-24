@@ -63,12 +63,29 @@ function Dashboard({ userEmail, onSignOut }) {
   
   const [uploadingDA, setUploadingDA] = useState(false);
   const [uploadMessageDA, setUploadMessageDA] = useState('');
-
   const [uploadingSLA, setUploadingSLA] = useState(false);
   const [uploadMessageSLA, setUploadMessageSLA] = useState('');
 
+  // Expanded Row State
   const [selectedCase, setSelectedCase] = useState(null);
   const [daList, setDaList] = useState([]);
+  const [wipList, setWipList] = useState([]); // NEW: WIP List
+
+  // NEW: Add Case Form State
+  const [showCaseForm, setShowCaseForm] = useState(false);
+  const [newCaseNum, setNewCaseNum] = useState('');
+  const [newPic, setNewPic] = useState('');
+  const [newCountry, setNewCountry] = useState('');
+  const [newSlaDate, setNewSlaDate] = useState('');
+  const [newPriority, setNewPriority] = useState('Medium');
+  const [newStatus, setNewStatus] = useState('IN PROGRESS');
+  const [newStage, setNewStage] = useState('Stage 1');
+
+  // NEW: WIP Form State
+  const [wipDesc, setWipDesc] = useState('');
+  const [wipDateSent, setWipDateSent] = useState(new Date().toISOString().split('T')[0]);
+  const [wipDueDate, setWipDueDate] = useState('');
+  const [wipStatus, setWipStatus] = useState('Pending');
 
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -120,56 +137,25 @@ function Dashboard({ userEmail, onSignOut }) {
     if (!file) return;
     setUploadingDA(true);
     setUploadMessageDA('1/4 Reading file...');
-
     Papa.parse(file, {
-      header: true,
-      skipEmptyLines: true,
+      header: true, skipEmptyLines: true,
       complete: async (results) => {
         try {
           setUploadMessageDA('2/4 Formatting & sanitizing data...');
-          const rawData = results.data;
-          let daDataToInsert = rawData.map(row => {
-            const getVal = (searchStrings) => {
-              for (let key in row) {
-                const cleanKey = key.trim().toLowerCase();
-                for (let search of searchStrings) {
-                  if (cleanKey === search.toLowerCase()) return row[key];
-                }
-              }
-              return null;
-            };
-            const caseNum = cleanVal(getVal(["CXN No"]));
-            const respId = cleanVal(getVal(["Respondents' IR ID No"])); 
-            const rawExecDate = cleanVal(getVal(["Date of execution 1"])); 
-            const execDate = formatDateString(rawExecDate);
+          let daDataToInsert = results.data.map(row => {
+            const getVal = (searchStrings) => { for (let key in row) { const cl = key.trim().toLowerCase(); for (let s of searchStrings) { if (cl === s.toLowerCase()) return row[key]; } } return null; };
+            const caseNum = cleanVal(getVal(["CXN No"])); const respId = cleanVal(getVal(["Respondents' IR ID No"])); 
+            const execDate = formatDateString(cleanVal(getVal(["Date of execution 1"]))); 
             let actionDays = null;
-            if (execDate) {
-              const today = new Date();
-              const exec = new Date(execDate);
-              if (!isNaN(exec.getTime())) actionDays = Math.floor((today - exec) / (1000 * 60 * 60 * 24));
-            }
-            return {
-              case_number: caseNum,
-              complainant_name: cleanVal(getVal(["Complainant's Name and IR ID No"])),
-              respondent_name: cleanVal(getVal(["Respondent's Name"])),
-              respondent_id: respId,
-              current_action: cleanVal(getVal(["Action Taken 1"])), 
-              execution_date: execDate,
-              remarks: cleanVal(getVal(["Remarks"])),
-              action_days: actionDays,
-              unique_key: caseNum && respId ? `${caseNum}|${respId}` : null
-            };
+            if (execDate) { const today = new Date(); const exec = new Date(execDate); if (!isNaN(exec.getTime())) actionDays = Math.floor((today - exec) / (1000 * 60 * 60 * 24)); }
+            return { case_number: caseNum, complainant_name: cleanVal(getVal(["Complainant's Name and IR ID No"])), respondent_name: cleanVal(getVal(["Respondent's Name"])), respondent_id: respId, current_action: cleanVal(getVal(["Action Taken 1"])), execution_date: execDate, remarks: cleanVal(getVal(["Remarks"])), action_days: actionDays, unique_key: caseNum && respId ? `${caseNum}|${respId}` : null };
           }).filter(item => item && item.case_number && item.unique_key); 
 
           const uniqueMap = new Map();
           daDataToInsert.forEach(item => uniqueMap.set(item.unique_key, item));
           const finalDataToInsert = Array.from(uniqueMap.values());
 
-          if (finalDataToInsert.length === 0) {
-            setUploadMessageDA('❌ Error: Found 0 valid rows.');
-            setUploadingDA(false);
-            return;
-          }
+          if (finalDataToInsert.length === 0) { setUploadMessageDA('❌ Error: Found 0 valid rows.'); setUploadingDA(false); return; }
 
           setUploadMessageDA('3/4 Fetching existing cases...');
           const { data: existingCases, error: fetchErr } = await supabase.from('cases').select('case_number');
@@ -177,8 +163,7 @@ function Dashboard({ userEmail, onSignOut }) {
           const existingSet = new Set(existingCases.map(c => c.case_number));
           const uniqueCaseNumbers = [...new Set(finalDataToInsert.map(item => item.case_number))];
           const missingCases = uniqueCaseNumbers.filter(cn => !existingSet.has(cn)).map(cn => {
-            const today = new Date();
-            const slaDate = new Date(today.setDate(today.getDate() + 30)).toISOString().split('T')[0];
+            const today = new Date(); const slaDate = new Date(today.setDate(today.getDate() + 30)).toISOString().split('T')[0];
             return { case_number: cn, case_status: 'IN PROGRESS', sla_due_date: slaDate, created_on: new Date().toISOString().split('T')[0], priority: 'Medium', stage: 'Stage 1' };
           });
 
@@ -186,39 +171,23 @@ function Dashboard({ userEmail, onSignOut }) {
             const missingChunks = chunkArray(missingCases, 100);
             for (let chunk of missingChunks) {
               const { error: insertErr } = await supabase.from('cases').insert(chunk);
-              if (insertErr) {
-                setUploadMessageDA(`❌ CRITICAL ERROR creating cases: ${insertErr.message}`);
-                setUploadingDA(false);
-                return;
-              }
+              if (insertErr) { setUploadMessageDA(`❌ CRITICAL ERROR creating cases: ${insertErr.message}`); setUploadingDA(false); return; }
             }
           }
 
           setUploadMessageDA('4/4 Uploading respondents (batch mode)...');
           const daChunks = chunkArray(finalDataToInsert, 100);
-          let errorCount = 0;
-          let firstError = null;
+          let errorCount = 0; let firstError = null;
           for (let chunk of daChunks) {
             const { error } = await supabase.from('disciplinary_actions').upsert(chunk, { onConflict: 'unique_key' });
-            if (error) {
-              errorCount++;
-              if (!firstError) firstError = error.message;
-            }
+            if (error) { errorCount++; if (!firstError) firstError = error.message; }
           }
-
           if (errorCount > 0) setUploadMessageDA(`⚠️ Completed with ${errorCount} chunk errors. First error: ${firstError}`);
           else setUploadMessageDA(`✅ Success! Processed ${finalDataToInsert.length} actions & auto-created ${missingCases.length} missing cases.`);
-          fetchCases(); 
-          setUploadingDA(false);
-        } catch (err) {
-          setUploadMessageDA(`❌ Unexpected Error: ${err.message}`);
-          setUploadingDA(false);
-        }
+          fetchCases(); setUploadingDA(false);
+        } catch (err) { setUploadMessageDA(`❌ Unexpected Error: ${err.message}`); setUploadingDA(false); }
       },
-      error: (err) => {
-        setUploadMessageDA(`❌ File Read Error: ${err.message}`);
-        setUploadingDA(false);
-      }
+      error: (err) => { setUploadMessageDA(`❌ File Read Error: ${err.message}`); setUploadingDA(false); }
     });
   };
 
@@ -228,30 +197,15 @@ function Dashboard({ userEmail, onSignOut }) {
     if (!file) return;
     setUploadingSLA(true);
     setUploadMessageSLA('1/3 Reading file...');
-
     Papa.parse(file, {
-      header: true,
-      skipEmptyLines: true,
-      delimiter: "", // Auto-detect delimiter
+      header: true, skipEmptyLines: true, delimiter: "",
       complete: async (results) => {
         try {
           setUploadMessageSLA('2/3 Formatting data...');
-          const rawData = results.data;
-          
-          let casesToUpsert = rawData.map(row => {
-            const getVal = (searchStrings) => {
-              for (let key in row) {
-                const cleanKey = key.trim().toLowerCase();
-                for (let search of searchStrings) {
-                  if (cleanKey.includes(search.toLowerCase())) return row[key];
-                }
-              }
-              return null;
-            };
-
+          let casesToUpsert = results.data.map(row => {
+            const getVal = (searchStrings) => { for (let key in row) { const cl = key.trim().toLowerCase(); for (let s of searchStrings) { if (cl.includes(s.toLowerCase())) return row[key]; } } return null; };
             const caseNum = cleanVal(getVal(["CASE NUMBER", "Case Number", "CXN No", "Case #", "CXN #"]));
             if (!caseNum) return null;
-
             return {
               case_number: caseNum,
               created_on: formatDateString(cleanVal(getVal(["CREATED ON", "Created On"]))),
@@ -266,56 +220,70 @@ function Dashboard({ userEmail, onSignOut }) {
             };
           }).filter(item => item && item.case_number); 
 
-          if (casesToUpsert.length === 0) {
-            setUploadMessageSLA('❌ Error: Found 0 valid rows. Make sure you saved as CSV UTF-8.');
-            setUploadingSLA(false);
-            return;
-          }
-
+          if (casesToUpsert.length === 0) { setUploadMessageSLA('❌ Error: Found 0 valid rows. Make sure you saved as CSV UTF-8.'); setUploadingSLA(false); return; }
           setUploadMessageSLA(`3/3 Updating ${casesToUpsert.length} cases in database...`);
-          
           const chunks = chunkArray(casesToUpsert, 100);
-          let errorCount = 0;
-          let firstError = null;
-
+          let errorCount = 0; let firstError = null;
           for (let chunk of chunks) {
             const { error } = await supabase.from('cases').upsert(chunk, { onConflict: 'case_number' });
-            if (error) {
-              errorCount++;
-              if (!firstError) firstError = error.message;
-            }
+            if (error) { errorCount++; if (!firstError) firstError = error.message; }
           }
-
-          if (errorCount > 0) {
-            setUploadMessageSLA(`⚠️ Completed with ${errorCount} chunk errors. First error: ${firstError}`);
-          } else {
-            setUploadMessageSLA(`✅ Success! Updated ${casesToUpsert.length} SLA cases.`);
-          }
-          fetchCases(); 
-          setUploadingSLA(false);
-        } catch (err) {
-          setUploadMessageSLA(`❌ Unexpected Error: ${err.message}`);
-          setUploadingSLA(false);
-        }
+          if (errorCount > 0) setUploadMessageSLA(`⚠️ Completed with ${errorCount} chunk errors. First error: ${firstError}`);
+          else setUploadMessageSLA(`✅ Success! Updated ${casesToUpsert.length} SLA cases.`);
+          fetchCases(); setUploadingSLA(false);
+        } catch (err) { setUploadMessageSLA(`❌ Unexpected Error: ${err.message}`); setUploadingSLA(false); }
       },
-      error: (err) => {
-        setUploadMessageSLA(`❌ File Read Error: ${err.message}`);
-        setUploadingSLA(false);
-      }
+      error: (err) => { setUploadMessageSLA(`❌ File Read Error: ${err.message}`); setUploadingSLA(false); }
     });
   };
 
+  // NEW: Add Case manually
+  const handleAddCase = async (e) => {
+    e.preventDefault();
+    const { error } = await supabase.from('cases').insert([{ 
+      case_number: newCaseNum, pic: newPic, country: newCountry, case_status: newStatus, sla_due_date: newSlaDate, priority: newPriority, stage: newStage, created_on: new Date().toISOString().split('T')[0]
+    }]);
+    if (error) alert('Error saving case: ' + error.message);
+    else {
+      setShowCaseForm(false);
+      setNewCaseNum(''); setNewPic(''); setNewCountry(''); setNewStatus('IN PROGRESS'); setNewSlaDate(''); setNewPriority('Medium'); setNewStage('Stage 1');
+      fetchCases(); 
+    }
+  };
+
+  // NEW: Expand case and fetch DA + WIP
   const handleCaseClick = async (caseNum) => {
     if (selectedCase === caseNum) { setSelectedCase(null); return; }
     setSelectedCase(caseNum);
     const { data: daData } = await supabase.from('disciplinary_actions').select('*').eq('case_number', caseNum);
+    const { data: wipData } = await supabase.from('wip_tracker').select('*').eq('case_number', caseNum).order('date_sent', { ascending: false });
     setDaList(daData || []);
+    setWipList(wipData || []);
   };
 
   const handleUpdateStatus = async (caseNum, newStatus) => {
     const { error } = await supabase.from('cases').update({ case_status: newStatus, modified_by_email: userEmail }).eq('case_number', caseNum);
     if (error) alert('Error updating status: ' + error.message);
     else fetchCases();
+  };
+
+  // NEW: Add WIP Action
+  const handleAddWIP = async (e) => {
+    e.preventDefault();
+    const { error } = await supabase.from('wip_tracker').insert([{ 
+      case_number: selectedCase, 
+      action_description: wipDesc, 
+      date_sent: wipDateSent, 
+      due_date: wipDueDate, 
+      status: wipStatus,
+      pic: userEmail 
+    }]);
+    if (error) alert('Error logging WIP: ' + error.message);
+    else {
+      setWipDesc(''); setWipDueDate(''); setWipStatus('Pending');
+      const { data } = await supabase.from('wip_tracker').select('*').eq('case_number', selectedCase).order('date_sent', { ascending: false });
+      setWipList(data);
+    }
   };
 
   const calculateSlaDays = (dueDate) => {
@@ -330,10 +298,7 @@ function Dashboard({ userEmail, onSignOut }) {
     const matchCase = c.case_number?.toLowerCase().includes(search);
     const matchPic = c.pic?.toLowerCase().includes(search);
     const matchCountry = c.country?.toLowerCase().includes(search);
-    const matchRespondent = c.disciplinary_actions?.some(da => 
-      da.respondent_name?.toLowerCase().includes(search) || 
-      da.respondent_id?.toLowerCase().includes(search)
-    );
+    const matchRespondent = c.disciplinary_actions?.some(da => da.respondent_name?.toLowerCase().includes(search) || da.respondent_id?.toLowerCase().includes(search));
     return matchCase || matchPic || matchCountry || matchRespondent;
   });
 
@@ -369,7 +334,6 @@ function Dashboard({ userEmail, onSignOut }) {
           <input type="file" accept=".csv" onChange={handleFileUploadDA} disabled={uploadingDA} style={{ marginBottom: '10px', fontSize: '12px' }} />
           {uploadMessageDA && <p style={{ fontWeight: 'bold', fontSize: '12px', color: uploadMessageDA.includes('Error') || uploadMessageDA.includes('errors') ? '#ef4444' : '#10b981' }}>{uploadMessageDA}</p>}
         </div>
-
         <div style={{ background: 'white', padding: '20px', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', flex: 1 }}>
           <h2 style={{ marginTop: 0, color: '#1f2937', fontSize: '18px' }}>📋 Upload SLA Tracker (Main Cases)</h2>
           <p style={{ color: '#6b7280', fontSize: '13px' }}>Updates PICs, SLA Dates, Priorities & Stages.</p>
@@ -379,16 +343,33 @@ function Dashboard({ userEmail, onSignOut }) {
       </div>
 
       <div style={{ background: 'white', padding: '20px', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
-        <h2 style={{ marginTop: 0, color: '#1f2937' }}>📋 SLA Case Tracker</h2>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+          <h2 style={{ marginTop: 0, color: '#1f2937' }}>📋 SLA Case Tracker</h2>
+          {/* NEW: Add New Case Button */}
+          <button onClick={() => setShowCaseForm(!showCaseForm)} style={{ backgroundColor: '#3b82f6', color: 'white', padding: '10px 16px', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}>
+            {showCaseForm ? 'Close Form' : '+ Add New Case'}
+          </button>
+        </div>
+
+        {/* NEW: Add Case Form */}
+        {showCaseForm && (
+          <form onSubmit={handleAddCase} style={{ background: '#f9fafb', padding: '20px', borderRadius: '8px', marginBottom: '20px', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', alignItems: 'end' }}>
+            <div><label style={{ fontSize: '12px', color: '#6b7280' }}>Case Number</label><input type="text" value={newCaseNum} onChange={(e) => setNewCaseNum(e.target.value)} required style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '4px' }} /></div>
+            <div><label style={{ fontSize: '12px', color: '#6b7280' }}>PIC</label><input type="text" value={newPic} onChange={(e) => setNewPic(e.target.value)} style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '4px' }} /></div>
+            <div><label style={{ fontSize: '12px', color: '#6b7280' }}>Country</label><input type="text" value={newCountry} onChange={(e) => setNewCountry(e.target.value)} required style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '4px' }} /></div>
+            <div><label style={{ fontSize: '12px', color: '#6b7280' }}>SLA Due Date</label><input type="date" value={newSlaDate} onChange={(e) => setNewSlaDate(e.target.value)} required style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '4px' }} /></div>
+            <div><label style={{ fontSize: '12px', color: '#6b7280' }}>Priority</label><select value={newPriority} onChange={(e) => setNewPriority(e.target.value)} style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '4px' }}><option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option></select></div>
+            <div><label style={{ fontSize: '12px', color: '#6b7280' }}>Status</label><select value={newStatus} onChange={(e) => setNewStatus(e.target.value)} style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '4px' }}><option value="IN PROGRESS">IN PROGRESS</option><option value="COMPLETED">COMPLETED</option></select></div>
+            <div><label style={{ fontSize: '12px', color: '#6b7280' }}>Stage</label><select value={newStage} onChange={(e) => setNewStage(e.target.value)} style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '4px' }}><option value="Stage 1">Stage 1</option><option value="Stage 2">Stage 2</option><option value="Stage 3">Stage 3</option></select></div>
+            <button type="submit" style={{ backgroundColor: '#10b981', color: 'white', padding: '10px 16px', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold' }}>Save Case</button>
+          </form>
+        )}
         
         <input 
           type="text" 
           placeholder="Search by Case#, PIC, Country, Respondent Name, or ID..." 
           value={searchTerm}
-          onChange={(e) => {
-            setSearchTerm(e.target.value);
-            setCurrentPage(1);
-          }}
+          onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
           style={{ width: '100%', padding: '10px', marginBottom: '20px', border: '1px solid #d1d5db', borderRadius: '6px', boxSizing: 'border-box' }}
         />
         
@@ -398,13 +379,12 @@ function Dashboard({ userEmail, onSignOut }) {
               <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                 <thead>
                   <tr style={{ borderBottom: '2px solid #e5e7eb', backgroundColor: '#f9fafb' }}>
-                    <th style={{ padding: '12px' }}>Case Number</th><th style={{ padding: '12px' }}>PIC</th><th style={{ padding: '12px' }}>Priority</th><th style={{ padding: '12px' }}>Status</th><th style={{ padding: '12px' }}>Stage</th><th style={{ padding: '12px' }}>SLA Due</th><th style={{ padding: '12px' }}>SLA Status</th><th style={{ padding: '12px' }}># Resp</th><th style={{ padding: '12px' }}>Actions</th>
+                    <th style={{ padding: '12px' }}>Case Number</th><th style={{ padding: '12px' }}>PIC</th><th style={{ padding: '12px' }}>Priority</th><th style={{ padding: '12px' }}>Status</th><th style={{ padding: '12px' }}>Stage</th><th style={{ padding: '12px' }}>SLA Due</th><th style={{ padding: '12px' }}>SLA Status</th><th style={{ padding: '12px' }}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {currentCases.map((c, index) => {
                     const slaDays = calculateSlaDays(c.sla_due_date);
-                    const respondentCount = c.disciplinary_actions?.length || 0;
                     return (
                       <React.Fragment key={index}>
                         <tr style={{ borderBottom: selectedCase === c.case_number ? 'none' : '1px solid #e5e7eb', cursor: 'pointer', backgroundColor: selectedCase === c.case_number ? '#eff6ff' : 'white' }}>
@@ -415,7 +395,6 @@ function Dashboard({ userEmail, onSignOut }) {
                           <td style={{ padding: '12px' }}>{c.stage || '—'}</td>
                           <td style={{ padding: '12px', whiteSpace: 'nowrap' }}>{c.sla_due_date}</td>
                           <td style={{ padding: '12px', fontWeight: 'bold', color: slaDays < 0 ? '#ef4444' : '#10b981', whiteSpace: 'nowrap' }}>{c.case_status !== 'IN PROGRESS' ? '—' : slaDays < 0 ? `🔴 ${Math.abs(slaDays)}d` : `🟢 ${slaDays}d`}</td>
-                          <td style={{ padding: '12px', textAlign: 'center', fontWeight: 'bold', color: respondentCount > 0 ? '#3b82f6' : '#d1d5db' }}>{respondentCount}</td>
                           <td style={{ padding: '12px', display: 'flex', gap: '8px' }}>
                             <button onClick={() => handleCaseClick(c.case_number)} style={{ backgroundColor: '#6b7280', color: 'white', padding: '6px 12px', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>{selectedCase === c.case_number ? 'Hide' : 'Expand'}</button>
                             {c.case_status === 'IN PROGRESS' && <button onClick={() => handleUpdateStatus(c.case_number, 'COMPLETED')} style={{ backgroundColor: '#10b981', color: 'white', padding: '6px 12px', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>✓</button>}
@@ -424,7 +403,40 @@ function Dashboard({ userEmail, onSignOut }) {
                         
                         {selectedCase === c.case_number && (
                           <tr>
-                            <td colSpan="9" style={{ padding: '20px', backgroundColor: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
+                            <td colSpan="8" style={{ padding: '20px', backgroundColor: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
+                              
+                              {/* WIP TRACKER SECTION */}
+                              <div style={{ marginBottom: '30px', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '15px', backgroundColor: 'white' }}>
+                                <h3 style={{ marginTop: 0, color: '#1f2937' }}>⏳ WIP Tracker (Daily Actions)</h3>
+                                <form onSubmit={handleAddWIP} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr auto', gap: '10px', marginBottom: '15px', alignItems: 'end' }}>
+                                  <div><label style={{ fontSize: '11px', color: '#6b7280' }}>Action Description</label><input type="text" placeholder="e.g. Sent email to IR" value={wipDesc} onChange={(e) => setWipDesc(e.target.value)} required style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '4px' }} /></div>
+                                  <div><label style={{ fontSize: '11px', color: '#6b7280' }}>Date Sent</label><input type="date" value={wipDateSent} onChange={(e) => setWipDateSent(e.target.value)} style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '4px' }} /></div>
+                                  <div><label style={{ fontSize: '11px', color: '#6b7280' }}>Due Date</label><input type="date" value={wipDueDate} onChange={(e) => setWipDueDate(e.target.value)} style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '4px' }} /></div>
+                                  <div><label style={{ fontSize: '11px', color: '#6b7280' }}>Status</label><select value={wipStatus} onChange={(e) => setWipStatus(e.target.value)} style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: '4px' }}><option value="Pending">Pending</option><option value="Done">Done</option></select></div>
+                                  <button type="submit" style={{ backgroundColor: '#8b5cf6', color: 'white', padding: '8px 16px', border: 'none', borderRadius: '4px', cursor: 'pointer', height: '35px' }}>Log Action</button>
+                                </form>
+                                {wipList.length === 0 ? <p style={{ color: '#6b7280', fontStyle: 'italic' }}>No WIP actions logged.</p> : (
+                                  <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                                    <thead><tr style={{ borderBottom: '2px solid #e5e7eb', backgroundColor: '#f9fafb' }}><th style={{ padding: '8px' }}>Date Sent</th><th style={{ padding: '8px' }}>Description</th><th style={{ padding: '8px' }}>Due Date</th><th style={{ padding: '8px' }}>SLA</th><th style={{ padding: '8px' }}>Status</th></tr></thead>
+                                    <tbody>
+                                      {wipList.map((w, i) => {
+                                        const wipSla = calculateSlaDays(w.due_date);
+                                        return (
+                                          <tr key={i} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                                            <td style={{ padding: '8px', fontSize: '12px' }}>{w.date_sent}</td>
+                                            <td style={{ padding: '8px', fontSize: '14px' }}>{w.action_description}</td>
+                                            <td style={{ padding: '8px', fontSize: '12px' }}>{w.due_date}</td>
+                                            <td style={{ padding: '8px', fontSize: '12px', fontWeight: 'bold', color: w.status === 'Done' ? '#6b7280' : (wipSla < 0 ? '#ef4444' : '#10b981') }}>{w.status === 'Done' ? '—' : (wipSla < 0 ? `🔴 ${Math.abs(wipSla)}d` : `🟢 ${wipSla}d`)}</td>
+                                            <td style={{ padding: '8px' }}><span style={{ fontSize: '11px', padding: '2px 6px', borderRadius: '4px', backgroundColor: w.status === 'Done' ? '#d1fae5' : '#fef3c7', color: w.status === 'Done' ? '#065f46' : '#92400e' }}>{w.status}</span></td>
+                                          </tr>
+                                        );
+                                      })}
+                                    </tbody>
+                                  </table>
+                                )}
+                              </div>
+
+                              {/* DA SECTION */}
                               <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '15px', backgroundColor: 'white' }}>
                                 <h3 style={{ marginTop: 0, color: '#1f2937' }}>⚖️ Disciplinary Actions (Respondents)</h3>
                                 {daList.length === 0 ? <p style={{ color: '#6b7280', fontStyle: 'italic' }}>No respondents linked.</p> : (
@@ -443,6 +455,7 @@ function Dashboard({ userEmail, onSignOut }) {
                                   </table>
                                 )}
                               </div>
+
                             </td>
                           </tr>
                         )}
@@ -454,23 +467,9 @@ function Dashboard({ userEmail, onSignOut }) {
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '20px' }}>
-              <button 
-                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} 
-                disabled={currentPage === 1}
-                style={{ backgroundColor: '#3b82f6', color: 'white', padding: '8px 16px', border: 'none', borderRadius: '6px', cursor: currentPage === 1 ? 'not-allowed' : 'pointer', opacity: currentPage === 1 ? 0.5 : 1 }}
-              >
-                ← Previous
-              </button>
-              <span style={{ color: '#4b5563' }}>
-                Page {currentPage} of {totalPages || 1} ({filteredCases.length} cases)
-              </span>
-              <button 
-                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))} 
-                disabled={currentPage === totalPages || totalPages === 0}
-                style={{ backgroundColor: '#3b82f6', color: 'white', padding: '8px 16px', border: 'none', borderRadius: '6px', cursor: (currentPage === totalPages || totalPages === 0) ? 'not-allowed' : 'pointer', opacity: (currentPage === totalPages || totalPages === 0) ? 0.5 : 1 }}
-              >
-                Next →
-              </button>
+              <button onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} disabled={currentPage === 1} style={{ backgroundColor: '#3b82f6', color: 'white', padding: '8px 16px', border: 'none', borderRadius: '6px', cursor: currentPage === 1 ? 'not-allowed' : 'pointer', opacity: currentPage === 1 ? 0.5 : 1 }}>← Previous</button>
+              <span style={{ color: '#4b5563' }}>Page {currentPage} of {totalPages || 1} ({filteredCases.length} cases)</span>
+              <button onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))} disabled={currentPage === totalPages || totalPages === 0} style={{ backgroundColor: '#3b82f6', color: 'white', padding: '8px 16px', border: 'none', borderRadius: '6px', cursor: (currentPage === totalPages || totalPages === 0) ? 'not-allowed' : 'pointer', opacity: (currentPage === totalPages || totalPages === 0) ? 0.5 : 1 }}>Next →</button>
             </div>
           </>
         )}
