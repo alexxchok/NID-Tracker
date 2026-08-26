@@ -141,6 +141,16 @@ function Dashboard({ userEmail, onSignOut }) {
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 25;
 
+  // Add Case Form State
+  const [showCaseForm, setShowCaseForm] = useState(false);
+  const [newCaseNum, setNewCaseNum] = useState('');
+  const [newPic, setNewPic] = useState('');
+  const [newCountry, setNewCountry] = useState('');
+  const [newSlaDate, setNewSlaDate] = useState('');
+  const [newPriority, setNewPriority] = useState('Medium');
+  const [newStatus, setNewStatus] = useState('IN PROGRESS');
+  const [newStage, setNewStage] = useState('Stage 1');
+
   const fetchCases = async () => {
     setLoading(true);
     const { data, error } = await supabase.from('cases').select('*, disciplinary_actions(respondent_name, respondent_id)').order('sla_due_date', { ascending: true });
@@ -312,6 +322,21 @@ function Dashboard({ userEmail, onSignOut }) {
     setDaList(daData || []); setWipList(wipData || []);
   };
 
+  const handleAddCase = async (e) => {
+    e.preventDefault();
+    const { error } = await supabase.from('cases').insert([{ 
+      case_number: newCaseNum, pic: newPic, country: newCountry, case_status: newStatus, 
+      sla_due_date: newSlaDate, priority: newPriority, stage: newStage, created_on: new Date().toISOString().split('T')[0]
+    }]);
+    if (error) {
+      alert('Error saving case: ' + error.message);
+    } else {
+      setShowCaseForm(false);
+      setNewCaseNum(''); setNewPic(''); setNewCountry(''); setNewStatus('IN PROGRESS'); setNewSlaDate(''); setNewPriority('Medium'); setNewStage('Stage 1');
+      fetchCases(); 
+    }
+  };
+
   const handleAddWIP = async (e) => {
     e.preventDefault();
     const rule = mappingRules.find(r => r.action_type === wipActionType);
@@ -369,6 +394,8 @@ function Dashboard({ userEmail, onSignOut }) {
     { id: 'analytics', label: 'Analytics', icon: '📈' },
   ];
 
+  const stages = Array.from({length: 10}, (_, i) => `Stage ${i + 1}`);
+
   return (
     <>
       <style>{`
@@ -419,9 +446,9 @@ function Dashboard({ userEmail, onSignOut }) {
         
         /* MAIN CONTENT */
         .main-content { flex: 1; padding: 24px; overflow-y: auto; -webkit-overflow-scrolling: touch; }
-        .page-header { margin-bottom: 24px; }
-        .page-header h2 { font-size: 22px; font-weight: 600; margin: 0 0 5px 0; }
-        .page-header p { color: #64748b; margin: 0; font-size: 13px; }
+        .page-header { margin-bottom: 24px; display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px; }
+        .page-header-text h2 { font-size: 22px; font-weight: 600; margin: 0 0 5px 0; }
+        .page-header-text p { color: #64748b; margin: 0; font-size: 13px; }
         
         /* CARDS & STATS */
         .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; margin-bottom: 24px; }
@@ -440,6 +467,12 @@ function Dashboard({ userEmail, onSignOut }) {
         .upload-area { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
         .btn-upload { padding: 10px 16px; background-color: #0f172a; color: white; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500; display: inline-block; }
         .upload-msg { font-size: 13px; font-weight: 500; color: #059669; }
+        
+        /* ADD CASE FORM */
+        .btn-add-case { padding: 10px 16px; background-color: #3b82f6; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500; }
+        .add-case-form { background: #f8fafc; padding: 16px; border-radius: 8px; margin-bottom: 16px; border: 1px solid #e2e8f0; }
+        .form-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+        @media (min-width: 768px) { .form-grid { grid-template-columns: repeat(4, 1fr); align-items: end; } }
         
         /* TABLE */
         .table-container { overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 12px; border: 1px solid #e2e8f0; background: white; }
@@ -545,8 +578,10 @@ function Dashboard({ userEmail, onSignOut }) {
           {activeTab === 'dashboard' && (
             <>
               <div className="page-header">
-                <h2>Dashboard Overview</h2>
-                <p>Monitor all case statuses and SLA compliance in real-time.</p>
+                <div className="page-header-text">
+                  <h2>Dashboard Overview</h2>
+                  <p>Monitor all case statuses and SLA compliance in real-time.</p>
+                </div>
               </div>
 
               <div className="stats-grid">
@@ -612,9 +647,59 @@ function Dashboard({ userEmail, onSignOut }) {
           {activeTab === 'cases' && (
             <>
               <div className="page-header">
-                <h2>Case Tracker</h2>
-                <p>Search and manage all disciplinary cases.</p>
+                <div className="page-header-text">
+                  <h2>Case Tracker</h2>
+                  <p>Search and manage all disciplinary cases.</p>
+                </div>
+                <button onClick={() => setShowCaseForm(!showCaseForm)} className="btn-add-case">
+                  {showCaseForm ? 'Close Form' : '+ Add New Case'}
+                </button>
               </div>
+
+              {showCaseForm && (
+                <form onSubmit={handleAddCase} className="add-case-form">
+                  <div className="form-grid">
+                    <div className="wip-input-group">
+                      <label>Case Number</label>
+                      <input type="text" value={newCaseNum} onChange={(e) => setNewCaseNum(e.target.value)} required />
+                    </div>
+                    <div className="wip-input-group">
+                      <label>PIC</label>
+                      <input type="text" value={newPic} onChange={(e) => setNewPic(e.target.value)} />
+                    </div>
+                    <div className="wip-input-group">
+                      <label>Country</label>
+                      <input type="text" value={newCountry} onChange={(e) => setNewCountry(e.target.value)} required />
+                    </div>
+                    <div className="wip-input-group">
+                      <label>SLA Due Date</label>
+                      <input type="date" value={newSlaDate} onChange={(e) => setNewSlaDate(e.target.value)} required />
+                    </div>
+                    <div className="wip-input-group">
+                      <label>Priority</label>
+                      <select value={newPriority} onChange={(e) => setNewPriority(e.target.value)}>
+                        <option value="High">High</option>
+                        <option value="Medium">Medium</option>
+                        <option value="Low">Low</option>
+                      </select>
+                    </div>
+                    <div className="wip-input-group">
+                      <label>Status</label>
+                      <select value={newStatus} onChange={(e) => setNewStatus(e.target.value)}>
+                        <option value="IN PROGRESS">IN PROGRESS</option>
+                        <option value="COMPLETED">COMPLETED</option>
+                      </select>
+                    </div>
+                    <div className="wip-input-group">
+                      <label>Stage</label>
+                      <select value={newStage} onChange={(e) => setNewStage(e.target.value)}>
+                        {stages.map(s => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                    </div>
+                    <button type="submit" className="btn-log" style={{ backgroundColor: '#10b981' }}>Save Case</button>
+                  </div>
+                </form>
+              )}
 
               <div className="table-container">
                 <div style={{ padding: '16px', borderBottom: '1px solid #e2e8f0' }}>
@@ -819,8 +904,10 @@ function Dashboard({ userEmail, onSignOut }) {
           {activeTab === 'analytics' && (
             <>
               <div className="page-header">
-                <h2>Analytics & Insights</h2>
-                <p>Visual breakdown of case metrics and performance.</p>
+                <div className="page-header-text">
+                  <h2>Analytics & Insights</h2>
+                  <p>Visual breakdown of case metrics and performance.</p>
+                </div>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px' }}>
