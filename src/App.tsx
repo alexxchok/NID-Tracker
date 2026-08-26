@@ -7,6 +7,7 @@ const supabaseUrl = 'https://yymvagbwxdaxrldrhmtm.supabase.co';
 const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl5bXZhZ2J3eGRheHJsZHJobXRtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY2OTEyMjcsImV4cCI6MjEwMjI2NzIyN30.W6WFGXzR7gMU0ln-vfMIJlsxwctWqnCv5Cb7qW8UXXY';
 const supabase = createClient(supabaseUrl, supabaseKey);
 
+// --- MAIN APP WRAPPER ---
 function App() {
   const [session, setSession] = useState(null);
 
@@ -20,6 +21,7 @@ function App() {
   return <Dashboard userEmail={session.user.email} onSignOut={() => supabase.auth.signOut()} />;
 }
 
+// --- AUTH SCREEN ---
 function AuthScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -35,21 +37,27 @@ function AuthScreen() {
   };
 
   return (
-    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', backgroundColor: '#f3f4f6', fontFamily: 'Arial, sans-serif' }}>
-      <div style={{ background: 'white', padding: '40px', borderRadius: '12px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)', width: '400px' }}>
-        <h2 style={{ textAlign: 'center', marginBottom: '20px', color: '#1f2937' }}>🔐 SLA Tracker Login</h2>
+    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', backgroundColor: '#0f172a', fontFamily: "'Inter', system-ui, sans-serif" }}>
+      <div style={{ background: 'white', padding: '40px', borderRadius: '16px', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1), 0 10px 10px -5px rgba(0,0,0,0.04)', width: '420px' }}>
+        <div style={{ textAlign: 'center', marginBottom: '30px' }}>
+          <div style={{ display: 'inline-block', padding: '12px', backgroundColor: '#3b82f6', borderRadius: '12px', marginBottom: '15px' }}>
+            <span style={{ color: 'white', fontSize: '24px' }}>📊</span>
+          </div>
+          <h2 style={{ margin: 0, color: '#0f172a', fontSize: '24px', fontWeight: 600 }}>SLA Tracker</h2>
+          <p style={{ color: '#64748b', marginTop: '5px', fontSize: '14px''>Sign in to your dashboard</p>
+        </div>
         <form onSubmit={handleLogin}>
-          <div style={{ marginBottom: '15px' }}>
-            <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px', color: '#4b5563' }}>Email</label>
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required style={{ width: '100%', padding: '10px', border: '1px solid #d1d5db', borderRadius: '6px', boxSizing: 'border-box' }} />
+          <div style={{ marginBottom: '16px' }}>
+            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: 500, color: '#334155' }}>Email</label>
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required style={{ width: '100%', padding: '12px', border: '1px solid #e2e8f0', borderRadius: '8px', boxSizing: 'border-box', fontSize: '14px', outline: 'none', transition: 'border-color 0.2s' }} />
           </div>
-          <div style={{ marginBottom: '20px' }}>
-            <label style={{ display: 'block', marginBottom: '5px', fontSize: '14px', color: '#4b5563' }}>Password</label>
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required style={{ width: '100%', padding: '10px', border: '1px solid #d1d5db', borderRadius: '6px', boxSizing: 'border-box' }} />
+          <div style={{ marginBottom: '24px' }}>
+            <label style={{ display: 'block', marginBottom: '6px', fontSize: '14px', fontWeight: 500, color: '#334155' }}>Password</label>
+            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required style={{ width: '100%', padding: '12px', border: '1px solid #e2e8f0', borderRadius: '8px', boxSizing: 'border-box', fontSize: '14px', outline: 'none', transition: 'border-color 0.2s' }} />
           </div>
-          {error && <p style={{ color: '#ef4444', fontSize: '14px', marginBottom: '15px' }}>{error}</p>}
-          <button type="submit" disabled={loading} style={{ width: '100%', backgroundColor: '#3b82f6', color: 'white', padding: '12px', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '16px' }}>
-            {loading ? 'Logging in...' : 'Login'}
+          {error && <div style={{ color: '#ef4444', fontSize: '14px', marginBottom: '16px', padding: '10px', backgroundColor: '#fee2e2', borderRadius: '6px' }}>{error}</div>}
+          <button type="submit" disabled={loading} style={{ width: '100%', backgroundColor: '#0f172a', color: 'white', padding: '14px', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 600, fontSize: '15px', transition: 'background-color 0.2s' }}>
+            {loading ? 'Signing in...' : 'Sign In'}
           </button>
         </form>
       </div>
@@ -57,6 +65,7 @@ function AuthScreen() {
   );
 }
 
+// --- DASHBOARD ---
 function Dashboard({ userEmail, onSignOut }) {
   const [cases, setCases] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -89,13 +98,9 @@ function Dashboard({ userEmail, onSignOut }) {
 
   const formatDateString = (dateStr) => {
     if (!dateStr && dateStr !== 0) return null;
-    
-    // If it's a string that looks like a number, convert it to a number first
     if (typeof dateStr === 'string' && !isNaN(dateStr) && dateStr.trim() !== '') {
       dateStr = parseFloat(dateStr);
     }
-    
-    // Handle Excel serial numbers (whether passed as numbers or strings)
     if (typeof dateStr === 'number') {
       const utc_days = Math.floor(dateStr - 25569);
       const utc_value = utc_days * 86400;        
@@ -104,11 +109,7 @@ function Dashboard({ userEmail, onSignOut }) {
         return `${date_info.getFullYear()}-${String(date_info.getMonth() + 1).padStart(2, '0')}-${String(date_info.getDate()).padStart(2, '0')}`;
       }
     }
-    
-    // Strip time part if it exists (e.g., "1/30/23 12:00 AM" -> "1/30/23")
     const cleanStr = String(dateStr).trim().split(' ')[0];
-    
-    // Try standard DD/MM/YYYY or MM/DD/YYYY
     const parts = cleanStr.split(/[-/]/);
     if (parts.length === 3) {
       let [p1, p2, p3] = parts.map(p => parseInt(p, 10));
@@ -121,8 +122,6 @@ function Dashboard({ userEmail, onSignOut }) {
         }
       }
     }
-    
-    // Fallback to Date object
     const fallbackDate = new Date(cleanStr);
     if (!isNaN(fallbackDate.getTime())) {
       const year = fallbackDate.getFullYear();
@@ -139,7 +138,6 @@ function Dashboard({ userEmail, onSignOut }) {
     return result;
   };
 
-  // Helper to find a sheet by scanning headers
   const findSheetByHeader = (wb, headerSearch) => {
     for (let name of wb.SheetNames) {
       const ws = wb.Sheets[name];
@@ -154,7 +152,6 @@ function Dashboard({ userEmail, onSignOut }) {
     return null;
   };
 
-  // --- MASTER EXCEL UPLOADER ---
   const handleMasterUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -166,10 +163,8 @@ function Dashboard({ userEmail, onSignOut }) {
       try {
         const data = new Uint8Array(e.target.result);
         const wb = XLSX.read(data, { type: 'array', cellDates: false });
-        
         setUploadMessage('2/5 Extracting sheets...');
         
-        // --- 1. PROCESS SLA_TRACKER (CASES) ---
         let casesToUpsert = [];
         const slaSheetName = wb.SheetNames.find(name => name.trim().toLowerCase() === 'sla_tracker');
         if (slaSheetName) {
@@ -194,10 +189,7 @@ function Dashboard({ userEmail, onSignOut }) {
           }).filter(Boolean);
         }
 
-        // --- 2. PROCESS RAW_DATA / DISCIPLINARY ACTIONS (RESPONDENTS) ---
         let daDataToInsert = [];
-        
-        // BULLETPROOF: Scan ALL sheets to find the one with "Action Taken 1"
         let daSheetName = findSheetByHeader(wb, "Action Taken 1");
         if (!daSheetName) daSheetName = findSheetByHeader(wb, "Current Action");
         
@@ -209,7 +201,6 @@ function Dashboard({ userEmail, onSignOut }) {
             const caseNum = cleanVal(getVal(["CXN No", "CXN #"]));
             const respId = cleanVal(getVal(["Respondent ID#", "Respondent ID No", "Respondents' IR ID No"])); 
             
-            // Build Action History Timeline
             let history = [];
             for (let i = 1; i <= 4; i++) {
               const action = cleanVal(getVal([`Action Taken ${i}`]));
@@ -219,7 +210,6 @@ function Dashboard({ userEmail, onSignOut }) {
                 history.push({ step: i, action: action, date: date });
               }
             }
-            // Fallback to Current/Previous Action if Action Taken 1-4 is missing
             if (history.length === 0) {
                 const currAction = cleanVal(getVal(["Current Action"]));
                 const currDate = formatDateString(cleanVal(getVal(["Current Action (Execution Date)", "Execution Date"])));
@@ -350,152 +340,239 @@ function Dashboard({ userEmail, onSignOut }) {
   const outOfSla = cases.filter(c => calculateSlaDays(c.sla_due_date) < 0 && c.case_status === 'IN PROGRESS').length;
 
   const getActionColor = (action) => {
-    if (!action) return '#6b7280';
+    if (!action) return { text: '#64748b', bg: '#f1f5f9' };
     const lower = action.toLowerCase();
-    if (lower.includes('terminat')) return '#ef4444';
-    if (lower.includes('suspend')) return '#f59e0b';
-    if (lower.includes('release') || lower.includes('issued warning')) return '#10b981';
-    return '#3b82f6';
+    if (lower.includes('terminat')) return { text: '#dc2626', bg: '#fee2e2' };
+    if (lower.includes('suspend')) return { text: '#d97706', bg: '#fef3c7' };
+    if (lower.includes('release') || lower.includes('issued warning')) return { text: '#059669', bg: '#d1fae5' };
+    return { text: '#2563eb', bg: '#dbeafe' };
   };
 
   return (
-    <div style={{ padding: '24px', fontFamily: 'Arial, sans-serif', backgroundColor: '#f3f4f6', minHeight: '100vh' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-        <h1 style={{ color: '#1f2937', margin: 0 }}>📊 SLA TRACKER DASHBOARD</h1>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-          <span style={{ fontSize: '14px', color: '#4b5563' }}>👤 {userEmail}</span>
-          <button onClick={onSignOut} style={{ backgroundColor: '#ef4444', color: 'white', padding: '8px 16px', border: 'none', borderRadius: '6px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px' }}>Logout</button>
-        </div>
-      </div>
+    <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: '#f8fafc', fontFamily: "'Inter', system-ui, sans-serif", color: '#0f172a' }}>
       
-      <div style={{ display: 'flex', gap: '16px', marginBottom: '30px' }}>
-        <div style={{ background: 'white', padding: '20px', borderRadius: '8px', flex: 1, boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}><h3 style={{ margin: 0, color: '#6b7280', fontSize: '14px' }}>TOTAL CASES</h3><p style={{ fontSize: '28px', fontWeight: 'bold', margin: '5px 0 0 0' }}>{totalCases}</p></div>
-        <div style={{ background: 'white', padding: '20px', borderRadius: '8px', flex: 1, boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}><h3 style={{ margin: 0, color: '#6b7280', fontSize: '14px' }}>IN PROGRESS</h3><p style={{ fontSize: '28px', fontWeight: 'bold', margin: '5px 0 0 0', color: '#f59e0b' }}>{inProgress}</p></div>
-        <div style={{ background: 'white', padding: '20px', borderRadius: '8px', flex: 1, boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}><h3 style={{ margin: 0, color: '#6b7280', fontSize: '14px' }}>COMPLETED</h3><p style={{ fontSize: '28px', fontWeight: 'bold', margin: '5px 0 0 0', color: '#10b981' }}>{completed}</p></div>
-        <div style={{ background: 'white', padding: '20px', borderRadius: '8px', flex: 1, boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}><h3 style={{ margin: 0, color: '#6b7280', fontSize: '14px' }}>OUT OF SLA</h3><p style={{ fontSize: '28px', fontWeight: 'bold', margin: '5px 0 0 0', color: '#ef4444' }}>{outOfSla}</p></div>
-      </div>
-
-      <div style={{ background: 'white', padding: '20px', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', marginBottom: '30px' }}>
-        <h2 style={{ marginTop: 0, color: '#1f2937', fontSize: '18px' }}>📤 Master Excel Uploader</h2>
-        <p style={{ color: '#6b7280', fontSize: '13px' }}>Upload your Excel workbook (.xlsx). The system will automatically scan for the sheets containing your Cases and Disciplinary Actions and sync them to the cloud.</p>
-        <input type="file" accept=".xlsx, .xls" onChange={handleMasterUpload} disabled={uploading} style={{ marginBottom: '10px', fontSize: '12px' }} />
-        {uploadMessage && <p style={{ fontWeight: 'bold', fontSize: '12px', color: uploadMessage.includes('Error') || uploadMessage.includes('errors') ? '#ef4444' : '#10b981' }}>{uploadMessage}</p>}
-      </div>
-
-      <div style={{ background: 'white', padding: '20px', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
-        <h2 style={{ marginTop: 0, color: '#1f2937' }}>📋 SLA Case Tracker</h2>
+      {/* SIDEBAR */}
+      <aside style={{ width: '260px', backgroundColor: '#0f172a', color: 'white', padding: '24px', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '40px' }}>
+          <span style={{ fontSize: '24px' }}>📊</span>
+          <h1 style={{ fontSize: '20px', fontWeight: 600, margin: 0 }}>SLA Tracker</h1>
+        </div>
         
-        <input 
-          type="text" 
-          placeholder="Search by Case#, PIC, Country, Respondent Name, or ID..." 
-          value={searchTerm}
-          onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
-          style={{ width: '100%', padding: '10px', marginBottom: '20px', border: '1px solid #d1d5db', borderRadius: '6px', boxSizing: 'border-box' }}
-        />
+        <nav style={{ flex: 1 }}>
+          <div style={{ padding: '10px', borderRadius: '6px', backgroundColor: '#1e293b', marginBottom: '5px', fontSize: '14px', fontWeight: 500 }}>Dashboard</div>
+          <div style={{ padding: '10px', color: '#94a3b8', fontSize: '14px' }}>Cases</div>
+          <div style={{ padding: '10px', color: '#94a3b8', fontSize: '14px' }}>Respondents</div>
+          <div style={{ padding: '10px', color: '#94a3b8', fontSize: '14px' }}>Analytics</div>
+        </nav>
+
+        <div style={{ borderTop: '1px solid #334155', paddingTop: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
+            <div style={{ width: '36px', height: '36px', borderRadius: '50%', backgroundColor: '#3b82f6', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '600' }}>
+              {userEmail?.charAt(0).toUpperCase()}
+            </div>
+            <div style={{ overflow: 'hidden' }}>
+              <div style={{ fontSize: '14px', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{userEmail}</div>
+              <div style={{ fontSize: '12px', color: '#94a3b8' }}>Administrator</div>
+            </div>
+          </div>
+          <button onClick={onSignOut} style={{ width: '100%', padding: '8px', backgroundColor: 'transparent', border: '1px solid #334155', color: '#94a3b8', borderRadius: '6px', cursor: 'pointer', fontSize: '13px' }}>Sign Out</button>
+        </div>
+      </aside>
+
+      {/* MAIN CONTENT */}
+      <main style={{ flex: 1, padding: '32px', overflowY: 'auto' }}>
         
-        {loading ? <p>Loading data...</p> : (
-          <>
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-                <thead>
-                  <tr style={{ borderBottom: '2px solid #e5e7eb', backgroundColor: '#f9fafb' }}>
-                    <th style={{ padding: '12px' }}>Case Number</th><th style={{ padding: '12px' }}>PIC</th><th style={{ padding: '12px' }}>Priority</th><th style={{ padding: '12px' }}>Status</th><th style={{ padding: '12px' }}>Stage</th><th style={{ padding: '12px' }}>SLA Due</th><th style={{ padding: '12px' }}>SLA Status</th><th style={{ padding: '12px' }}># Resp</th><th style={{ padding: '12px' }}>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {currentCases.map((c, index) => {
-                    const slaDays = calculateSlaDays(c.sla_due_date);
-                    const respondentCount = c.disciplinary_actions?.length || 0;
-                    return (
-                      <React.Fragment key={index}>
-                        <tr style={{ borderBottom: selectedCase === c.case_number ? 'none' : '1px solid #e5e7eb', cursor: 'pointer', backgroundColor: selectedCase === c.case_number ? '#eff6ff' : 'white' }}>
-                          <td style={{ padding: '12px', fontWeight: 'bold', whiteSpace: 'nowrap' }}>{c.case_number}</td>
-                          <td style={{ padding: '12px', whiteSpace: 'nowrap' }}>{c.pic || '—'}</td>
-                          <td style={{ padding: '12px', fontWeight: 'bold', color: c.priority === 'High' ? '#ef4444' : c.priority === 'Medium' ? '#f59e0b' : '#6b7280' }}>{c.priority || '—'}</td>
-                          <td style={{ padding: '12px' }}><span style={{ padding: '4px 8px', borderRadius: '12px', fontSize: '12px', fontWeight: 'bold', backgroundColor: c.case_status === 'IN PROGRESS' ? '#fef3c7' : '#d1fae5', color: c.case_status === 'IN PROGRESS' ? '#92400e' : '#065f46' }}>{c.case_status}</span></td>
-                          <td style={{ padding: '12px' }}>{c.stage || '—'}</td>
-                          <td style={{ padding: '12px', whiteSpace: 'nowrap' }}>{c.sla_due_date}</td>
-                          <td style={{ padding: '12px', fontWeight: 'bold', color: slaDays < 0 ? '#ef4444' : '#10b981', whiteSpace: 'nowrap' }}>{c.case_status !== 'IN PROGRESS' ? '—' : slaDays < 0 ? `🔴 ${Math.abs(slaDays)}d` : `🟢 ${slaDays}d`}</td>
-                          <td style={{ padding: '12px', textAlign: 'center', fontWeight: 'bold', color: respondentCount > 0 ? '#3b82f6' : '#d1d5db' }}>{respondentCount}</td>
-                          <td style={{ padding: '12px', display: 'flex', gap: '8px' }}>
-                            <button onClick={() => handleCaseClick(c.case_number)} style={{ backgroundColor: '#6b7280', color: 'white', padding: '6px 12px', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>{selectedCase === c.case_number ? 'Hide' : 'Expand'}</button>
-                            {c.case_status === 'IN PROGRESS' && <button onClick={() => handleUpdateStatus(c.case_number, 'COMPLETED')} style={{ backgroundColor: '#10b981', color: 'white', padding: '6px 12px', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>✓</button>}
-                          </td>
-                        </tr>
-                        
-                        {selectedCase === c.case_number && (
-                          <tr>
-                            <td colSpan="9" style={{ padding: '20px', backgroundColor: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
-                              <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '15px', backgroundColor: 'white' }}>
-                                <h3 style={{ marginTop: 0, color: '#1f2937' }}>⚖️ Disciplinary Actions (Respondents)</h3>
-                                {daList.length === 0 ? <p style={{ color: '#6b7280', fontStyle: 'italic' }}>No respondents linked.</p> : (
-                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                                    {daList.map((da, i) => (
-                                      <div key={i} style={{ border: '1px solid #e5e7eb', borderRadius: '8px', padding: '15px', backgroundColor: '#fcfcfc' }}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '15px', paddingBottom: '15px', borderBottom: '1px solid #e5e7eb' }}>
-                                          <div>
-                                            <div style={{ fontSize: '12px', color: '#9ca3af', marginBottom: '4px' }}>COMPLAINANT</div>
-                                            <div style={{ fontWeight: 'bold' }}>{da.complainant_name || '—'}</div>
-                                            <div style={{ fontSize: '12px', color: '#6b7280' }}>ID: {da.complainant_id || '—'} | {da.complainant_country || ''}</div>
-                                          </div>
-                                          <div style={{ textAlign: 'right' }}>
-                                            <div style={{ fontSize: '12px', color: '#9ca3af', marginBottom: '4px' }}>RESPONDENT</div>
-                                            <div style={{ fontWeight: 'bold' }}>{da.respondent_name || '—'}</div>
-                                            <div style={{ fontSize: '12px', color: '#6b7280' }}>ID: {da.respondent_id || '—'} | {da.respondent_country || ''}</div>
-                                          </div>
-                                        </div>
-                                        
-                                        <div style={{ fontSize: '12px', color: '#9ca3af', marginBottom: '8px' }}>ACTION TIMELINE</div>
-                                        {da.action_history && da.action_history.length > 0 ? (
-                                          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                                            {da.action_history.map((h, idx) => (
-                                              <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                                <div style={{ width: '24px', height: '24px', borderRadius: '50%', backgroundColor: '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 'bold', color: '#6b7280', flexShrink: 0 }}>{h.step}</div>
-                                                <div style={{ flex: 1 }}>
-                                                  <span style={{ fontWeight: 'bold', color: getActionColor(h.action) }}>{h.action || '—'}</span>
-                                                  <span style={{ fontSize: '12px', color: '#6b7280', marginLeft: '8px' }}>{h.date || 'No date'}</span>
-                                                </div>
-                                              </div>
-                                            ))}
-                                          </div>
-                                        ) : (
-                                          <div style={{ fontSize: '14px', color: '#6b7280' }}>
-                                            <span style={{ fontWeight: 'bold', color: getActionColor(da.current_action) }}>{da.current_action || '—'}</span>
-                                            <span style={{ fontSize: '12px', color: '#6b7280', marginLeft: '8px' }}>{da.execution_date || 'No date'}</span>
-                                          </div>
-                                        )}
-                                        
-                                        {da.remarks && (
-                                          <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '1px dashed #e5e7eb' }}>
-                                            <div style={{ fontSize: '12px', color: '#9ca3af', marginBottom: '4px' }}>REMARKS</div>
-                                            <div style={{ fontSize: '13px', color: '#4b5563' }}>{da.remarks}</div>
-                                          </div>
-                                        )}
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
+        {/* HEADER */}
+        <div style={{ marginBottom: '32px' }}>
+          <h2 style={{ fontSize: '24px', fontWeight: 600, margin: '0 0 5px 0' }}>Dashboard Overview</h2>
+          <p style={{ color: '#64748b', margin: 0, fontSize: '14px' }}>Monitor all case statuses and SLA compliance in real-time.</p>
+        </div>
+
+        {/* STATS CARDS */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '32px' }}>
+          <StatCard title="Total Cases" value={totalCases} color="#64748b" bg="#f1f5f9" />
+          <StatCard title="In Progress" value={inProgress} color="#d97706" bg="#fef3c7" />
+          <StatCard title="Completed" value={completed} color="#059669" bg="#d1fae5" />
+          <StatCard title="Out of SLA" value={outOfSla} color="#dc2626" bg="#fee2e2" />
+        </div>
+
+        {/* UPLOADER */}
+        <div style={{ background: 'white', padding: '24px', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', border: '1px solid #e2e8f0', marginBottom: '32px' }}>
+          <h3 style={{ marginTop: 0, marginBottom: '8px', fontSize: '16px', fontWeight: 600 }}>Data Synchronization</h3>
+          <p style={{ color: '#64748b', fontSize: '13px', marginBottom: '16px' }}>Upload your Excel workbook (.xlsx). The system will automatically scan for the sheets containing your Cases and Disciplinary Actions.</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <label style={{ padding: '10px 16px', backgroundColor: '#0f172a', color: 'white', borderRadius: '8px', cursor: 'pointer', fontSize: '14px', fontWeight: 500 }}>
+              Upload Excel
+              <input type="file" accept=".xlsx, .xls" onChange={handleMasterUpload} disabled={uploading} style={{ display: 'none' }} />
+            </label>
+            {uploadMessage && <span style={{ fontSize: '13px', fontWeight: 500, color: uploadMessage.includes('Error') || uploadMessage.includes('errors') ? '#dc2626' : '#059669' }}>{uploadMessage}</span>}
+          </div>
+        </div>
+
+        {/* CASES TABLE */}
+        <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+          <div style={{ padding: '16px 24px', borderBottom: '1px solid #e2e8f0' }}>
+            <input 
+              type="text" 
+              placeholder="Search by Case#, PIC, Country, Respondent Name, or ID..." 
+              value={searchTerm}
+              onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
+              style={{ width: '100%', padding: '10px 16px', border: '1px solid #e2e8f0', borderRadius: '8px', boxSizing: 'border-box', fontSize: '14px', outline: 'none' }}
+            />
+          </div>
+          
+          {loading ? (
+            <div style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>Loading data...</div>
+          ) : (
+            <>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '1px solid #e2e8f0', backgroundColor: '#f8fafc' }}>
+                      <Th>Case Number</Th><Th>PIC</Th><Th>Priority</Th><Th>Status</Th><Th>Stage</Th><Th>SLA Due</Th><Th>SLA Status</Th><Th style={{ textAlign: 'center' }}>Resp</Th><Th>Actions</Th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {currentCases.map((c, index) => {
+                      const slaDays = calculateSlaDays(c.sla_due_date);
+                      const respondentCount = c.disciplinary_actions?.length || 0;
+                      const isBreached = slaDays < 0 && c.case_status === 'IN PROGRESS';
+                      return (
+                        <React.Fragment key={index}>
+                          <tr style={{ borderBottom: '1px solid #f1f5f9', transition: 'background-color 0.2s', cursor: 'pointer', backgroundColor: selectedCase === c.case_number ? '#f8fafc' : 'white' }} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = selectedCase === c.case_number ? '#f8fafc' : '#f9fafb'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = selectedCase === c.case_number ? '#f8fafc' : 'white'}>
+                            <Td style={{ fontWeight: 600, color: '#0f172a' }}>{c.case_number}</Td>
+                            <Td style={{ color: '#475569' }}>{c.pic || '—'}</Td>
+                            <Td>
+                              <span style={{ padding: '4px 10px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, backgroundColor: c.priority === 'High' ? '#fee2e2' : c.priority === 'Medium' ? '#fef3c7' : '#f1f5f9', color: c.priority === 'High' ? '#dc2626' : c.priority === 'Medium' ? '#d97706' : '#64748b' }}>{c.priority || '—'}</span>
+                            </Td>
+                            <Td>
+                              <span style={{ padding: '4px 10px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, backgroundColor: c.case_status === 'IN PROGRESS' ? '#dbeafe' : '#d1fae5', color: c.case_status === 'IN PROGRESS' ? '#2563eb' : '#059669' }}>{c.case_status}</span>
+                            </Td>
+                            <Td style={{ color: '#475569', fontSize: '13px' }}>{c.stage || '—'}</Td>
+                            <Td style={{ color: '#475569', fontSize: '13px' }}>{c.sla_due_date}</Td>
+                            <Td>
+                              {c.case_status !== 'IN PROGRESS' ? '—' : (
+                                <span style={{ fontWeight: 600, color: isBreached ? '#dc2626' : '#059669', fontSize: '13px' }}>
+                                  {isBreached ? `🔴 ${Math.abs(slaDays)}d` : `🟢 ${slaDays}d`}
+                                </span>
+                              )}
+                            </Td>
+                            <Td style={{ textAlign: 'center', fontWeight: 600, color: respondentCount > 0 ? '#2563eb' : '#94a3b8' }}>{respondentCount}</Td>
+                            <Td>
+                              <div style={{ display: 'flex', gap: '8px' }}>
+                                <button onClick={() => handleCaseClick(c.case_number)} style={{ padding: '6px 12px', backgroundColor: '#f1f5f9', color: '#475569', border: '1px solid #e2e8f0', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 500 }}>{selectedCase === c.case_number ? 'Hide' : 'View'}</button>
+                                {c.case_status === 'IN PROGRESS' && <button onClick={() => handleUpdateStatus(c.case_number, 'COMPLETED')} style={{ padding: '6px 12px', backgroundColor: '#0f172a', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 500 }}>✓ Complete</button>}
                               </div>
-                            </td>
+                            </Td>
                           </tr>
-                        )}
-                      </React.Fragment>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                          
+                          {selectedCase === c.case_number && (
+                            <tr>
+                              <td colSpan="9" style={{ padding: '24px', backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                                <div style={{ background: 'white', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                                  <div style={{ padding: '16px 24px', borderBottom: '1px solid #e2e8f0' }}>
+                                    <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>Disciplinary Actions</h3>
+                                  </div>
+                                  {daList.length === 0 ? (
+                                    <div style={{ padding: '24px', textAlign: 'center', color: '#94a3b8' }}>No respondents linked to this case.</div>
+                                  ) : (
+                                    <div style={{ padding: '16px' }}>
+                                      {daList.map((da, i) => {
+                                        const colors = getActionColor(da.current_action);
+                                        return (
+                                          <div key={i} style={{ border: '1px solid #e2e8f0', borderRadius: '8px', padding: '20px', marginBottom: '16px', backgroundColor: '#fcfcfc' }}>
+                                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px', paddingBottom: '16px', borderBottom: '1px solid #e2e8f0' }}>
+                                              <div>
+                                                <div style={{ fontSize: '11px', textTransform: 'uppercase', color: '#94a3b8', marginBottom: '4px', letterSpacing: '0.05em' }}>Complainant</div>
+                                                <div style={{ fontWeight: 600, fontSize: '15px' }}>{da.complainant_name || '—'}</div>
+                                                <div style={{ fontSize: '13px', color: '#64748b', marginTop: '2px' }}>ID: {da.complainant_id || '—'} | {da.complainant_country || '—'}</div>
+                                              </div>
+                                              <div style={{ textAlign: 'right' }}>
+                                                <div style={{ fontSize: '11px', textTransform: 'uppercase', color: '#94a3b8', marginBottom: '4px', letterSpacing: '0.05em' }}>Respondent</div>
+                                                <div style={{ fontWeight: 600, fontSize: '15px' }}>{da.respondent_name || '—'}</div>
+                                                <div style={{ fontSize: '13px', color: '#64748b', marginTop: '2px' }}>ID: {da.respondent_id || '—'} | {da.respondent_country || '—'}</div>
+                                              </div>
+                                            </div>
+                                            
+                                            <div style={{ fontSize: '11px', textTransform: 'uppercase', color: '#94a3b8', marginBottom: '12px', letterSpacing: '0.05em' }}>Action Timeline</div>
+                                            {da.action_history && da.action_history.length > 0 ? (
+                                              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                                                {da.action_history.map((h, idx) => {
+                                                  const hColors = getActionColor(h.action);
+                                                  return (
+                                                    <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                                      <div style={{ width: '28px', height: '28px', borderRadius: '50%', backgroundColor: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 600, color: '#64748b', flexShrink: 0 }}>{h.step}</div>
+                                                      <div style={{ flex: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                        <span style={{ padding: '4px 12px', borderRadius: '6px', fontSize: '13px', fontWeight: 600, backgroundColor: hColors.bg, color: hColors.text }}>{h.action || '—'}</span>
+                                                        <span style={{ fontSize: '13px', color: '#64748b' }}>{h.date || 'No date'}</span>
+                                                      </div>
+                                                    </div>
+                                                  );
+                                                })}
+                                              </div>
+                                            ) : (
+                                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                <span style={{ padding: '4px 12px', borderRadius: '6px', fontSize: '13px', fontWeight: 600, backgroundColor: colors.bg, color: colors.text }}>{da.current_action || '—'}</span>
+                                                <span style={{ fontSize: '13px', color: '#64748b' }}>{da.execution_date || 'No date'}</span>
+                                              </div>
+                                            )}
+                                            
+                                            {da.remarks && (
+                                              <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px dashed #e2e8f0' }}>
+                                                <div style={{ fontSize: '11px', textTransform: 'uppercase', color: '#94a3b8', marginBottom: '6px', letterSpacing: '0.05em' }}>Remarks</div>
+                                                <div style={{ fontSize: '14px', color: '#475569', lineHeight: '1.5' }}>{da.remarks}</div>
+                                              </div>
+                                            )}
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
 
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '20px' }}>
-              <button onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} disabled={currentPage === 1} style={{ backgroundColor: '#3b82f6', color: 'white', padding: '8px 16px', border: 'none', borderRadius: '6px', cursor: currentPage === 1 ? 'not-allowed' : 'pointer', opacity: currentPage === 1 ? 0.5 : 1 }}>← Previous</button>
-              <span style={{ color: '#4b5563' }}>Page {currentPage} of {totalPages || 1} ({filteredCases.length} cases)</span>
-              <button onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))} disabled={currentPage === totalPages || totalPages === 0} style={{ backgroundColor: '#3b82f6', color: 'white', padding: '8px 16px', border: 'none', borderRadius: '6px', cursor: (currentPage === totalPages || totalPages === 0) ? 'not-allowed' : 'pointer', opacity: (currentPage === totalPages || totalPages === 0) ? 0.5 : 1 }}>Next →</button>
-            </div>
-          </>
-        )}
+              {/* PAGINATION */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 24px', borderTop: '1px solid #e2e8f0' }}>
+                <button onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} disabled={currentPage === 1} style={{ padding: '8px 16px', backgroundColor: 'white', border: '1px solid #e2e8f0', borderRadius: '6px', cursor: currentPage === 1 ? 'not-allowed' : 'pointer', opacity: currentPage === 1 ? 0.5 : 1, fontSize: '13px', fontWeight: 500 }}>← Previous</button>
+                <span style={{ color: '#64748b', fontSize: '13px' }}>Page {currentPage} of {totalPages || 1} ({filteredCases.length} cases)</span>
+                <button onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))} disabled={currentPage === totalPages || totalPages === 0} style={{ padding: '8px 16px', backgroundColor: 'white', border: '1px solid #e2e8f0', borderRadius: '6px', cursor: (currentPage === totalPages || totalPages === 0) ? 'not-allowed' : 'pointer', opacity: (currentPage === totalPages || totalPages === 0) ? 0.5 : 1, fontSize: '13px', fontWeight: 500 }}>Next →</button>
+              </div>
+            </>
+          )}
+        </div>
+
+      </main>
+    </div>
+  );
+}
+
+// --- HELPER COMPONENTS ---
+function StatCard({ title, value, color, bg }) {
+  return (
+    <div style={{ background: 'white', padding: '20px', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', border: '1px solid #e2e8f0' }}>
+      <div style={{ fontSize: '13px', color: '#64748b', marginBottom: '8px', fontWeight: 500 }}>{title}</div>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+        <span style={{ fontSize: '28px', fontWeight: 700, color: color }}>{value}</span>
+        <span style={{ fontSize: '13px', padding: '2px 8px', backgroundColor: bg, color: color, borderRadius: '12px', fontWeight: 600 }}>cases</span>
       </div>
     </div>
   );
+}
+
+function Th({ children, style }) {
+  return <th style={{ padding: '12px 24px', fontSize: '12px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', ...style }}>{children}</th>;
+}
+
+function Td({ children, style }) {
+  return <td style={{ padding: '14px 24px', fontSize: '14px', color: '#475569', whiteSpace: 'nowrap', ...style }}>{children}</td>;
 }
 
 export default App;
