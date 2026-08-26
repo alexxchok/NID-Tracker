@@ -7,6 +7,75 @@ const supabaseUrl = 'https://yymvagbwxdaxrldrhmtm.supabase.co';
 const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl5bXZhZ2J3eGRheHJsZHJobXRtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY2OTEyMjcsImV4cCI6MjEwMjI2NzIyN30.W6WFGXzR7gMU0ln-vfMIJlsxwctWqnCv5Cb7qW8UXXY';
 const supabase = createClient(supabaseUrl, supabaseKey);
 
+// --- WORKING DAYS CONFIGURATION ---
+// Add your public holidays here in "YYYY-MM-DD" format. The app will automatically skip these!
+const PUBLIC_HOLIDAYS = [
+  // "2026-01-01", // Example: New Year's Day
+  // "2026-12-25", // Example: Christmas Day
+];
+
+const isHoliday = (dateObj) => {
+  const dateStr = dateObj.toISOString().split('T')[0];
+  return PUBLIC_HOLIDAYS.includes(dateStr);
+};
+
+// Calculate business days between today and the due date
+const calculateBusinessDays = (dueDate) => {
+  if (!dueDate) return 0;
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const due = new Date(dueDate); due.setHours(0, 0, 0, 0);
+  
+  let diff = 0;
+  let cur = new Date(today);
+  
+  if (cur < due) {
+    while (cur < due) {
+      cur.setDate(cur.getDate() + 1);
+      const day = cur.getDay(); // 0 = Sunday, 6 = Saturday
+      if (day !== 0 && day !== 6 && !isHoliday(cur)) diff++;
+    }
+    return diff;
+  } else if (cur > due) {
+    while (cur > due) {
+      const day = cur.getDay();
+      if (day !== 0 && day !== 6 && !isHoliday(cur)) diff--;
+      cur.setDate(cur.getDate() - 1);
+    }
+    return diff;
+  }
+  return 0;
+};
+
+// Add business days to a start date (for WIP SLA Expiry)
+const addBusinessDays = (startDate, daysToAdd) => {
+  if (!startDate) return null;
+  let date = new Date(startDate);
+  date.setHours(0,0,0,0);
+  let added = 0;
+  while (added < daysToAdd) {
+    date.setDate(date.getDate() + 1);
+    const day = date.getDay();
+    if (day !== 0 && day !== 6 && !isHoliday(date)) {
+      added++;
+    }
+  }
+  return date.toISOString().split('T')[0];
+};
+
+// Helper to format time ago
+const formatTimeAgo = (timestamp) => {
+  if (!timestamp) return '—';
+  const date = new Date(timestamp);
+  const now = new Date();
+  const diff = Math.floor((now - date) / 1000); // seconds
+  
+  if (diff < 60) return 'Just now';
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  if (diff < 172800) return 'Yesterday';
+  return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+};
+
 function App() {
   const [session, setSession] = useState(null);
 
@@ -62,20 +131,6 @@ function AuthScreen() {
     </div>
   );
 }
-
-// Helper to format time ago
-const formatTimeAgo = (timestamp) => {
-  if (!timestamp) return '—';
-  const date = new Date(timestamp);
-  const now = new Date();
-  const diff = Math.floor((now - date) / 1000); // seconds
-  
-  if (diff < 60) return 'Just now';
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-  if (diff < 172800) return 'Yesterday';
-  return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
-};
 
 function Dashboard({ userEmail, onSignOut }) {
   const [cases, setCases] = useState([]);
@@ -248,7 +303,10 @@ function Dashboard({ userEmail, onSignOut }) {
             const latestDate = history.length > 0 ? history[history.length - 1].date : null;
             
             let actionDays = null;
-            if (latestDate) { const today = new Date(); const exec = new Date(latestDate); if (!isNaN(exec.getTime())) actionDays = Math.floor((today - exec) / (1000 * 60 * 60 * 24)); }
+            if (latestDate) { 
+              // Use business days for action days too!
+              actionDays = calculateBusinessDays(latestDate) * -1; // Positive number representing days ago
+            }
             
             return {
               case_number: caseNum,
@@ -352,12 +410,8 @@ function Dashboard({ userEmail, onSignOut }) {
       }
     }
 
-    let expiryDate = null;
-    if (wipDateSent) {
-      let d = new Date(wipDateSent);
-      d.setDate(d.getDate() + slaDays);
-      expiryDate = d.toISOString().split('T')[0];
-    }
+    // USE BUSINESS DAYS TO CALCULATE EXPIRY DATE
+    let expiryDate = addBusinessDays(wipDateSent, slaDays);
 
     const { error: wipError } = await supabase.from('wip_actions').insert([{ 
       case_number: selectedCase, 
@@ -377,7 +431,6 @@ function Dashboard({ userEmail, onSignOut }) {
     }
     
     if (stageToAssign) {
-      // Also pass modified_by_email here!
       await supabase.from('cases').update({ stage: stageToAssign, modified_by_email: userEmail }).eq('case_number', selectedCase);
     }
 
@@ -389,16 +442,9 @@ function Dashboard({ userEmail, onSignOut }) {
   };
 
   const handleUpdateStatus = async (caseNum, newStatus) => {
-    // Pass modified_by_email here!
     const { error } = await supabase.from('cases').update({ case_status: newStatus, modified_by_email: userEmail }).eq('case_number', caseNum);
     if (error) alert('Error updating status: ' + error.message);
     else fetchCases();
-  };
-
-  const calculateSlaDays = (dueDate) => {
-    if (!dueDate) return 0;
-    const today = new Date(); today.setHours(0, 0, 0, 0);
-    return Math.ceil((new Date(dueDate) - today) / (1000 * 60 * 60 * 24));
   };
 
   const filteredCases = cases.filter(c => {
@@ -417,7 +463,9 @@ function Dashboard({ userEmail, onSignOut }) {
   const totalCases = cases.length;
   const inProgress = cases.filter(c => c.case_status === 'IN PROGRESS').length;
   const completed = cases.filter(c => c.case_status === 'COMPLETED').length;
-  const outOfSlaCases = cases.filter(c => calculateSlaDays(c.sla_due_date) < 0 && c.case_status === 'IN PROGRESS');
+  
+  // Use the new business days calculator for SLA breaches!
+  const outOfSlaCases = cases.filter(c => calculateBusinessDays(c.sla_due_date) < 0 && c.case_status === 'IN PROGRESS');
 
   const getActionColor = (action) => {
     if (!action) return { text: '#64748b', bg: '#f1f5f9' };
@@ -508,7 +556,7 @@ function Dashboard({ userEmail, onSignOut }) {
             <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', border: '1px solid #e2e8f0' }}>
               <div style={{ padding: '16px 24px', borderBottom: '1px solid #e2e8f0' }}>
                 <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600 }}>SLA Breaches Alert</h3>
-                <p style={{ margin: '5px 0 0 0', color: '#64748b', fontSize: '13px' }}>Cases that have passed their due date.</p>
+                <p style={{ margin: '5px 0 0 0', color: '#64748b', fontSize: '13px' }}>Cases that have passed their due date (business days).</p>
               </div>
               <div style={{ padding: '16px 24px' }}>
                 {outOfSlaCases.length === 0 ? (
@@ -516,7 +564,7 @@ function Dashboard({ userEmail, onSignOut }) {
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                     {outOfSlaCases.slice(0, 5).map(c => {
-                      const days = calculateSlaDays(c.sla_due_date);
+                      const days = calculateBusinessDays(c.sla_due_date);
                       return (
                         <div key={c.case_number} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', backgroundColor: '#f8fafc', borderRadius: '8px' }}>
                           <div>
@@ -524,7 +572,7 @@ function Dashboard({ userEmail, onSignOut }) {
                             <div style={{ fontSize: '12px', color: '#64748b' }}>{c.pic} | {c.country}</div>
                           </div>
                           <div style={{ padding: '4px 12px', backgroundColor: '#fee2e2', color: '#dc2626', borderRadius: '12px', fontSize: '12px', fontWeight: 600 }}>
-                            🔴 {Math.abs(days)} days overdue
+                            🔴 {Math.abs(days)} working days overdue
                           </div>
                         </div>
                       );
@@ -570,7 +618,7 @@ function Dashboard({ userEmail, onSignOut }) {
                     </thead>
                     <tbody>
                       {currentCases.map((c, index) => {
-                        const slaDays = calculateSlaDays(c.sla_due_date);
+                        const slaDays = calculateBusinessDays(c.sla_due_date);
                         const respondentCount = c.disciplinary_actions?.length || 0;
                         const isBreached = slaDays < 0 && c.case_status === 'IN PROGRESS';
                         const modifierName = c.modified_by_email ? c.modified_by_email.split('@')[0] : '—';
@@ -585,7 +633,7 @@ function Dashboard({ userEmail, onSignOut }) {
                               <Td>
                                 {c.case_status !== 'IN PROGRESS' ? '—' : (
                                   <span style={{ fontWeight: 600, color: isBreached ? '#dc2626' : '#059669', fontSize: '13px', whiteSpace: 'nowrap' }}>
-                                    {isBreached ? `🔴 ${Math.abs(slaDays)}d` : `🟢 ${slaDays}d`}
+                                    {isBreached ? `🔴 ${Math.abs(slaDays)}wd` : `🟢 ${slaDays}wd`}
                                   </span>
                                 )}
                               </Td>
@@ -651,7 +699,7 @@ function Dashboard({ userEmail, onSignOut }) {
                                       ) : (
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                           {wipList.map((w, i) => {
-                                            const wipSlaDays = calculateSlaDays(w.expiry_date);
+                                            const wipSlaDays = calculateBusinessDays(w.expiry_date);
                                             return (
                                               <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', backgroundColor: '#f8fafc', borderRadius: '8px' }}>
                                                 <div style={{ width: '24px', height: '24px', borderRadius: '50%', backgroundColor: '#e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 600, color: '#64748b', flexShrink: 0 }}>{i + 1}</div>
@@ -665,7 +713,7 @@ function Dashboard({ userEmail, onSignOut }) {
                                                 </div>
                                                 <div style={{ textAlign: 'right' }}>
                                                   <div style={{ fontSize: '11px', color: '#94a3b8', textTransform: 'uppercase' }}>SLA Timer</div>
-                                                  <span style={{ fontWeight: 600, fontSize: '13px', color: wipSlaDays < 0 ? '#dc2626' : '#059669' }}>{wipSlaDays < 0 ? `🔴 ${Math.abs(wipSlaDays)}d` : `🟢 ${wipSlaDays}d`}</span>
+                                                  <span style={{ fontWeight: 600, fontSize: '13px', color: wipSlaDays < 0 ? '#dc2626' : '#059669' }}>{wipSlaDays < 0 ? `🔴 ${Math.abs(wipSlaDays)}wd` : `🟢 ${wipSlaDays}wd`}</span>
                                                 </div>
                                               </div>
                                             );
