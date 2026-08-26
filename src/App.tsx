@@ -737,7 +737,7 @@ function Dashboard({ userEmail, onSignOut }) {
                 <ChartRow label="Within SLA" value={withinSla} total={inProgress} color="#10b981" />
                 <ChartRow label="Out of SLA" value={outOfSlaCases.length} total={inProgress} color="#ef4444" />
                 <div style={{ marginTop: '24px', padding: '16px', backgroundColor: '#f8fafc', borderRadius: '8px' }}>
-                  <div style={{ fontSize: '13px', color: '#64748b', marginBottom: '4px''>Compliance Rate</div>
+                <div style={{ fontSize: '13px', color: '#64748b', marginBottom: '4px' }}>Compliance Rate</div>
                   <div style={{ fontSize: '28px', fontWeight: 700, color: withinSla > 0 ? '#10b981' : '#ef4444' }}>
                     {inProgress > 0 ? ((withinSla / inProgress) * 100).toFixed(1) : '0.0'}%
                   </div>
