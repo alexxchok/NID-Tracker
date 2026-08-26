@@ -63,6 +63,20 @@ function AuthScreen() {
   );
 }
 
+// Helper to format time ago
+const formatTimeAgo = (timestamp) => {
+  if (!timestamp) return '—';
+  const date = new Date(timestamp);
+  const now = new Date();
+  const diff = Math.floor((now - date) / 1000); // seconds
+  
+  if (diff < 60) return 'Just now';
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  if (diff < 172800) return 'Yesterday';
+  return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+};
+
 function Dashboard({ userEmail, onSignOut }) {
   const [cases, setCases] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -77,7 +91,6 @@ function Dashboard({ userEmail, onSignOut }) {
   const [daList, setDaList] = useState([]);
   const [wipList, setWipList] = useState([]);
 
-  // WIP Form State
   const [showWipForm, setShowWipForm] = useState(false);
   const [mappingRules, setMappingRules] = useState([]);
   const [wipActionType, setWipActionType] = useState('');
@@ -98,7 +111,6 @@ function Dashboard({ userEmail, onSignOut }) {
 
   useEffect(() => { 
     fetchCases(); 
-    // Fetch mapping rules for the WIP dropdown and auto-staging
     supabase.from('mapping_rules').select('*').then(({ data }) => setMappingRules(data || []));
   }, []);
 
@@ -324,21 +336,15 @@ function Dashboard({ userEmail, onSignOut }) {
     setWipList(wipData || []);
   };
 
-  // --- WIP AUTO-STAGING ENGINE ---
   const handleAddWIP = async (e) => {
     e.preventDefault();
-    
-    // 1. Find the mapping rule for the selected action type
     const rule = mappingRules.find(r => r.action_type === wipActionType);
-    
     let stageToAssign = rule?.default_stage || null;
     let slaDays = rule?.default_sla_days || 2;
 
-    // 2. Ambiguous Action Logic (e.g., "Draft case summary")
     if (rule && rule.initial_stage && rule.concluding_stage) {
       const currentCase = cases.find(c => c.case_number === selectedCase);
       const currentStageNum = parseInt(currentCase?.stage?.replace('Stage ', '') || '0', 10);
-      // If the case is already at Stage 6 or above, it's in the concluding cycle
       if (currentStageNum >= 6) {
         stageToAssign = rule.concluding_stage;
       } else {
@@ -346,15 +352,13 @@ function Dashboard({ userEmail, onSignOut }) {
       }
     }
 
-    // 3. Calculate Expiry Date (Date Sent + SLA Days)
     let expiryDate = null;
     if (wipDateSent) {
       let d = new Date(wipDateSent);
-      d.setDate(d.getDate() + slaDays); // Simple calendar days for now
+      d.setDate(d.getDate() + slaDays);
       expiryDate = d.toISOString().split('T')[0];
     }
 
-    // 4. Insert the WIP Action into the database
     const { error: wipError } = await supabase.from('wip_actions').insert([{ 
       case_number: selectedCase, 
       action_type: wipActionType, 
@@ -372,12 +376,11 @@ function Dashboard({ userEmail, onSignOut }) {
       return;
     }
     
-    // 5. Auto-update the Case Stage if a rule was found
     if (stageToAssign) {
+      // Also pass modified_by_email here!
       await supabase.from('cases').update({ stage: stageToAssign, modified_by_email: userEmail }).eq('case_number', selectedCase);
     }
 
-    // 6. Refresh the WIP list and the main Cases table
     const { data: newWipData } = await supabase.from('wip_actions').select('*').eq('case_number', selectedCase).order('date_sent', { ascending: false });
     setWipList(newWipData || []);
     setWipDesc('');
@@ -386,6 +389,7 @@ function Dashboard({ userEmail, onSignOut }) {
   };
 
   const handleUpdateStatus = async (caseNum, newStatus) => {
+    // Pass modified_by_email here!
     const { error } = await supabase.from('cases').update({ case_status: newStatus, modified_by_email: userEmail }).eq('case_number', caseNum);
     if (error) alert('Error updating status: ' + error.message);
     else fetchCases();
@@ -555,7 +559,13 @@ function Dashboard({ userEmail, onSignOut }) {
                   <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', tableLayout: 'fixed' }}>
                     <thead>
                       <tr style={{ borderBottom: '1px solid #e2e8f0', backgroundColor: '#f8fafc' }}>
-                        <Th>Case Number</Th><Th>PIC</Th><Th>Status</Th><Th>SLA</Th><Th style={{ textAlign: 'center', width: '80px' }}>Resp</Th><Th style={{ width: '150px' }}>Actions</Th>
+                        <Th>Case Number</Th>
+                        <Th>PIC</Th>
+                        <Th>Status</Th>
+                        <Th>SLA</Th>
+                        <Th style={{ textAlign: 'center', width: '60px' }}>Resp</Th>
+                        <Th style={{ width: '140px' }}>Last Modified</Th>
+                        <Th style={{ width: '120px' }}>Actions</Th>
                       </tr>
                     </thead>
                     <tbody>
@@ -563,6 +573,7 @@ function Dashboard({ userEmail, onSignOut }) {
                         const slaDays = calculateSlaDays(c.sla_due_date);
                         const respondentCount = c.disciplinary_actions?.length || 0;
                         const isBreached = slaDays < 0 && c.case_status === 'IN PROGRESS';
+                        const modifierName = c.modified_by_email ? c.modified_by_email.split('@')[0] : '—';
                         return (
                           <React.Fragment key={index}>
                             <tr style={{ borderBottom: '1px solid #f1f5f9', cursor: 'pointer', backgroundColor: selectedCase === c.case_number ? '#f8fafc' : 'white' }}>
@@ -580,16 +591,20 @@ function Dashboard({ userEmail, onSignOut }) {
                               </Td>
                               <Td style={{ textAlign: 'center', fontWeight: 600, color: respondentCount > 0 ? '#2563eb' : '#94a3b8' }}>{respondentCount}</Td>
                               <Td>
+                                <div style={{ fontSize: '12px', fontWeight: 500, color: '#334155', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{modifierName}</div>
+                                <div style={{ fontSize: '11px', color: '#94a3b8', whiteSpace: 'nowrap' }}>{formatTimeAgo(c.last_modified)}</div>
+                              </Td>
+                              <Td>
                                 <div style={{ display: 'flex', gap: '8px' }}>
                                   <button onClick={() => handleCaseClick(c.case_number)} style={{ padding: '6px 12px', backgroundColor: '#f1f5f9', color: '#475569', border: '1px solid #e2e8f0', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 500, whiteSpace: 'nowrap' }}>{selectedCase === c.case_number ? 'Hide' : 'View'}</button>
-                                  {c.case_status === 'IN PROGRESS' && <button onClick={() => handleUpdateStatus(c.case_number, 'COMPLETED')} style={{ padding: '6px 12px', backgroundColor: '#0f172a', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 500, whiteSpace: 'nowrap' }}>✓ Complete</button>}
+                                  {c.case_status === 'IN PROGRESS' && <button onClick={() => handleUpdateStatus(c.case_number, 'COMPLETED')} style={{ padding: '6px 12px', backgroundColor: '#0f172a', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 500, whiteSpace: 'nowrap' }}>✓</button>}
                                 </div>
                               </Td>
                             </tr>
                             
                             {selectedCase === c.case_number && (
                               <tr>
-                                <td colSpan="6" style={{ padding: '24px', backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+                                <td colSpan="7" style={{ padding: '24px', backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
                                   <div style={{ background: 'white', borderRadius: '8px', border: '1px solid #e2e8f0', padding: '20px' }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px', flexWrap: 'wrap', gap: '16px' }}>
                                       <div>
@@ -604,7 +619,6 @@ function Dashboard({ userEmail, onSignOut }) {
                                       </div>
                                     </div>
                                     
-                                    {/* WIP TRACKER SECTION */}
                                     <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '20px', marginBottom: '20px' }}>
                                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                                         <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 600 }}>⏳ WIP Tracker (Daily Actions)</h4>
@@ -660,7 +674,6 @@ function Dashboard({ userEmail, onSignOut }) {
                                       )}
                                     </div>
 
-                                    {/* DA SECTION */}
                                     <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '20px' }}>
                                       <h4 style={{ margin: '0 0 16px 0', fontSize: '14px', fontWeight: 600 }}>Disciplinary Actions (Respondents)</h4>
                                       {daList.length === 0 ? (
