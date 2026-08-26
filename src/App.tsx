@@ -75,16 +75,18 @@ function Dashboard({ userEmail, onSignOut }) {
 
   const [selectedCase, setSelectedCase] = useState(null);
   const [daList, setDaList] = useState([]);
+  const [wipList, setWipList] = useState([]);
+
+  // WIP Form State
+  const [showWipForm, setShowWipForm] = useState(false);
+  const [mappingRules, setMappingRules] = useState([]);
+  const [wipActionType, setWipActionType] = useState('');
+  const [wipDesc, setWipDesc] = useState('');
+  const [wipDateSent, setWipDateSent] = useState(new Date().toISOString().split('T')[0]);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 25;
-
-  // Respondents State
-  const [respondents, setRespondents] = useState([]);
-  const [loadingResp, setLoadingResp] = useState(true);
-  const [respSearch, setRespSearch] = useState('');
-  const [respPage, setRespPage] = useState(1);
 
   const fetchCases = async () => {
     setLoading(true);
@@ -94,26 +96,11 @@ function Dashboard({ userEmail, onSignOut }) {
     setLoading(false);
   };
 
-  const fetchRespondents = async () => {
-    setLoadingResp(true);
-    // Fetch respondents and join with cases to get PIC and Case Status
-    const { data, error } = await supabase
-      .from('disciplinary_actions')
-      .select('*, cases(case_number, pic, case_status, country)')
-      .order('respondent_name', { ascending: true });
-    
-    if (error) console.error('Error fetching respondents:', error);
-    else setRespondents(data || []);
-    setLoadingResp(false);
-  };
-
-  useEffect(() => { fetchCases(); }, []);
-
-  useEffect(() => {
-    if (activeTab === 'respondents' && respondents.length === 0) {
-      fetchRespondents();
-    }
-  }, [activeTab]);
+  useEffect(() => { 
+    fetchCases(); 
+    // Fetch mapping rules for the WIP dropdown and auto-staging
+    supabase.from('mapping_rules').select('*').then(({ data }) => setMappingRules(data || []));
+  }, []);
 
   const cleanVal = (val) => {
     if (val === undefined || val === null) return null;
@@ -318,7 +305,6 @@ function Dashboard({ userEmail, onSignOut }) {
 
         setUploadMessage(finalMsg);
         fetchCases(); 
-        fetchRespondents(); // Refresh respondents tab as well
         setUploading(false);
       } catch (err) {
         setUploadMessage(`❌ Unexpected Error: ${err.message}`);
@@ -331,8 +317,72 @@ function Dashboard({ userEmail, onSignOut }) {
   const handleCaseClick = async (caseNum) => {
     if (selectedCase === caseNum) { setSelectedCase(null); return; }
     setSelectedCase(caseNum);
+    setShowWipForm(false);
     const { data: daData } = await supabase.from('disciplinary_actions').select('*').eq('case_number', caseNum);
+    const { data: wipData } = await supabase.from('wip_actions').select('*').eq('case_number', caseNum).order('date_sent', { ascending: false });
     setDaList(daData || []);
+    setWipList(wipData || []);
+  };
+
+  // --- WIP AUTO-STAGING ENGINE ---
+  const handleAddWIP = async (e) => {
+    e.preventDefault();
+    
+    // 1. Find the mapping rule for the selected action type
+    const rule = mappingRules.find(r => r.action_type === wipActionType);
+    
+    let stageToAssign = rule?.default_stage || null;
+    let slaDays = rule?.default_sla_days || 2;
+
+    // 2. Ambiguous Action Logic (e.g., "Draft case summary")
+    if (rule && rule.initial_stage && rule.concluding_stage) {
+      const currentCase = cases.find(c => c.case_number === selectedCase);
+      const currentStageNum = parseInt(currentCase?.stage?.replace('Stage ', '') || '0', 10);
+      // If the case is already at Stage 6 or above, it's in the concluding cycle
+      if (currentStageNum >= 6) {
+        stageToAssign = rule.concluding_stage;
+      } else {
+        stageToAssign = rule.initial_stage;
+      }
+    }
+
+    // 3. Calculate Expiry Date (Date Sent + SLA Days)
+    let expiryDate = null;
+    if (wipDateSent) {
+      let d = new Date(wipDateSent);
+      d.setDate(d.getDate() + slaDays); // Simple calendar days for now
+      expiryDate = d.toISOString().split('T')[0];
+    }
+
+    // 4. Insert the WIP Action into the database
+    const { error: wipError } = await supabase.from('wip_actions').insert([{ 
+      case_number: selectedCase, 
+      action_type: wipActionType, 
+      description: wipDesc, 
+      stage_auto: stageToAssign,
+      date_sent: wipDateSent, 
+      sla_days: slaDays,
+      expiry_date: expiryDate,
+      status: 'Pending',
+      pic: userEmail 
+    }]);
+    
+    if (wipError) {
+      alert('Error logging WIP: ' + wipError.message);
+      return;
+    }
+    
+    // 5. Auto-update the Case Stage if a rule was found
+    if (stageToAssign) {
+      await supabase.from('cases').update({ stage: stageToAssign, modified_by_email: userEmail }).eq('case_number', selectedCase);
+    }
+
+    // 6. Refresh the WIP list and the main Cases table
+    const { data: newWipData } = await supabase.from('wip_actions').select('*').eq('case_number', selectedCase).order('date_sent', { ascending: false });
+    setWipList(newWipData || []);
+    setWipDesc('');
+    setShowWipForm(false);
+    fetchCases();
   };
 
   const handleUpdateStatus = async (caseNum, newStatus) => {
@@ -347,7 +397,6 @@ function Dashboard({ userEmail, onSignOut }) {
     return Math.ceil((new Date(dueDate) - today) / (1000 * 60 * 60 * 24));
   };
 
-  // CASES FILTERING
   const filteredCases = cases.filter(c => {
     if (!searchTerm) return true;
     const search = searchTerm.toLowerCase();
@@ -361,33 +410,10 @@ function Dashboard({ userEmail, onSignOut }) {
   const totalPages = Math.ceil(filteredCases.length / pageSize);
   const currentCases = filteredCases.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
-  // RESPONDENTS FILTERING
-  const filteredRespondents = respondents.filter(r => {
-    if (!respSearch) return true;
-    const search = respSearch.toLowerCase();
-    return r.respondent_name?.toLowerCase().includes(search) || 
-           r.respondent_id?.toLowerCase().includes(search) || 
-           r.case_number?.toLowerCase().includes(search) ||
-           r.current_action?.toLowerCase().includes(search);
-  });
-
-  const respTotalPages = Math.ceil(filteredRespondents.length / pageSize);
-  const currentRespondents = filteredRespondents.slice((respPage - 1) * pageSize, respPage * pageSize);
-
-  // ANALYTICS CALCULATIONS
   const totalCases = cases.length;
   const inProgress = cases.filter(c => c.case_status === 'IN PROGRESS').length;
   const completed = cases.filter(c => c.case_status === 'COMPLETED').length;
-  const cancelled = cases.filter(c => c.case_status === 'CANCELLED').length;
   const outOfSlaCases = cases.filter(c => calculateSlaDays(c.sla_due_date) < 0 && c.case_status === 'IN PROGRESS');
-  const withinSla = inProgress - outOfSlaCases.length;
-
-  const highPriority = cases.filter(c => c.priority === 'High').length;
-  const medPriority = cases.filter(c => c.priority === 'Medium').length;
-  const lowPriority = cases.filter(c => c.priority === 'Low').length;
-
-  const stages = Array.from({length: 10}, (_, i) => `Stage ${i + 1}`);
-  const stageCounts = stages.map(s => ({ stage: s, count: cases.filter(c => c.stage === s).length }));
 
   const getActionColor = (action) => {
     if (!action) return { text: '#64748b', bg: '#f1f5f9' };
@@ -401,14 +427,12 @@ function Dashboard({ userEmail, onSignOut }) {
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: '📊' },
     { id: 'cases', label: 'Cases', icon: '📁' },
-    { id: 'respondents', label: 'Respondents', icon: '👥' },
     { id: 'analytics', label: 'Analytics', icon: '📈' },
   ];
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: '#f8fafc', fontFamily: "'Inter', system-ui, sans-serif", color: '#0f172a' }}>
       
-      {/* SIDEBAR */}
       <aside style={{ width: sidebarOpen ? '260px' : '80px', backgroundColor: '#0f172a', color: 'white', padding: '24px 16px', display: 'flex', flexDirection: 'column', transition: 'width 0.3s ease', flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: sidebarOpen ? 'space-between' : 'center', marginBottom: '40px' }}>
           {sidebarOpen && <h1 style={{ fontSize: '20px', fontWeight: 600, margin: 0 }}>SLA Tracker</h1>}
@@ -449,10 +473,8 @@ function Dashboard({ userEmail, onSignOut }) {
         </div>
       </aside>
 
-      {/* MAIN CONTENT */}
       <main style={{ flex: 1, padding: '32px', overflowY: 'auto' }}>
         
-        {/* DASHBOARD VIEW */}
         {activeTab === 'dashboard' && (
           <>
             <div style={{ marginBottom: '32px' }}>
@@ -510,7 +532,6 @@ function Dashboard({ userEmail, onSignOut }) {
           </>
         )}
 
-        {/* CASES VIEW */}
         {activeTab === 'cases' && (
           <>
             <div style={{ marginBottom: '24px' }}>
@@ -583,6 +604,63 @@ function Dashboard({ userEmail, onSignOut }) {
                                       </div>
                                     </div>
                                     
+                                    {/* WIP TRACKER SECTION */}
+                                    <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '20px', marginBottom: '20px' }}>
+                                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                                        <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 600 }}>⏳ WIP Tracker (Daily Actions)</h4>
+                                        <button onClick={() => setShowWipForm(!showWipForm)} style={{ padding: '6px 12px', backgroundColor: '#8b5cf6', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 500 }}>{showWipForm ? 'Cancel' : '+ Log Action'}</button>
+                                      </div>
+
+                                      {showWipForm && (
+                                        <form onSubmit={handleAddWIP} style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', marginBottom: '16px', display: 'grid', gridTemplateColumns: '2fr 3fr 1fr auto', gap: '12px', alignItems: 'end' }}>
+                                          <div>
+                                            <label style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>Action Type</label>
+                                            <select value={wipActionType} onChange={(e) => setWipActionType(e.target.value)} required style={{ width: '100%', padding: '8px', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '13px' }}>
+                                              <option value="">Select an action...</option>
+                                              {mappingRules.map(rule => <option key={rule.id} value={rule.action_type}>{rule.action_type}</option>)}
+                                            </select>
+                                          </div>
+                                          <div>
+                                            <label style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>Description</label>
+                                            <input type="text" value={wipDesc} onChange={(e) => setWipDesc(e.target.value)} required style={{ width: '100%', padding: '8px', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '13px' }} />
+                                          </div>
+                                          <div>
+                                            <label style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>Date Sent</label>
+                                            <input type="date" value={wipDateSent} onChange={(e) => setWipDateSent(e.target.value)} style={{ width: '100%', padding: '8px', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '13px' }} />
+                                          </div>
+                                          <button type="submit" style={{ padding: '9px 16px', backgroundColor: '#0f172a', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: 500 }}>Log</button>
+                                        </form>
+                                      )}
+
+                                      {wipList.length === 0 ? (
+                                        <div style={{ padding: '16px', textAlign: 'center', backgroundColor: '#f8fafc', borderRadius: '8px', color: '#94a3b8', fontSize: '13px' }}>No WIP actions logged yet.</div>
+                                      ) : (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                          {wipList.map((w, i) => {
+                                            const wipSlaDays = calculateSlaDays(w.expiry_date);
+                                            return (
+                                              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', backgroundColor: '#f8fafc', borderRadius: '8px' }}>
+                                                <div style={{ width: '24px', height: '24px', borderRadius: '50%', backgroundColor: '#e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 600, color: '#64748b', flexShrink: 0 }}>{i + 1}</div>
+                                                <div style={{ flex: 1 }}>
+                                                  <div style={{ fontWeight: 600, fontSize: '14px', color: '#0f172a' }}>{w.action_type}</div>
+                                                  <div style={{ fontSize: '12px', color: '#64748b' }}>{w.description}</div>
+                                                </div>
+                                                <div style={{ textAlign: 'right' }}>
+                                                  <div style={{ fontSize: '11px', color: '#94a3b8', textTransform: 'uppercase' }}>Mapped Stage</div>
+                                                  <span style={{ padding: '2px 8px', backgroundColor: '#dbeafe', color: '#2563eb', borderRadius: '4px', fontSize: '11px', fontWeight: 600 }}>{w.stage_auto || '—'}</span>
+                                                </div>
+                                                <div style={{ textAlign: 'right' }}>
+                                                  <div style={{ fontSize: '11px', color: '#94a3b8', textTransform: 'uppercase' }}>SLA Timer</div>
+                                                  <span style={{ fontWeight: 600, fontSize: '13px', color: wipSlaDays < 0 ? '#dc2626' : '#059669' }}>{wipSlaDays < 0 ? `🔴 ${Math.abs(wipSlaDays)}d` : `🟢 ${wipSlaDays}d`}</span>
+                                                </div>
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                      )}
+                                    </div>
+
+                                    {/* DA SECTION */}
                                     <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '20px' }}>
                                       <h4 style={{ margin: '0 0 16px 0', fontSize: '14px', fontWeight: 600 }}>Disciplinary Actions (Respondents)</h4>
                                       {daList.length === 0 ? (
@@ -654,66 +732,6 @@ function Dashboard({ userEmail, onSignOut }) {
           </>
         )}
 
-        {/* RESPONDENTS VIEW */}
-        {activeTab === 'respondents' && (
-          <>
-            <div style={{ marginBottom: '24px' }}>
-              <h2 style={{ fontSize: '24px', fontWeight: 600, margin: '0 0 5px 0' }}>Respondents Directory</h2>
-              <p style={{ color: '#64748b', margin: 0, fontSize: '14px' }}>Search and view all individuals involved in disciplinary cases.</p>
-            </div>
-
-            <div style={{ background: 'white', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
-              <div style={{ padding: '16px 24px', borderBottom: '1px solid #e2e8f0' }}>
-                <input 
-                  type="text" placeholder="Search respondents, IDs, or actions..." value={respSearch}
-                  onChange={(e) => { setRespSearch(e.target.value); setRespPage(1); }}
-                  style={{ width: '100%', padding: '10px 16px', border: '1px solid #e2e8f0', borderRadius: '8px', boxSizing: 'border-box', fontSize: '14px', outline: 'none' }}
-                />
-              </div>
-              
-              {loadingResp ? (
-                <div style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>Loading respondents...</div>
-              ) : (
-                <>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', tableLayout: 'fixed' }}>
-                    <thead>
-                      <tr style={{ borderBottom: '1px solid #e2e8f0', backgroundColor: '#f8fafc' }}>
-                        <Th>Respondent</Th><Th>ID</Th><Th>Latest Action</Th><Th>Case#</Th><Th>PIC</Th><Th>Status</Th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {currentRespondents.map((r, index) => {
-                        const colors = getActionColor(r.current_action);
-                        return (
-                          <tr key={index} style={{ borderBottom: '1px solid #f1f5f9', backgroundColor: 'white' }}>
-                            <Td style={{ fontWeight: 600, color: '#0f172a' }}>{r.respondent_name || '—'}</Td>
-                            <Td style={{ color: '#475569', fontSize: '13px' }}>{r.respondent_id || '—'}</Td>
-                            <Td>
-                              <span style={{ padding: '4px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, backgroundColor: colors.bg, color: colors.text, whiteSpace: 'nowrap' }}>{r.current_action || '—'}</span>
-                            </Td>
-                            <Td style={{ color: '#2563eb', fontSize: '13px', fontWeight: 500 }}>{r.case_number}</Td>
-                            <Td style={{ color: '#475569', fontSize: '13px' }}>{r.cases?.pic || '—'}</Td>
-                            <Td>
-                              <span style={{ padding: '4px 10px', borderRadius: '12px', fontSize: '11px', fontWeight: 600, backgroundColor: r.cases?.case_status === 'IN PROGRESS' ? '#dbeafe' : '#d1fae5', color: r.cases?.case_status === 'IN PROGRESS' ? '#2563eb' : '#059669', whiteSpace: 'nowrap' }}>{r.cases?.case_status || '—'}</span>
-                            </Td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 24px', borderTop: '1px solid #e2e8f0' }}>
-                    <button onClick={() => setRespPage(prev => Math.max(1, prev - 1))} disabled={respPage === 1} style={{ padding: '8px 16px', backgroundColor: 'white', border: '1px solid #e2e8f0', borderRadius: '6px', cursor: respPage === 1 ? 'not-allowed' : 'pointer', opacity: respPage === 1 ? 0.5 : 1, fontSize: '13px', fontWeight: 500 }}>← Previous</button>
-                    <span style={{ color: '#64748b', fontSize: '13px' }}>Page {respPage} of {respTotalPages || 1} ({filteredRespondents.length} respondents)</span>
-                    <button onClick={() => setRespPage(prev => Math.min(respTotalPages, prev + 1))} disabled={respPage === respTotalPages || respTotalPages === 0} style={{ padding: '8px 16px', backgroundColor: 'white', border: '1px solid #e2e8f0', borderRadius: '6px', cursor: (respPage === respTotalPages || respTotalPages === 0) ? 'not-allowed' : 'pointer', opacity: (respPage === respTotalPages || respTotalPages === 0) ? 0.5 : 1, fontSize: '13px', fontWeight: 500 }}>Next →</button>
-                  </div>
-                </>
-              )}
-            </div>
-          </>
-        )}
-
-        {/* ANALYTICS VIEW */}
         {activeTab === 'analytics' && (
           <>
             <div style={{ marginBottom: '24px' }}>
@@ -722,44 +740,25 @@ function Dashboard({ userEmail, onSignOut }) {
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '24px' }}>
-              
-              {/* Case Status Chart */}
               <div style={{ background: 'white', padding: '24px', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', border: '1px solid #e2e8f0' }}>
                 <h3 style={{ marginTop: 0, marginBottom: '20px', fontSize: '16px', fontWeight: 600 }}>Case Status Breakdown</h3>
                 <ChartRow label="In Progress" value={inProgress} total={totalCases} color="#3b82f6" />
                 <ChartRow label="Completed" value={completed} total={totalCases} color="#10b981" />
-                <ChartRow label="Cancelled" value={cancelled} total={totalCases} color="#ef4444" />
+                <ChartRow label="Cancelled" value={cases.filter(c => c.case_status === 'CANCELLED').length} total={totalCases} color="#ef4444" />
               </div>
 
-              {/* SLA Compliance Chart */}
               <div style={{ background: 'white', padding: '24px', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', border: '1px solid #e2e8f0' }}>
                 <h3 style={{ marginTop: 0, marginBottom: '20px', fontSize: '16px', fontWeight: 600 }}>SLA Compliance (Active Cases)</h3>
-                <ChartRow label="Within SLA" value={withinSla} total={inProgress} color="#10b981" />
+                <ChartRow label="Within SLA" value={inProgress - outOfSlaCases.length} total={inProgress} color="#10b981" />
                 <ChartRow label="Out of SLA" value={outOfSlaCases.length} total={inProgress} color="#ef4444" />
-                <div style={{ marginTop: '24px', padding: '16px', backgroundColor: '#f8fafc', borderRadius: '8px' }}>
-                <div style={{ fontSize: '13px', color: '#64748b', marginBottom: '4px' }}>Compliance Rate</div>
-                  <div style={{ fontSize: '28px', fontWeight: 700, color: withinSla > 0 ? '#10b981' : '#ef4444' }}>
-                    {inProgress > 0 ? ((withinSla / inProgress) * 100).toFixed(1) : '0.0'}%
-                  </div>
-                </div>
               </div>
 
-              {/* Priority Chart */}
               <div style={{ background: 'white', padding: '24px', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', border: '1px solid #e2e8f0' }}>
                 <h3 style={{ marginTop: 0, marginBottom: '20px', fontSize: '16px', fontWeight: 600 }}>Priority Distribution</h3>
-                <ChartRow label="High Priority" value={highPriority} total={totalCases} color="#ef4444" />
-                <ChartRow label="Medium Priority" value={medPriority} total={totalCases} color="#f59e0b" />
-                <ChartRow label="Low Priority" value={lowPriority} total={totalCases} color="#64748b" />
+                <ChartRow label="High Priority" value={cases.filter(c => c.priority === 'High').length} total={totalCases} color="#ef4444" />
+                <ChartRow label="Medium Priority" value={cases.filter(c => c.priority === 'Medium').length} total={totalCases} color="#f59e0b" />
+                <ChartRow label="Low Priority" value={cases.filter(c => c.priority === 'Low').length} total={totalCases} color="#64748b" />
               </div>
-
-              {/* Stage Chart */}
-              <div style={{ background: 'white', padding: '24px', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', border: '1px solid #e2e8f0' }}>
-                <h3 style={{ marginTop: 0, marginBottom: '20px', fontSize: '16px', fontWeight: 600 }}>Case Stage Distribution</h3>
-                {stageCounts.map((s, i) => (
-                  <ChartRow key={i} label={s.stage} value={s.count} total={totalCases} color="#8b5cf6" />
-                ))}
-              </div>
-
             </div>
           </>
         )}
@@ -769,7 +768,6 @@ function Dashboard({ userEmail, onSignOut }) {
   );
 }
 
-// --- HELPER COMPONENTS ---
 function StatCard({ title, value, color, bg }) {
   return (
     <div style={{ background: 'white', padding: '20px', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', border: '1px solid #e2e8f0' }}>
