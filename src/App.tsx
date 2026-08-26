@@ -44,7 +44,7 @@ function AuthScreen() {
             <span style={{ color: 'white', fontSize: '24px' }}>📊</span>
           </div>
           <h2 style={{ margin: 0, color: '#0f172a', fontSize: '24px', fontWeight: 600 }}>SLA Tracker</h2>
-          <p style={{ color: '#64748b', marginTop: '5px', fontSize: '14px''>Sign in to your dashboard</p>
+          <p style={{ color: '#64748b', marginTop: '5px', fontSize: '14px' }}>Sign in to your dashboard</p>
         </div>
         <form onSubmit={handleLogin}>
           <div style={{ marginBottom: '16px' }}>
