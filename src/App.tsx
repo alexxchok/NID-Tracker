@@ -7,8 +7,9 @@ const supabaseUrl = 'https://yymvagbwxdaxrldrhmtm.supabase.co';
 const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl5bXZhZ2J3eGRheHJsZHJobXRtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY2OTEyMjcsImV4cCI6MjEwMjI2NzIyN30.W6WFGXzR7gMU0ln-vfMIJlsxwctWqnCv5Cb7qW8UXXY';
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-// --- WORKING DAYS CONFIGURATION ---
+// --- CONFIGURATION ---
 const PUBLIC_HOLIDAYS = [];
+const STANDARD_CASE_SLA_DAYS = 20; // Used for Reactivate Case logic
 
 const isHoliday = (dateObj) => {
   const dateStr = dateObj.toISOString().split('T')[0];
@@ -54,18 +55,14 @@ const addBusinessDays = (startDate, daysToAdd) => {
   return date.toISOString().split('T')[0];
 };
 
-const formatTimeAgo = (timestamp) => {
-  if (!timestamp) return '—';
-  const date = new Date(timestamp);
-  const now = new Date();
-  const diff = Math.floor((now - date) / 1000);
-  if (diff < 60) return 'Just now';
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-  if (diff < 172800) return 'Yesterday';
-  return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+const calculatePriority = (slaDate) => {
+  const days = calculateBusinessDays(slaDate);
+  if (days <= 5) return 'High';
+  if (days <= 10) return 'Medium';
+  return 'Low';
 };
 
+// Format exact date and time (e.g., "28 Aug 2026, 14:30")
 const formatDateTime = (timestamp) => {
   if (!timestamp) return '—';
   const date = new Date(timestamp);
@@ -104,14 +101,8 @@ function AuthScreen() {
           <p>Sign in to your dashboard</p>
         </div>
         <form onSubmit={handleLogin}>
-          <div className="form-group">
-            <label>Email</label>
-            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-          </div>
-          <div className="form-group">
-            <label>Password</label>
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
-          </div>
+          <div className="form-group"><label>Email</label><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required /></div>
+          <div className="form-group"><label>Password</label><input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required /></div>
           {error && <div className="error-box">{error}</div>}
           <button type="submit" disabled={loading} className="btn-primary">{loading ? 'Signing in...' : 'Sign In'}</button>
         </form>
@@ -136,15 +127,15 @@ function Dashboard({ userEmail, onSignOut }) {
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 25;
 
+  // Sorting State
+  const [sortConfig, setSortConfig] = useState({ key: 'sla_due_date', direction: 'ascending' });
+
   // Add Case Form State
   const [showCaseForm, setShowCaseForm] = useState(false);
   const [newCaseNum, setNewCaseNum] = useState('');
   const [newPic, setNewPic] = useState('');
   const [newCountry, setNewCountry] = useState('');
-  const [newSlaDate, setNewSlaDate] = useState('');
-  const [newPriority, setNewPriority] = useState('Medium');
-  const [newStatus, setNewStatus] = useState('IN PROGRESS');
-  const [newStage, setNewStage] = useState('Stage 1');
+  const [newSlaDays, setNewSlaDays] = useState(20); // Replaced SLA Date with SLA Days
 
   // WIP Form State
   const [wipActionType, setWipActionType] = useState('');
@@ -159,10 +150,12 @@ function Dashboard({ userEmail, onSignOut }) {
   const [newDaAction, setNewDaAction] = useState('');
   const [newDaDate, setNewDaDate] = useState(new Date().toISOString().split('T')[0]);
   const [expandedDAs, setExpandedDAs] = useState({});
+  const [newViolation, setNewViolation] = useState({});
 
   const fetchCases = async () => {
     setLoading(true);
-    const { data, error } = await supabase.from('cases').select('*, disciplinary_actions(respondent_name, respondent_id, complainant_name, complainant_id)').order('sla_due_date', { ascending: true });
+    // Added wip_actions status to count active WIPs
+    const { data, error } = await supabase.from('cases').select('*, disciplinary_actions(respondent_name, respondent_id, complainant_name, complainant_id, current_action, violations), wip_actions(status)').order('sla_due_date', { ascending: true });
     if (error) console.error('Error:', error);
     else setCases(data);
     setLoading(false);
@@ -272,12 +265,11 @@ function Dashboard({ userEmail, onSignOut }) {
             }
             const latestAction = history.length > 0 ? history[history.length - 1].action : null;
             const latestDate = history.length > 0 ? history[history.length - 1].date : null;
-            let actionDays = latestDate ? calculateBusinessDays(latestDate) * -1 : null;
             return {
               case_number: caseNum, complainant_name: cleanVal(getVal(["Complainant Name", "Complainant's Name and IR ID No"])), complainant_id: cleanVal(getVal(["Complainant ID#"])),
-              complainant_country: cleanVal(getVal(["Complainant Country"])), respondent_name: cleanVal(getVal(["Respondent Name", "Respondent's Name"])), respondent_id: respId,
-              respondent_country: cleanVal(getVal(["Respondent Country", "Country"])), current_action: latestAction, execution_date: latestDate,
-              action_history: history.length > 0 ? history : null, remarks: cleanVal(getVal(["Remarks"])), action_days: actionDays,
+              respondent_name: cleanVal(getVal(["Respondent Name", "Respondent's Name"])), respondent_id: respId,
+              current_action: latestAction, execution_date: latestDate,
+              action_history: history.length > 0 ? history : null, remarks: cleanVal(getVal(["Remarks"])),
               unique_key: caseNum && respId ? `${caseNum}|${respId}` : null
             };
           }).filter(item => item && item.case_number && item.unique_key);
@@ -335,26 +327,38 @@ function Dashboard({ userEmail, onSignOut }) {
 
   const handleAddCase = async (e) => {
     e.preventDefault();
+    const today = new Date().toISOString().split('T')[0];
+    const slaDate = addBusinessDays(today, newSlaDays);
+    const priority = calculatePriority(slaDate);
+    
     const { error } = await supabase.from('cases').insert([{ 
-      case_number: newCaseNum, pic: newPic, country: newCountry, case_status: newStatus, 
-      sla_due_date: newSlaDate, priority: newPriority, stage: newStage, created_on: new Date().toISOString().split('T')[0]
+      case_number: newCaseNum, pic: newPic, country: newCountry, case_status: 'IN PROGRESS', 
+      sla_due_date: slaDate, priority: priority, stage: 'Stage 1', created_on: today
     }]);
     if (error) {
       alert('Error saving case: ' + error.message);
     } else {
       setShowCaseForm(false);
-      setNewCaseNum(''); setNewPic(''); setNewCountry(''); setNewStatus('IN PROGRESS'); setNewSlaDate(''); setNewPriority('Medium'); setNewStage('Stage 1');
+      setNewCaseNum(''); setNewPic(''); setNewCountry(''); setNewSlaDays(20);
       fetchCases(); 
     }
   };
 
-  const handleUpdateStatus = async (caseNum, newStatus) => {
-    const payload = { case_status: newStatus, modified_by_email: userEmail };
-    if (newStatus === 'COMPLETED') payload.date_completed = new Date().toISOString().split('T')[0];
-    if (newStatus === 'IN PROGRESS') payload.date_completed = null;
-    
-    const { error } = await supabase.from('cases').update(payload).eq('case_number', caseNum);
-    if (error) alert('Error updating status: ' + error.message);
+  const handleCompleteCase = async (caseNum) => {
+    const { error } = await supabase.from('cases').update({ 
+      case_status: 'COMPLETED', date_completed: new Date().toISOString().split('T')[0], modified_by_email: userEmail 
+    }).eq('case_number', caseNum);
+    if (error) alert('Error completing case: ' + error.message);
+    else fetchCases();
+  };
+
+  const handleReactivateCase = async (caseNum) => {
+    const today = new Date().toISOString().split('T')[0];
+    const newSlaDate = addBusinessDays(today, STANDARD_CASE_SLA_DAYS);
+    const { error } = await supabase.from('cases').update({ 
+      case_status: 'IN PROGRESS', date_completed: null, sla_due_date: newSlaDate, priority: calculatePriority(newSlaDate), modified_by_email: userEmail 
+    }).eq('case_number', caseNum);
+    if (error) alert('Error reactivating case: ' + error.message);
     else fetchCases();
   };
 
@@ -378,14 +382,12 @@ function Dashboard({ userEmail, onSignOut }) {
     let expiryDate = addBusinessDays(wipDateSent, slaDays);
 
     if (editingWipId) {
-      // Update existing WIP
       const { error } = await supabase.from('wip_actions').update({ 
         action_type: wipActionType, description: wipDesc, stage_auto: stageToAssign,
         date_sent: wipDateSent, sla_days: slaDays, expiry_date: expiryDate, notes: wipNotes, pic: userEmail, last_modified: new Date().toISOString()
       }).eq('id', editingWipId);
       if (error) alert('Error updating WIP: ' + error.message);
     } else {
-      // Insert new WIP
       const { error } = await supabase.from('wip_actions').insert([{ 
         case_number: selectedCase, action_type: wipActionType, description: wipDesc, stage_auto: stageToAssign,
         date_sent: wipDateSent, sla_days: slaDays, expiry_date: expiryDate, status: 'Pending', notes: wipNotes, pic: userEmail 
@@ -419,6 +421,7 @@ function Dashboard({ userEmail, onSignOut }) {
     else {
       const { data: newWipData } = await supabase.from('wip_actions').select('*').eq('case_number', selectedCase).order('date_sent', { ascending: false });
       setWipList(newWipData || []);
+      fetchCases();
     }
   };
 
@@ -452,11 +455,57 @@ function Dashboard({ userEmail, onSignOut }) {
       setAddingDaFor(null);
       setNewDaAction('');
       setNewDaDate(new Date().toISOString().split('T')[0]);
+      fetchCases();
+    }
+  };
+
+  const handleAddViolation = async (daId) => {
+    const violationText = newViolation[daId];
+    if (!violationText) return;
+    
+    const da = daList.find(d => d.id === daId);
+    const violations = da.violations || [];
+    violations.push(violationText);
+
+    const { error } = await supabase.from('disciplinary_actions').update({ 
+      violations: violations, modified_by_email: userEmail, last_modified: new Date().toISOString()
+    }).eq('id', daId);
+
+    if (error) alert('Error adding violation: ' + error.message);
+    else {
+      const { data: newDaData } = await supabase.from('disciplinary_actions').select('*').eq('case_number', selectedCase);
+      setDaList(newDaData || []);
+      setNewViolation(prev => ({ ...prev, [daId]: '' }));
+    }
+  };
+
+  const handleDeleteViolation = async (daId, index) => {
+    const da = daList.find(d => d.id === daId);
+    const violations = da.violations || [];
+    violations.splice(index, 1);
+
+    const { error } = await supabase.from('disciplinary_actions').update({ 
+      violations: violations, modified_by_email: userEmail, last_modified: new Date().toISOString()
+    }).eq('id', daId);
+
+    if (error) alert('Error deleting violation: ' + error.message);
+    else {
+      const { data: newDaData } = await supabase.from('disciplinary_actions').select('*').eq('case_number', selectedCase);
+      setDaList(newDaData || []);
     }
   };
 
   const toggleExpandDA = (daId) => {
     setExpandedDAs(prev => ({ ...prev, [daId]: !prev[daId] }));
+  };
+
+  // --- SORTING LOGIC ---
+  const requestSort = (key) => {
+    let direction = 'ascending';
+    if (sortConfig.key === key && sortConfig.direction === 'ascending') {
+      direction = 'descending';
+    }
+    setSortConfig({ key, direction });
   };
 
   // --- FILTERING & SORTING ---
@@ -471,12 +520,29 @@ function Dashboard({ userEmail, onSignOut }) {
     return matchCase || matchPic || matchCountry || matchRespondent || matchComplainant;
   });
 
-  // Sort by SLA expiry (nearest first, nulls last)
-  const sortedCases = filteredCases.sort((a, b) => {
-    if (!a.sla_due_date) return 1;
-    if (!b.sla_due_date) return -1;
-    return new Date(a.sla_due_date) - new Date(b.sla_due_date);
-  });
+  const sortedCases = React.useMemo(() => {
+    let sortableCases = [...filteredCases];
+    if (sortConfig.key === 'da_in_force') {
+      sortableCases.sort((a, b) => {
+        const aCount = a.disciplinary_actions?.filter(da => da.current_action?.toLowerCase().includes('suspend') || da.current_action?.toLowerCase().includes('terminat')).length || 0;
+        const bCount = b.disciplinary_actions?.filter(da => da.current_action?.toLowerCase().includes('suspend') || da.current_action?.toLowerCase().includes('terminat')).length || 0;
+        return sortConfig.direction === 'ascending' ? aCount - bCount : bCount - aCount;
+      });
+    } else if (sortConfig.key === 'active_wip') {
+      sortableCases.sort((a, b) => {
+        const aCount = a.wip_actions?.filter(w => w.status === 'Pending').length || 0;
+        const bCount = b.wip_actions?.filter(w => w.status === 'Pending').length || 0;
+        return sortConfig.direction === 'ascending' ? aCount - bCount : bCount - aCount;
+      });
+    } else if (sortConfig.key === 'pic' || sortConfig.key === 'case_status' || sortConfig.key === 'sla_due_date') {
+      sortableCases.sort((a, b) => {
+        if (a[sortConfig.key] < b[sortConfig.key]) return sortConfig.direction === 'ascending' ? -1 : 1;
+        if (a[sortConfig.key] > b[sortConfig.key]) return sortConfig.direction === 'ascending' ? 1 : -1;
+        return 0;
+      });
+    }
+    return sortableCases;
+  }, [filteredCases, sortConfig]);
 
   const totalPages = Math.ceil(sortedCases.length / pageSize);
   const currentCases = sortedCases.slice((currentPage - 1) * pageSize, currentPage * pageSize);
@@ -501,15 +567,16 @@ function Dashboard({ userEmail, onSignOut }) {
     { id: 'analytics', label: 'Analytics', icon: '📈' },
   ];
 
-  const stages = Array.from({length: 10}, (_, i) => `Stage ${i + 1}`);
+  const SortIndicator = ({ column }) => {
+    if (sortConfig.key !== column) return <span style={{ color: '#cbd5e1', marginLeft: '4px' }}>↕</span>;
+    return sortConfig.direction === 'ascending' ? <span style={{ marginLeft: '4px' }}>▲</span> : <span style={{ marginLeft: '4px' }}>▼</span>;
+  };
 
   return (
     <>
       <style>{`
         * { box-sizing: border-box; }
         body { margin: 0; font-family: 'Inter', system-ui, -apple-system, sans-serif; }
-        
-        /* AUTH SCREEN */
         .auth-wrapper { display: flex; justify-content: center; align-items: center; height: 100vh; background-color: #0f172a; }
         .auth-card { background: white; padding: 40px; border-radius: 16px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); width: 100%; max-width: 420px; margin: 16px; }
         .auth-header { text-align: center; margin-bottom: 30px; }
@@ -521,47 +588,35 @@ function Dashboard({ userEmail, onSignOut }) {
         .form-group input { width: 100%; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 14px; outline: none; transition: border-color 0.2s; }
         .form-group input:focus { border-color: #3b82f6; }
         .error-box { color: #ef4444; font-size: 14px; margin-bottom: 16px; padding: 10px; background-color: #fee2e2; border-radius: 6px; }
-        .btn-primary { width: 100%; background-color: #0f172a; color: white; padding: 14px; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 15px; transition: background-color 0.2s; }
-        .btn-primary:hover { background-color: #1e293b; }
-        .btn-primary:disabled { background-color: #64748b; cursor: not-allowed; }
-        
-        /* DASHBOARD LAYOUT */
+        .btn-primary { width: 100%; background-color: #0f172a; color: white; padding: 14px; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 15px; }
         .app-container { display: flex; min-height: 100vh; background-color: #f8fafc; color: #0f172a; }
-        
-        /* SIDEBAR */
         .sidebar { width: 260px; background-color: #0f172a; color: white; padding: 24px 16px; display: flex; flex-direction: column; transition: width 0.3s ease; flex-shrink: 0; }
         .sidebar.collapsed { width: 80px; }
         .sidebar-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 40px; }
         .sidebar-header.collapsed { justify-content: center; }
         .sidebar-header h1 { font-size: 20px; font-weight: 600; margin: 0; white-space: nowrap; }
         .sidebar-toggle { background: transparent; border: none; color: white; cursor: pointer; font-size: 20px; }
-        .nav-item { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 8px; margin-bottom: 5px; cursor: pointer; transition: background-color 0.2s; }
+        .nav-item { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 8px; margin-bottom: 5px; cursor: pointer; }
         .nav-item:hover { background-color: #1e293b; }
         .nav-item.active { background-color: #1e293b; color: white; }
         .nav-item.inactive { color: #94a3b8; }
         .nav-item.collapsed { justify-content: center; }
         .nav-item span.icon { font-size: 18px; }
-        .nav-item span.label { font-size: 14px; font-weight: 500; white-space: nowrap; }
+        .nav-item span.label { font-size: 14px; font-weight: 500; }
         .sidebar-footer { margin-top: auto; border-top: 1px solid #334155; padding-top: 16px; }
         .user-info { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
         .user-info.collapsed { justify-content: center; }
-        .user-avatar { width: 36px; height: 36px; border-radius: 50%; background-color: #3b82f6; display: flex; align-items: center; justify-content: center; font-weight: 600; flex-shrink: 0; text-transform: uppercase; }
-        .user-details { overflow: hidden; }
+        .user-avatar { width: 36px; height: 36px; border-radius: 50%; background-color: #3b82f6; display: flex; align-items: center; justify-content: center; font-weight: 600; flex-shrink: 0; }
         .user-details .email { font-size: 14px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .user-details .role { font-size: 12px; color: #94a3b8; }
         .btn-signout { width: 100%; padding: 8px; background-color: transparent; border: 1px solid #334155; color: #94a3b8; border-radius: 6px; cursor: pointer; font-size: 13px; }
-        
-        /* MAIN CONTENT */
-        .main-content { flex: 1; padding: 24px; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+        .main-content { flex: 1; padding: 24px; overflow-y: auto; }
         .page-header { margin-bottom: 24px; display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px; }
         .page-header-text h2 { font-size: 22px; font-weight: 600; margin: 0 0 5px 0; }
         .page-header-text p { color: #64748b; margin: 0; font-size: 13px; }
-        
-        /* CARDS & STATS */
         .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; margin-bottom: 24px; }
         .card-header { margin-top: 0; margin-bottom: 8px; font-size: 16px; font-weight: 600; }
         .card-subtitle { color: #64748b; font-size: 13px; margin-bottom: 16px; }
-        
         .stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 24px; }
         @media (min-width: 768px) { .stats-grid { grid-template-columns: repeat(4, 1fr); gap: 16px; } }
         .stat-card { background: white; padding: 16px; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; }
@@ -569,60 +624,48 @@ function Dashboard({ userEmail, onSignOut }) {
         .stat-value { display: flex; align-items: baseline; gap: 6px; }
         .stat-number { font-size: 24px; font-weight: 700; color: #0f172a; }
         .stat-badge { font-size: 11px; padding: 2px 6px; border-radius: 10px; font-weight: 600; }
-        
-        /* UPLOAD AREA */
         .upload-area { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
         .btn-upload { padding: 10px 16px; background-color: #0f172a; color: white; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500; display: inline-block; }
         .upload-msg { font-size: 13px; font-weight: 500; color: #059669; }
-        
-        /* ADD CASE FORM */
         .btn-add-case { padding: 10px 16px; background-color: #3b82f6; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500; }
         .add-case-form { background: #f8fafc; padding: 16px; border-radius: 8px; margin-bottom: 16px; border: 1px solid #e2e8f0; }
         .form-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
         @media (min-width: 768px) { .form-grid { grid-template-columns: repeat(4, 1fr); align-items: end; } }
-        
-        /* TABLE */
-        .table-container { overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 12px; border: 1px solid #e2e8f0; background: white; }
-        .table { width: 100%; border-collapse: collapse; text-align: left; min-width: 800px; }
+        .table-container { overflow-x: auto; border-radius: 12px; border: 1px solid #e2e8f0; background: white; }
+        .table { width: 100%; border-collapse: collapse; text-align: left; min-width: 900px; }
         .table thead tr { border-bottom: 1px solid #e2e8f0; background-color: #f8fafc; }
-        .table th { padding: 12px 16px; font-size: 11px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap; }
-        .table td { padding: 12px 16px; font-size: 13px; color: #475569; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-bottom: 1px solid #f1f5f9; }
+        .table th { padding: 12px 16px; font-size: 11px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap; cursor: pointer; }
+        .table th:hover { background-color: #f1f5f9; }
+        .table td { padding: 12px 16px; font-size: 13px; color: #475569; white-space: nowrap; border-bottom: 1px solid #f1f5f9; }
         .table tbody tr { cursor: pointer; transition: background-color 0.2s; }
         .table tbody tr:hover { background-color: #f9fafb; }
         .table tbody tr.selected { background-color: #f8fafc; }
-        
         .badge { padding: 4px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; white-space: nowrap; }
         .badge-blue { background-color: #dbeafe; color: #2563eb; }
         .badge-green { background-color: #d1fae5; color: #059669; }
         .badge-red { background-color: #fee2e2; color: #dc2626; }
         .badge-yellow { background-color: #fef3c7; color: #d97706; }
         .badge-grey { background-color: #e2e8f0; color: #64748b; }
-        
+        .badge-purple { background-color: #f3e8ff; color: #9333ea; }
         .btn-action { padding: 6px 10px; background-color: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 500; white-space: nowrap; margin-right: 4px; }
         .btn-success { background-color: #10b981; color: white; border: none; }
         .btn-warning { background-color: #f59e0b; color: white; border: none; }
         .btn-danger { background-color: #ef4444; color: white; border: none; }
         .btn-purple { background-color: #8b5cf6; color: white; border: none; }
-        
-        /* EXPANDED ROW */
         .expanded-content { padding: 16px; background-color: #f8fafc; border-bottom: 1px solid #e2e8f0; }
         .expanded-card { background: white; border-radius: 8px; border: 1px solid #e2e8f0; padding: 16px; }
         .expanded-header { display: flex; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 12px; }
         .expanded-label { font-size: 11px; color: #94a3b8; font-weight: 600; text-transform: uppercase; display: block; margin-bottom: 4px; }
         .expanded-value { font-weight: 600; font-size: 15px; }
-        .expanded-sub { font-size: 12px; color: #64748b; }
-        
+        .expanded-sub { font-size: 12px; color: #64748b; margin-top: 4px; }
         .section-divider { border-top: 1px solid #e2e8f0; padding-top: 16px; margin-top: 16px; }
         .section-title { margin: 0 0 12px 0; font-size: 14px; font-weight: 600; display: flex; justify-content: space-between; align-items: center; }
-        
-        /* WIP FORM */
         .wip-form { background: #f8fafc; padding: 12px; border-radius: 8px; margin-bottom: 12px; display: grid; grid-template-columns: 1fr; gap: 8px; }
         @media (min-width: 768px) { .wip-form { grid-template-columns: 2fr 2fr 1fr 1fr 2fr auto; align-items: end; } }
         .wip-input-group label { font-size: 10px; color: #64748b; font-weight: 600; display: block; margin-bottom: 2px; }
         .wip-input-group select, .wip-input-group input, .wip-input-group textarea { width: 100%; padding: 6px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 13px; }
+        .wip-input-group textarea { resize: vertical; min-height: 32px; }
         .btn-log { padding: 8px 12px; background-color: #0f172a; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; }
-        
-        /* WIP & DA ITEMS */
         .list-item { display: flex; align-items: flex-start; gap: 10px; padding: 10px; background-color: #f8fafc; border-radius: 8px; margin-bottom: 8px; flex-wrap: wrap; }
         .list-item.done { opacity: 0.5; background-color: #f1f5f9; }
         .step-circle { width: 22px; height: 22px; border-radius: 50%; background-color: #e2e8f0; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 600; color: #64748b; flex-shrink: 0; margin-top: 2px; }
@@ -630,20 +673,14 @@ function Dashboard({ userEmail, onSignOut }) {
         .item-title { font-weight: 600; font-size: 13px; color: #0f172a; }
         .item-sub { font-size: 11px; color: #64748b; margin-top: 4px; white-space: pre-wrap; }
         .item-meta { text-align: right; }
-        .item-actions { display: flex; gap: 4px; margin-top: 8px; }
-        
-        /* PAGINATION */
+        .item-actions { display: flex; gap: 4px; margin-top: 8px; flex-wrap: wrap; }
         .pagination { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-top: 1px solid #e2e8f0; }
         .btn-page { padding: 6px 12px; background-color: white; border: 1px solid #e2e8f0; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 500; }
         .btn-page:disabled { opacity: 0.5; cursor: not-allowed; }
-        
-        /* ANALYTICS */
         .chart-row { margin-bottom: 16px; }
         .chart-label { display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 13px; }
         .chart-track { width: 100%; background-color: #f1f5f9; border-radius: 6px; height: 8px; overflow: hidden; }
         .chart-fill { height: 100%; border-radius: 6px; transition: width 0.5s ease; }
-        
-        /* MOBILE SIDEBAR OVERLAY */
         @media (max-width: 768px) {
           .sidebar { position: fixed; left: 0; top: 0; bottom: 0; z-index: 100; box-shadow: 2px 0 10px rgba(0,0,0,0.1); }
           .sidebar.collapsed { transform: translateX(-100%); width: 260px; }
@@ -657,7 +694,6 @@ function Dashboard({ userEmail, onSignOut }) {
             {sidebarOpen && <h1>SLA Tracker</h1>}
             <button onClick={() => setSidebarOpen(!sidebarOpen)} className="sidebar-toggle">☰</button>
           </div>
-          
           <nav style={{ flex: 1 }}>
             {navItems.map(item => (
               <div key={item.id} onClick={() => setActiveTab(item.id)} className={`nav-item ${activeTab === item.id ? 'active' : 'inactive'} ${sidebarOpen ? '' : 'collapsed'}`}>
@@ -666,16 +702,10 @@ function Dashboard({ userEmail, onSignOut }) {
               </div>
             ))}
           </nav>
-
           <div className="sidebar-footer">
             <div className={`user-info ${sidebarOpen ? '' : 'collapsed'}`}>
               <div className="user-avatar">{userEmail?.charAt(0).toUpperCase()}</div>
-              {sidebarOpen && (
-                <div className="user-details">
-                  <div className="email">{userEmail}</div>
-                  <div className="role">Administrator</div>
-                </div>
-              )}
+              {sidebarOpen && (<div className="user-details"><div className="email">{userEmail}</div><div className="role">Administrator</div></div>)}
             </div>
             {sidebarOpen && <button onClick={onSignOut} className="btn-signout">Sign Out</button>}
           </div>
@@ -691,14 +721,12 @@ function Dashboard({ userEmail, onSignOut }) {
                   <p>Monitor all case statuses and SLA compliance in real-time.</p>
                 </div>
               </div>
-
               <div className="stats-grid">
                 <div className="stat-card"><div className="stat-title">Total Cases</div><div className="stat-value"><span className="stat-number">{totalCases}</span><span className="stat-badge badge-grey">cases</span></div></div>
                 <div className="stat-card"><div className="stat-title">In Progress</div><div className="stat-value"><span className="stat-number" style={{color: '#d97706'}}>{inProgress}</span><span className="stat-badge badge-yellow">cases</span></div></div>
                 <div className="stat-card"><div className="stat-title">Completed</div><div className="stat-value"><span className="stat-number" style={{color: '#059669'}}>{completed}</span><span className="stat-badge badge-green">cases</span></div></div>
                 <div className="stat-card"><div className="stat-title">Out of SLA</div><div className="stat-value"><span className="stat-number" style={{color: '#dc2626'}}>{outOfSlaCases.length}</span><span className="stat-badge badge-red">cases</span></div></div>
               </div>
-
               <div className="card">
                 <h3 className="card-header">Data Synchronization</h3>
                 <p className="card-subtitle">Upload your Excel workbook (.xlsx) to sync data.</p>
@@ -707,7 +735,6 @@ function Dashboard({ userEmail, onSignOut }) {
                   {uploadMessage && <span className="upload-msg" style={{ color: uploadMessage.includes('Error') ? '#dc2626' : '#059669' }}>{uploadMessage}</span>}
                 </div>
               </div>
-
               <div className="card" style={{ padding: 0 }}>
                 <div style={{ padding: '16px', borderBottom: '1px solid #e2e8f0' }}>
                   <h3 className="card-header" style={{ margin: 0 }}>SLA Breaches Alert</h3>
@@ -750,10 +777,7 @@ function Dashboard({ userEmail, onSignOut }) {
                     <div className="wip-input-group"><label>Case Number</label><input type="text" value={newCaseNum} onChange={(e) => setNewCaseNum(e.target.value)} required /></div>
                     <div className="wip-input-group"><label>PIC</label><input type="text" value={newPic} onChange={(e) => setNewPic(e.target.value)} /></div>
                     <div className="wip-input-group"><label>Country</label><input type="text" value={newCountry} onChange={(e) => setNewCountry(e.target.value)} required /></div>
-                    <div className="wip-input-group"><label>SLA Due Date</label><input type="date" value={newSlaDate} onChange={(e) => setNewSlaDate(e.target.value)} required /></div>
-                    <div className="wip-input-group"><label>Priority</label><select value={newPriority} onChange={(e) => setNewPriority(e.target.value)}><option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option></select></div>
-                    <div className="wip-input-group"><label>Status</label><select value={newStatus} onChange={(e) => setNewStatus(e.target.value)}><option value="IN PROGRESS">IN PROGRESS</option><option value="COMPLETED">COMPLETED</option></select></div>
-                    <div className="wip-input-group"><label>Stage</label><select value={newStage} onChange={(e) => setNewStage(e.target.value)}>{stages.map(s => <option key={s} value={s}>{s}</option>)}</select></div>
+                    <div className="wip-input-group"><label>SLA Days</label><input type="number" min="1" max="100" value={newSlaDays} onChange={(e) => setNewSlaDays(parseInt(e.target.value) || 20)} required /></div>
                     <button type="submit" className="btn-log" style={{ backgroundColor: '#10b981' }}>Save Case</button>
                   </div>
                 </form>
@@ -771,28 +795,30 @@ function Dashboard({ userEmail, onSignOut }) {
                     <table className="table">
                       <thead>
                         <tr>
-                          <th>Case Number</th><th>PIC</th><th>Status</th><th>SLA</th><th style={{ textAlign: 'center', width: '60px' }}>Resp</th><th style={{ width: '140px' }}>Last Modified</th><th style={{ width: '80px' }}>Actions</th>
+                          <th onClick={() => requestSort('case_number')}>Case Number <SortIndicator column="case_number" /></th>
+                          <th onClick={() => requestSort('pic')}>PIC <SortIndicator column="pic" /></th>
+                          <th onClick={() => requestSort('case_status')}>Status <SortIndicator column="case_status" /></th>
+                          <th onClick={() => requestSort('sla_due_date')}>SLA Date <SortIndicator column="sla_due_date" /></th>
+                          <th onClick={() => requestSort('da_in_force')}>DA In Force <SortIndicator column="da_in_force" /></th>
+                          <th onClick={() => requestSort('active_wip')}>Active WIP <SortIndicator column="active_wip" /></th>
+                          <th style={{ width: '80px' }}>Actions</th>
                         </tr>
                       </thead>
                       <tbody>
                         {currentCases.map((c, index) => {
                           const slaDays = calculateBusinessDays(c.sla_due_date);
-                          const respondentCount = c.disciplinary_actions?.length || 0;
+                          const daInForce = c.disciplinary_actions?.filter(da => da.current_action?.toLowerCase().includes('suspend') || da.current_action?.toLowerCase().includes('terminat')).length || 0;
+                          const activeWip = c.wip_actions?.filter(w => w.status === 'Pending').length || 0;
                           const isBreached = slaDays < 0 && c.case_status === 'IN PROGRESS';
-                          const modifierName = c.modified_by_email ? c.modified_by_email.split('@')[0] : '—';
                           return (
                             <React.Fragment key={index}>
                               <tr className={selectedCase === c.case_number ? 'selected' : ''}>
                                 <td style={{ fontWeight: 600, color: '#0f172a' }}>{c.case_number}</td>
                                 <td>{c.pic || '—'}</td>
                                 <td><span className={`badge ${c.case_status === 'IN PROGRESS' ? 'badge-blue' : 'badge-green'}`}>{c.case_status}</span></td>
-                                <td>
-                                  {c.case_status !== 'IN PROGRESS' ? '—' : (
-                                    <span style={{ fontWeight: 600, color: isBreached ? '#dc2626' : '#059669' }}>{isBreached ? `🔴 ${Math.abs(slaDays)}wd` : `🟢 ${slaDays}wd`}</span>
-                                  )}
-                                </td>
-                                <td style={{ textAlign: 'center', fontWeight: 600, color: respondentCount > 0 ? '#2563eb' : '#94a3b8' }}>{respondentCount}</td>
-                                <td><div style={{ fontSize: '12px', fontWeight: 500, color: '#334155' }}>{modifierName}</div><div style={{ fontSize: '11px', color: '#94a3b8' }}>{formatTimeAgo(c.last_modified)}</div></td>
+                                <td style={{ color: isBreached ? '#dc2626' : '#059669', fontWeight: 600 }}>{c.sla_due_date || '—'}</td>
+                                <td style={{ textAlign: 'center', fontWeight: 600, color: daInForce > 0 ? '#dc2626' : '#94a3b8' }}>{daInForce}</td>
+                                <td style={{ textAlign: 'center', fontWeight: 600, color: activeWip > 0 ? '#8b5cf6' : '#94a3b8' }}>{activeWip}</td>
                                 <td><button onClick={() => handleCaseClick(c.case_number)} className="btn-action">{selectedCase === c.case_number ? 'Hide' : 'View'}</button></td>
                               </tr>
                               
@@ -805,6 +831,8 @@ function Dashboard({ userEmail, onSignOut }) {
                                           <span className="expanded-label">CASE DETAILS</span>
                                           <div className="expanded-value">{c.case_number}</div>
                                           <div className="expanded-sub">Priority: {c.priority || '—'} | Stage: {c.stage || '—'}</div>
+                                          {c.date_completed && <div className="expanded-sub" style={{ color: '#059669', marginTop: '4px' }}>Completed on: {c.date_completed}</div>}
+                                          {c.modified_by_email && <div className="expanded-sub" style={{ marginTop: '4px' }}>Last modified by {c.modified_by_email.split('@')[0]} on {formatDateTime(c.last_modified)}</div>}
                                         </div>
                                         <div style={{ textAlign: 'right' }}>
                                           <span className="expanded-label">SLA DUE DATE</span>
@@ -814,8 +842,8 @@ function Dashboard({ userEmail, onSignOut }) {
                                       </div>
                                       
                                       <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
-                                        {c.case_status === 'IN PROGRESS' && <button onClick={() => handleUpdateStatus(c.case_number, 'COMPLETED')} className="btn-action btn-success">Complete Case</button>}
-                                        {c.case_status === 'COMPLETED' && <button onClick={() => handleUpdateStatus(c.case_number, 'IN PROGRESS')} className="btn-action btn-warning">Reactivate Case</button>}
+                                        {c.case_status === 'IN PROGRESS' && <button onClick={() => handleCompleteCase(c.case_number)} className="btn-action btn-success">Complete Case</button>}
+                                        {c.case_status === 'COMPLETED' && <button onClick={() => handleReactivateCase(c.case_number)} className="btn-action btn-warning">Reactivate Case</button>}
                                       </div>
 
                                       <div className="section-divider">
@@ -829,7 +857,7 @@ function Dashboard({ userEmail, onSignOut }) {
                                             <div className="wip-input-group"><label>Action Type</label><select value={wipActionType} onChange={(e) => setWipActionType(e.target.value)} required><option value="">Select...</option>{mappingRules.map(rule => <option key={rule.id} value={rule.action_type}>{rule.action_type}</option>)}</select></div>
                                             <div className="wip-input-group"><label>Description</label><input type="text" value={wipDesc} onChange={(e) => setWipDesc(e.target.value)} required /></div>
                                             <div className="wip-input-group"><label>Date Sent</label><input type="date" value={wipDateSent} onChange={(e) => setWipDateSent(e.target.value)} required /></div>
-                                            <div className="wip-input-group"><label>SLA Days</label><input type="number" value={wipSlaDays} onChange={(e) => setWipSlaDays(parseInt(e.target.value) || 2)} required /></div>
+                                            <div className="wip-input-group"><label>SLA Days (1-100)</label><input type="number" min="1" max="100" value={wipSlaDays} onChange={(e) => setWipSlaDays(Math.max(1, Math.min(100, parseInt(e.target.value) || 2)))} required /></div>
                                             <div className="wip-input-group"><label>Notes / Replies</label><textarea value={wipNotes} onChange={(e) => setWipNotes(e.target.value)} rows="1" placeholder="e.g., Reply 1 (Date)..."></textarea></div>
                                             <div style={{ display: 'flex', gap: '4px' }}>
                                               <button type="submit" className="btn-log">{editingWipId ? 'Update' : 'Log'}</button>
@@ -851,22 +879,11 @@ function Dashboard({ userEmail, onSignOut }) {
                                                     <div className="item-title">{w.action_type} {w.status === 'Done' && <span className="badge badge-green" style={{ marginLeft: '4px' }}>Done</span>}</div>
                                                     <div className="item-sub">{w.description}</div>
                                                     {w.notes && <div className="item-sub" style={{ marginTop: '4px', color: '#475569', fontStyle: 'italic' }}>Notes: {w.notes}</div>}
-                                                    <div className="item-sub" style={{ marginTop: '4px' }}>By: {w.pic?.split('@')[0] || '—'} | Logged: {formatDateTime(w.date_sent)} | Modified: {formatTimeAgo(w.last_modified)}</div>
+                                                    <div className="item-sub" style={{ marginTop: '4px' }}>By: {w.pic?.split('@')[0] || '—'} | Logged: {formatDateTime(w.date_sent)} | Modified: {formatDateTime(w.last_modified)}</div>
                                                   </div>
-                                                  <div className="item-meta">
-                                                    <div className="expanded-label">Stage</div>
-                                                    <span className="badge badge-blue">{w.stage_auto || '—'}</span>
-                                                  </div>
-                                                  <div className="item-meta">
-                                                    <div className="expanded-label">SLA Timer</div>
-                                                    <span style={{ fontWeight: 600, color: wipSlaDays < 0 ? '#dc2626' : '#059669' }}>{wipSlaDays < 0 ? `🔴 ${Math.abs(wipSlaDays)}wd` : `🟢 ${wipSlaDays}wd`}</span>
-                                                  </div>
-                                                  {w.status !== 'Done' && (
-                                                    <div className="item-actions">
-                                                      <button onClick={() => handleEditWip(w)} className="btn-action">Edit</button>
-                                                      <button onClick={() => handleCompleteWip(w.id)} className="btn-action btn-success">Complete</button>
-                                                    </div>
-                                                  )}
+                                                  <div className="item-meta"><div className="expanded-label">Stage</div><span className="badge badge-blue">{w.stage_auto || '—'}</span></div>
+                                                  <div className="item-meta"><div className="expanded-label">SLA Timer</div><span style={{ fontWeight: 600, color: wipSlaDays < 0 ? '#dc2626' : '#059669' }}>{wipSlaDays < 0 ? `🔴 ${Math.abs(wipSlaDays)}wd` : `🟢 ${wipSlaDays}wd`}</span></div>
+                                                  {w.status !== 'Done' && (<div className="item-actions"><button onClick={() => handleEditWip(w)} className="btn-action">Edit</button><button onClick={() => handleCompleteWip(w.id)} className="btn-action btn-success">Complete</button></div>)}
                                                 </div>
                                               );
                                             })}
@@ -886,15 +903,8 @@ function Dashboard({ userEmail, onSignOut }) {
                                               return (
                                                 <div key={da.id} style={{ border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px', marginBottom: '12px' }}>
                                                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
-                                                    <div>
-                                                      <span className="expanded-label">Respondent: </span>
-                                                      <span className="item-title">{da.respondent_name || '—'}</span>
-                                                      <span className="item-sub" style={{ marginLeft: '8px' }}>({da.respondent_id || '—'})</span>
-                                                    </div>
-                                                    <div style={{ textAlign: 'right' }}>
-                                                      <span className="expanded-label">Complainant: </span>
-                                                      <span className="item-title">{da.complainant_name || '—'}</span>
-                                                    </div>
+                                                    <div><span className="expanded-label">Respondent: </span><span className="item-title">{da.respondent_name || '—'}</span><span className="item-sub" style={{ marginLeft: '8px' }}>({da.respondent_id || '—'})</span></div>
+                                                    <div style={{ textAlign: 'right' }}><span className="expanded-label">Complainant: </span><span className="item-title">{da.complainant_name || '—'}</span></div>
                                                   </div>
                                                   
                                                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', padding: '8px', backgroundColor: '#f8fafc', borderRadius: '6px' }} onClick={() => toggleExpandDA(da.id)}>
@@ -911,7 +921,7 @@ function Dashboard({ userEmail, onSignOut }) {
                                                             <div className="step-circle">{h.step}</div>
                                                             <div className="item-content">
                                                               <span className="badge" style={{ backgroundColor: hColors.bg, color: hColors.text }}>{h.action || '—'}</span>
-                                                              <div className="item-sub" style={{ marginTop: '4px' }}>{h.date || 'No date'}</div>
+                                                              <div className="item-sub" style={{ marginTop: '4px' }}>Date: {h.date || 'No date'}</div>
                                                               {h.added_by && <div className="item-sub" style={{ fontSize: '10px' }}>Added by: {h.added_by?.split('@')[0]} on {formatDateTime(h.added_at)}</div>}
                                                             </div>
                                                           </div>
@@ -930,6 +940,22 @@ function Dashboard({ userEmail, onSignOut }) {
                                                       )}
                                                     </div>
                                                   )}
+
+                                                  <div style={{ marginTop: '12px', padding: '8px', backgroundColor: '#f8fafc', borderRadius: '6px' }}>
+                                                    <div className="expanded-label">Violations</div>
+                                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '4px' }}>
+                                                      {(da.violations || []).map((v, vIdx) => (
+                                                        <span key={vIdx} className="badge badge-red" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                          {v}
+                                                          <button onClick={() => handleDeleteViolation(da.id, vIdx)} style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontWeight: 'bold', padding: 0 }}>×</button>
+                                                        </span>
+                                                      ))}
+                                                    </div>
+                                                    <div style={{ display: 'flex', gap: '4px', marginTop: '8px' }}>
+                                                      <input type="text" placeholder="Add violation..." value={newViolation[da.id] || ''} onChange={(e) => setNewViolation(prev => ({ ...prev, [da.id]: e.target.value }))} style={{ flex: 1, padding: '6px', border: '1px solid #e2e8f0', borderRadius: '6px' }} />
+                                                      <button onClick={() => handleAddViolation(da.id)} className="btn-action">Add</button>
+                                                    </div>
+                                                  </div>
                                                 </div>
                                               );
                                             })}
@@ -965,25 +991,10 @@ function Dashboard({ userEmail, onSignOut }) {
                   <p>Visual breakdown of case metrics and performance.</p>
                 </div>
               </div>
-
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px' }}>
-                <div className="card">
-                  <h3 className="card-header">Case Status Breakdown</h3>
-                  <ChartRow label="In Progress" value={inProgress} total={totalCases} color="#3b82f6" />
-                  <ChartRow label="Completed" value={completed} total={totalCases} color="#10b981" />
-                  <ChartRow label="Cancelled" value={cases.filter(c => c.case_status === 'CANCELLED').length} total={totalCases} color="#ef4444" />
-                </div>
-                <div className="card">
-                  <h3 className="card-header">SLA Compliance (Active Cases)</h3>
-                  <ChartRow label="Within SLA" value={inProgress - outOfSlaCases.length} total={inProgress} color="#10b981" />
-                  <ChartRow label="Out of SLA" value={outOfSlaCases.length} total={inProgress} color="#ef4444" />
-                </div>
-                <div className="card">
-                  <h3 className="card-header">Priority Distribution</h3>
-                  <ChartRow label="High Priority" value={cases.filter(c => c.priority === 'High').length} total={totalCases} color="#ef4444" />
-                  <ChartRow label="Medium Priority" value={cases.filter(c => c.priority === 'Medium').length} total={totalCases} color="#f59e0b" />
-                  <ChartRow label="Low Priority" value={cases.filter(c => c.priority === 'Low').length} total={totalCases} color="#64748b" />
-                </div>
+                <div className="card"><h3 className="card-header">Case Status Breakdown</h3><ChartRow label="In Progress" value={inProgress} total={totalCases} color="#3b82f6" /><ChartRow label="Completed" value={completed} total={totalCases} color="#10b981" /><ChartRow label="Cancelled" value={cases.filter(c => c.case_status === 'CANCELLED').length} total={totalCases} color="#ef4444" /></div>
+                <div className="card"><h3 className="card-header">SLA Compliance (Active Cases)</h3><ChartRow label="Within SLA" value={inProgress - outOfSlaCases.length} total={inProgress} color="#10b981" /><ChartRow label="Out of SLA" value={outOfSlaCases.length} total={inProgress} color="#ef4444" /></div>
+                <div className="card"><h3 className="card-header">Priority Distribution</h3><ChartRow label="High Priority" value={cases.filter(c => c.priority === 'High').length} total={totalCases} color="#ef4444" /><ChartRow label="Medium Priority" value={cases.filter(c => c.priority === 'Medium').length} total={totalCases} color="#f59e0b" /><ChartRow label="Low Priority" value={cases.filter(c => c.priority === 'Low').length} total={totalCases} color="#64748b" /></div>
               </div>
             </>
           )}
@@ -997,13 +1008,8 @@ function ChartRow({ label, value, total, color }) {
   const percent = total > 0 ? (value / total) * 100 : 0;
   return (
     <div className="chart-row">
-      <div className="chart-label">
-        <span style={{ fontWeight: 500, color: '#334155' }}>{label}</span>
-        <span style={{ color: '#64748b' }}>{value} ({percent.toFixed(1)}%)</span>
-      </div>
-      <div className="chart-track">
-        <div className="chart-fill" style={{ width: `${percent}%`, backgroundColor: color }}></div>
-      </div>
+      <div className="chart-label"><span style={{ fontWeight: 500, color: '#334155' }}>{label}</span><span style={{ color: '#64748b' }}>{value} ({percent.toFixed(1)}%)</span></div>
+      <div className="chart-track"><div className="chart-fill" style={{ width: `${percent}%`, backgroundColor: color }}></div></div>
     </div>
   );
 }
