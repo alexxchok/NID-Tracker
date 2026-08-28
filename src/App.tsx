@@ -19,10 +19,8 @@ const calculateBusinessDays = (dueDate) => {
   if (!dueDate) return 0;
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const due = new Date(dueDate); due.setHours(0, 0, 0, 0);
-  
   let diff = 0;
   let cur = new Date(today);
-  
   if (cur < due) {
     while (cur < due) {
       cur.setDate(cur.getDate() + 1);
@@ -68,15 +66,19 @@ const formatTimeAgo = (timestamp) => {
   return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
 };
 
+const formatDateTime = (timestamp) => {
+  if (!timestamp) return '—';
+  const date = new Date(timestamp);
+  return date.toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+};
+
 function App() {
   const [session, setSession] = useState(null);
-
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => setSession(session));
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => setSession(session));
     return () => subscription.unsubscribe();
   }, []);
-
   if (!session) return <AuthScreen />;
   return <Dashboard userEmail={session.user.email} onSignOut={() => supabase.auth.signOut()} />;
 }
@@ -86,7 +88,6 @@ function AuthScreen() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-
   const handleLogin = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -94,7 +95,6 @@ function AuthScreen() {
     if (error) setError(error.message);
     setLoading(false);
   };
-
   return (
     <div className="auth-wrapper">
       <div className="auth-card">
@@ -113,9 +113,7 @@ function AuthScreen() {
             <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
           </div>
           {error && <div className="error-box">{error}</div>}
-          <button type="submit" disabled={loading} className="btn-primary">
-            {loading ? 'Signing in...' : 'Sign In'}
-          </button>
+          <button type="submit" disabled={loading} className="btn-primary">{loading ? 'Signing in...' : 'Sign In'}</button>
         </form>
       </div>
     </div>
@@ -134,9 +132,6 @@ function Dashboard({ userEmail, onSignOut }) {
   const [wipList, setWipList] = useState([]);
   const [showWipForm, setShowWipForm] = useState(false);
   const [mappingRules, setMappingRules] = useState([]);
-  const [wipActionType, setWipActionType] = useState('');
-  const [wipDesc, setWipDesc] = useState('');
-  const [wipDateSent, setWipDateSent] = useState(new Date().toISOString().split('T')[0]);
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 25;
@@ -151,9 +146,23 @@ function Dashboard({ userEmail, onSignOut }) {
   const [newStatus, setNewStatus] = useState('IN PROGRESS');
   const [newStage, setNewStage] = useState('Stage 1');
 
+  // WIP Form State
+  const [wipActionType, setWipActionType] = useState('');
+  const [wipDesc, setWipDesc] = useState('');
+  const [wipDateSent, setWipDateSent] = useState(new Date().toISOString().split('T')[0]);
+  const [wipSlaDays, setWipSlaDays] = useState(2);
+  const [wipNotes, setWipNotes] = useState('');
+  const [editingWipId, setEditingWipId] = useState(null);
+
+  // DA Add Action State
+  const [addingDaFor, setAddingDaFor] = useState(null);
+  const [newDaAction, setNewDaAction] = useState('');
+  const [newDaDate, setNewDaDate] = useState(new Date().toISOString().split('T')[0]);
+  const [expandedDAs, setExpandedDAs] = useState({});
+
   const fetchCases = async () => {
     setLoading(true);
-    const { data, error } = await supabase.from('cases').select('*, disciplinary_actions(respondent_name, respondent_id)').order('sla_due_date', { ascending: true });
+    const { data, error } = await supabase.from('cases').select('*, disciplinary_actions(respondent_name, respondent_id, complainant_name, complainant_id)').order('sla_due_date', { ascending: true });
     if (error) console.error('Error:', error);
     else setCases(data);
     setLoading(false);
@@ -317,6 +326,8 @@ function Dashboard({ userEmail, onSignOut }) {
     if (selectedCase === caseNum) { setSelectedCase(null); return; }
     setSelectedCase(caseNum);
     setShowWipForm(false);
+    setEditingWipId(null);
+    setAddingDaFor(null);
     const { data: daData } = await supabase.from('disciplinary_actions').select('*').eq('case_number', caseNum);
     const { data: wipData } = await supabase.from('wip_actions').select('*').eq('case_number', caseNum).order('date_sent', { ascending: false });
     setDaList(daData || []); setWipList(wipData || []);
@@ -337,42 +348,138 @@ function Dashboard({ userEmail, onSignOut }) {
     }
   };
 
+  const handleUpdateStatus = async (caseNum, newStatus) => {
+    const payload = { case_status: newStatus, modified_by_email: userEmail };
+    if (newStatus === 'COMPLETED') payload.date_completed = new Date().toISOString().split('T')[0];
+    if (newStatus === 'IN PROGRESS') payload.date_completed = null;
+    
+    const { error } = await supabase.from('cases').update(payload).eq('case_number', caseNum);
+    if (error) alert('Error updating status: ' + error.message);
+    else fetchCases();
+  };
+
+  // --- WIP LOGIC ---
+  const resetWipForm = () => {
+    setWipActionType(''); setWipDesc(''); setWipDateSent(new Date().toISOString().split('T')[0]); setWipSlaDays(2); setWipNotes(''); setEditingWipId(null); setShowWipForm(false);
+  };
+
   const handleAddWIP = async (e) => {
     e.preventDefault();
     const rule = mappingRules.find(r => r.action_type === wipActionType);
     let stageToAssign = rule?.default_stage || null;
-    let slaDays = rule?.default_sla_days || 2;
+    let slaDays = wipSlaDays || rule?.default_sla_days || 2;
+
     if (rule && rule.initial_stage && rule.concluding_stage) {
       const currentCase = cases.find(c => c.case_number === selectedCase);
       const currentStageNum = parseInt(currentCase?.stage?.replace('Stage ', '') || '0', 10);
       stageToAssign = currentStageNum >= 6 ? rule.concluding_stage : rule.initial_stage;
     }
+    
     let expiryDate = addBusinessDays(wipDateSent, slaDays);
-    const { error: wipError } = await supabase.from('wip_actions').insert([{ 
-      case_number: selectedCase, action_type: wipActionType, description: wipDesc, stage_auto: stageToAssign,
-      date_sent: wipDateSent, sla_days: slaDays, expiry_date: expiryDate, status: 'Pending', pic: userEmail 
-    }]);
-    if (wipError) { alert('Error logging WIP: ' + wipError.message); return; }
+
+    if (editingWipId) {
+      // Update existing WIP
+      const { error } = await supabase.from('wip_actions').update({ 
+        action_type: wipActionType, description: wipDesc, stage_auto: stageToAssign,
+        date_sent: wipDateSent, sla_days: slaDays, expiry_date: expiryDate, notes: wipNotes, pic: userEmail, last_modified: new Date().toISOString()
+      }).eq('id', editingWipId);
+      if (error) alert('Error updating WIP: ' + error.message);
+    } else {
+      // Insert new WIP
+      const { error } = await supabase.from('wip_actions').insert([{ 
+        case_number: selectedCase, action_type: wipActionType, description: wipDesc, stage_auto: stageToAssign,
+        date_sent: wipDateSent, sla_days: slaDays, expiry_date: expiryDate, status: 'Pending', notes: wipNotes, pic: userEmail 
+      }]);
+      if (error) alert('Error logging WIP: ' + error.message);
+    }
+
     if (stageToAssign) await supabase.from('cases').update({ stage: stageToAssign, modified_by_email: userEmail }).eq('case_number', selectedCase);
+    
     const { data: newWipData } = await supabase.from('wip_actions').select('*').eq('case_number', selectedCase).order('date_sent', { ascending: false });
     setWipList(newWipData || []);
-    setWipDesc(''); setShowWipForm(false); fetchCases();
+    resetWipForm();
+    fetchCases();
   };
 
-  const handleUpdateStatus = async (caseNum, newStatus) => {
-    const { error } = await supabase.from('cases').update({ case_status: newStatus, modified_by_email: userEmail }).eq('case_number', caseNum);
-    if (error) alert('Error updating status: ' + error.message);
-    else fetchCases();
+  const handleEditWip = (w) => {
+    setEditingWipId(w.id);
+    setWipActionType(w.action_type);
+    setWipDesc(w.description);
+    setWipDateSent(w.date_sent);
+    setWipSlaDays(w.sla_days);
+    setWipNotes(w.notes || '');
+    setShowWipForm(true);
   };
 
+  const handleCompleteWip = async (wipId) => {
+    const { error } = await supabase.from('wip_actions').update({ 
+      status: 'Done', completed_at: new Date().toISOString(), pic: userEmail, last_modified: new Date().toISOString()
+    }).eq('id', wipId);
+    if (error) alert('Error completing WIP: ' + error.message);
+    else {
+      const { data: newWipData } = await supabase.from('wip_actions').select('*').eq('case_number', selectedCase).order('date_sent', { ascending: false });
+      setWipList(newWipData || []);
+    }
+  };
+
+  // --- DA LOGIC ---
+  const handleAddDaAction = async (e, daId) => {
+    e.preventDefault();
+    const da = daList.find(d => d.id === daId);
+    if (!da) return;
+    
+    const history = da.action_history || [];
+    history.push({ 
+      step: history.length + 1, 
+      action: newDaAction, 
+      date: newDaDate, 
+      added_by: userEmail, 
+      added_at: new Date().toISOString() 
+    });
+
+    const { error } = await supabase.from('disciplinary_actions').update({ 
+      action_history: history, 
+      current_action: newDaAction, 
+      execution_date: newDaDate,
+      modified_by_email: userEmail,
+      last_modified: new Date().toISOString()
+    }).eq('id', daId);
+
+    if (error) alert('Error adding action: ' + error.message);
+    else {
+      const { data: newDaData } = await supabase.from('disciplinary_actions').select('*').eq('case_number', selectedCase);
+      setDaList(newDaData || []);
+      setAddingDaFor(null);
+      setNewDaAction('');
+      setNewDaDate(new Date().toISOString().split('T')[0]);
+    }
+  };
+
+  const toggleExpandDA = (daId) => {
+    setExpandedDAs(prev => ({ ...prev, [daId]: !prev[daId] }));
+  };
+
+  // --- FILTERING & SORTING ---
   const filteredCases = cases.filter(c => {
     if (!searchTerm) return true;
     const search = searchTerm.toLowerCase();
-    return c.case_number?.toLowerCase().includes(search) || c.pic?.toLowerCase().includes(search) || c.country?.toLowerCase().includes(search) || c.disciplinary_actions?.some(da => da.respondent_name?.toLowerCase().includes(search) || da.respondent_id?.toLowerCase().includes(search));
+    const matchCase = c.case_number?.toLowerCase().includes(search);
+    const matchPic = c.pic?.toLowerCase().includes(search);
+    const matchCountry = c.country?.toLowerCase().includes(search);
+    const matchRespondent = c.disciplinary_actions?.some(da => da.respondent_name?.toLowerCase().includes(search) || da.respondent_id?.toLowerCase().includes(search));
+    const matchComplainant = c.disciplinary_actions?.some(da => da.complainant_name?.toLowerCase().includes(search) || da.complainant_id?.toLowerCase().includes(search));
+    return matchCase || matchPic || matchCountry || matchRespondent || matchComplainant;
   });
 
-  const totalPages = Math.ceil(filteredCases.length / pageSize);
-  const currentCases = filteredCases.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  // Sort by SLA expiry (nearest first, nulls last)
+  const sortedCases = filteredCases.sort((a, b) => {
+    if (!a.sla_due_date) return 1;
+    if (!b.sla_due_date) return -1;
+    return new Date(a.sla_due_date) - new Date(b.sla_due_date);
+  });
+
+  const totalPages = Math.ceil(sortedCases.length / pageSize);
+  const currentCases = sortedCases.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   const totalCases = cases.length;
   const inProgress = cases.filter(c => c.case_status === 'IN PROGRESS').length;
@@ -489,9 +596,13 @@ function Dashboard({ userEmail, onSignOut }) {
         .badge-green { background-color: #d1fae5; color: #059669; }
         .badge-red { background-color: #fee2e2; color: #dc2626; }
         .badge-yellow { background-color: #fef3c7; color: #d97706; }
+        .badge-grey { background-color: #e2e8f0; color: #64748b; }
         
         .btn-action { padding: 6px 10px; background-color: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 500; white-space: nowrap; margin-right: 4px; }
-        .btn-complete { background-color: #0f172a; color: white; border: none; }
+        .btn-success { background-color: #10b981; color: white; border: none; }
+        .btn-warning { background-color: #f59e0b; color: white; border: none; }
+        .btn-danger { background-color: #ef4444; color: white; border: none; }
+        .btn-purple { background-color: #8b5cf6; color: white; border: none; }
         
         /* EXPANDED ROW */
         .expanded-content { padding: 16px; background-color: #f8fafc; border-bottom: 1px solid #e2e8f0; }
@@ -506,19 +617,20 @@ function Dashboard({ userEmail, onSignOut }) {
         
         /* WIP FORM */
         .wip-form { background: #f8fafc; padding: 12px; border-radius: 8px; margin-bottom: 12px; display: grid; grid-template-columns: 1fr; gap: 8px; }
-        @media (min-width: 768px) { .wip-form { grid-template-columns: 2fr 3fr 1fr auto; align-items: end; } }
+        @media (min-width: 768px) { .wip-form { grid-template-columns: 2fr 2fr 1fr 1fr 2fr auto; align-items: end; } }
         .wip-input-group label { font-size: 10px; color: #64748b; font-weight: 600; display: block; margin-bottom: 2px; }
-        .wip-input-group select, .wip-input-group input { width: 100%; padding: 6px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 13px; }
+        .wip-input-group select, .wip-input-group input, .wip-input-group textarea { width: 100%; padding: 6px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 13px; }
         .btn-log { padding: 8px 12px; background-color: #0f172a; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; }
-        .btn-purple { background-color: #8b5cf6; }
         
         /* WIP & DA ITEMS */
-        .list-item { display: flex; align-items: center; gap: 10px; padding: 10px; background-color: #f8fafc; border-radius: 8px; margin-bottom: 8px; flex-wrap: wrap; }
-        .step-circle { width: 22px; height: 22px; border-radius: 50%; background-color: #e2e8f0; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 600; color: #64748b; flex-shrink: 0; }
+        .list-item { display: flex; align-items: flex-start; gap: 10px; padding: 10px; background-color: #f8fafc; border-radius: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+        .list-item.done { opacity: 0.5; background-color: #f1f5f9; }
+        .step-circle { width: 22px; height: 22px; border-radius: 50%; background-color: #e2e8f0; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 600; color: #64748b; flex-shrink: 0; margin-top: 2px; }
         .item-content { flex: 1; min-width: 150px; }
         .item-title { font-weight: 600; font-size: 13px; color: #0f172a; }
-        .item-sub { font-size: 11px; color: #64748b; }
+        .item-sub { font-size: 11px; color: #64748b; margin-top: 4px; white-space: pre-wrap; }
         .item-meta { text-align: right; }
+        .item-actions { display: flex; gap: 4px; margin-top: 8px; }
         
         /* PAGINATION */
         .pagination { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-top: 1px solid #e2e8f0; }
@@ -548,11 +660,7 @@ function Dashboard({ userEmail, onSignOut }) {
           
           <nav style={{ flex: 1 }}>
             {navItems.map(item => (
-              <div 
-                key={item.id} 
-                onClick={() => setActiveTab(item.id)}
-                className={`nav-item ${activeTab === item.id ? 'active' : 'inactive'} ${sidebarOpen ? '' : 'collapsed'}`}
-              >
+              <div key={item.id} onClick={() => setActiveTab(item.id)} className={`nav-item ${activeTab === item.id ? 'active' : 'inactive'} ${sidebarOpen ? '' : 'collapsed'}`}>
                 <span className="icon">{item.icon}</span>
                 {sidebarOpen && <span className="label">{item.label}</span>}
               </div>
@@ -585,32 +693,17 @@ function Dashboard({ userEmail, onSignOut }) {
               </div>
 
               <div className="stats-grid">
-                <div className="stat-card">
-                  <div className="stat-title">Total Cases</div>
-                  <div className="stat-value"><span className="stat-number">{totalCases}</span><span className="stat-badge" style={{backgroundColor: '#f1f5f9', color: '#64748b'}}>cases</span></div>
-                </div>
-                <div className="stat-card">
-                  <div className="stat-title">In Progress</div>
-                  <div className="stat-value"><span className="stat-number" style={{color: '#d97706'}}>{inProgress}</span><span className="stat-badge" style={{backgroundColor: '#fef3c7', color: '#d97706'}}>cases</span></div>
-                </div>
-                <div className="stat-card">
-                  <div className="stat-title">Completed</div>
-                  <div className="stat-value"><span className="stat-number" style={{color: '#059669'}}>{completed}</span><span className="stat-badge" style={{backgroundColor: '#d1fae5', color: '#059669'}}>cases</span></div>
-                </div>
-                <div className="stat-card">
-                  <div className="stat-title">Out of SLA</div>
-                  <div className="stat-value"><span className="stat-number" style={{color: '#dc2626'}}>{outOfSlaCases.length}</span><span className="stat-badge" style={{backgroundColor: '#fee2e2', color: '#dc2626'}}>cases</span></div>
-                </div>
+                <div className="stat-card"><div className="stat-title">Total Cases</div><div className="stat-value"><span className="stat-number">{totalCases}</span><span className="stat-badge badge-grey">cases</span></div></div>
+                <div className="stat-card"><div className="stat-title">In Progress</div><div className="stat-value"><span className="stat-number" style={{color: '#d97706'}}>{inProgress}</span><span className="stat-badge badge-yellow">cases</span></div></div>
+                <div className="stat-card"><div className="stat-title">Completed</div><div className="stat-value"><span className="stat-number" style={{color: '#059669'}}>{completed}</span><span className="stat-badge badge-green">cases</span></div></div>
+                <div className="stat-card"><div className="stat-title">Out of SLA</div><div className="stat-value"><span className="stat-number" style={{color: '#dc2626'}}>{outOfSlaCases.length}</span><span className="stat-badge badge-red">cases</span></div></div>
               </div>
 
               <div className="card">
                 <h3 className="card-header">Data Synchronization</h3>
                 <p className="card-subtitle">Upload your Excel workbook (.xlsx) to sync data.</p>
                 <div className="upload-area">
-                  <label className="btn-upload">
-                    Upload Excel
-                    <input type="file" accept=".xlsx, .xls" onChange={handleMasterUpload} disabled={uploading} style={{ display: 'none' }} />
-                  </label>
+                  <label className="btn-upload">Upload Excel<input type="file" accept=".xlsx, .xls" onChange={handleMasterUpload} disabled={uploading} style={{ display: 'none' }} /></label>
                   {uploadMessage && <span className="upload-msg" style={{ color: uploadMessage.includes('Error') ? '#dc2626' : '#059669' }}>{uploadMessage}</span>}
                 </div>
               </div>
@@ -629,10 +722,7 @@ function Dashboard({ userEmail, onSignOut }) {
                         const days = calculateBusinessDays(c.sla_due_date);
                         return (
                           <div key={c.case_number} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', backgroundColor: '#f8fafc', borderRadius: '8px' }}>
-                            <div>
-                              <div style={{ fontWeight: 600, fontSize: '14px' }}>{c.case_number}</div>
-                              <div style={{ fontSize: '12px', color: '#64748b' }}>{c.pic} | {c.country}</div>
-                            </div>
+                            <div><div style={{ fontWeight: 600, fontSize: '14px' }}>{c.case_number}</div><div style={{ fontSize: '12px', color: '#64748b' }}>{c.pic} | {c.country}</div></div>
                             <div className="badge badge-red">🔴 {Math.abs(days)} working days overdue</div>
                           </div>
                         );
@@ -651,51 +741,19 @@ function Dashboard({ userEmail, onSignOut }) {
                   <h2>Case Tracker</h2>
                   <p>Search and manage all disciplinary cases.</p>
                 </div>
-                <button onClick={() => setShowCaseForm(!showCaseForm)} className="btn-add-case">
-                  {showCaseForm ? 'Close Form' : '+ Add New Case'}
-                </button>
+                <button onClick={() => setShowCaseForm(!showCaseForm)} className="btn-add-case">{showCaseForm ? 'Close Form' : '+ Add New Case'}</button>
               </div>
 
               {showCaseForm && (
                 <form onSubmit={handleAddCase} className="add-case-form">
                   <div className="form-grid">
-                    <div className="wip-input-group">
-                      <label>Case Number</label>
-                      <input type="text" value={newCaseNum} onChange={(e) => setNewCaseNum(e.target.value)} required />
-                    </div>
-                    <div className="wip-input-group">
-                      <label>PIC</label>
-                      <input type="text" value={newPic} onChange={(e) => setNewPic(e.target.value)} />
-                    </div>
-                    <div className="wip-input-group">
-                      <label>Country</label>
-                      <input type="text" value={newCountry} onChange={(e) => setNewCountry(e.target.value)} required />
-                    </div>
-                    <div className="wip-input-group">
-                      <label>SLA Due Date</label>
-                      <input type="date" value={newSlaDate} onChange={(e) => setNewSlaDate(e.target.value)} required />
-                    </div>
-                    <div className="wip-input-group">
-                      <label>Priority</label>
-                      <select value={newPriority} onChange={(e) => setNewPriority(e.target.value)}>
-                        <option value="High">High</option>
-                        <option value="Medium">Medium</option>
-                        <option value="Low">Low</option>
-                      </select>
-                    </div>
-                    <div className="wip-input-group">
-                      <label>Status</label>
-                      <select value={newStatus} onChange={(e) => setNewStatus(e.target.value)}>
-                        <option value="IN PROGRESS">IN PROGRESS</option>
-                        <option value="COMPLETED">COMPLETED</option>
-                      </select>
-                    </div>
-                    <div className="wip-input-group">
-                      <label>Stage</label>
-                      <select value={newStage} onChange={(e) => setNewStage(e.target.value)}>
-                        {stages.map(s => <option key={s} value={s}>{s}</option>)}
-                      </select>
-                    </div>
+                    <div className="wip-input-group"><label>Case Number</label><input type="text" value={newCaseNum} onChange={(e) => setNewCaseNum(e.target.value)} required /></div>
+                    <div className="wip-input-group"><label>PIC</label><input type="text" value={newPic} onChange={(e) => setNewPic(e.target.value)} /></div>
+                    <div className="wip-input-group"><label>Country</label><input type="text" value={newCountry} onChange={(e) => setNewCountry(e.target.value)} required /></div>
+                    <div className="wip-input-group"><label>SLA Due Date</label><input type="date" value={newSlaDate} onChange={(e) => setNewSlaDate(e.target.value)} required /></div>
+                    <div className="wip-input-group"><label>Priority</label><select value={newPriority} onChange={(e) => setNewPriority(e.target.value)}><option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option></select></div>
+                    <div className="wip-input-group"><label>Status</label><select value={newStatus} onChange={(e) => setNewStatus(e.target.value)}><option value="IN PROGRESS">IN PROGRESS</option><option value="COMPLETED">COMPLETED</option></select></div>
+                    <div className="wip-input-group"><label>Stage</label><select value={newStage} onChange={(e) => setNewStage(e.target.value)}>{stages.map(s => <option key={s} value={s}>{s}</option>)}</select></div>
                     <button type="submit" className="btn-log" style={{ backgroundColor: '#10b981' }}>Save Case</button>
                   </div>
                 </form>
@@ -703,11 +761,7 @@ function Dashboard({ userEmail, onSignOut }) {
 
               <div className="table-container">
                 <div style={{ padding: '16px', borderBottom: '1px solid #e2e8f0' }}>
-                  <input 
-                    type="text" placeholder="Search cases, PICs, respondents..." value={searchTerm}
-                    onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
-                    style={{ width: '100%', padding: '10px 16px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '14px', outline: 'none' }}
-                  />
+                  <input type="text" placeholder="Search cases, PICs, respondents, complainants..." value={searchTerm} onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }} style={{ width: '100%', padding: '10px 16px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '14px', outline: 'none' }} />
                 </div>
                 
                 {loading ? (
@@ -717,7 +771,7 @@ function Dashboard({ userEmail, onSignOut }) {
                     <table className="table">
                       <thead>
                         <tr>
-                          <th>Case Number</th><th>PIC</th><th>Status</th><th>SLA</th><th style={{ textAlign: 'center', width: '60px' }}>Resp</th><th style={{ width: '140px' }}>Last Modified</th><th style={{ width: '120px' }}>Actions</th>
+                          <th>Case Number</th><th>PIC</th><th>Status</th><th>SLA</th><th style={{ textAlign: 'center', width: '60px' }}>Resp</th><th style={{ width: '140px' }}>Last Modified</th><th style={{ width: '80px' }}>Actions</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -731,25 +785,15 @@ function Dashboard({ userEmail, onSignOut }) {
                               <tr className={selectedCase === c.case_number ? 'selected' : ''}>
                                 <td style={{ fontWeight: 600, color: '#0f172a' }}>{c.case_number}</td>
                                 <td>{c.pic || '—'}</td>
-                                <td>
-                                  <span className={`badge ${c.case_status === 'IN PROGRESS' ? 'badge-blue' : 'badge-green'}`}>{c.case_status}</span>
-                                </td>
+                                <td><span className={`badge ${c.case_status === 'IN PROGRESS' ? 'badge-blue' : 'badge-green'}`}>{c.case_status}</span></td>
                                 <td>
                                   {c.case_status !== 'IN PROGRESS' ? '—' : (
-                                    <span style={{ fontWeight: 600, color: isBreached ? '#dc2626' : '#059669' }}>
-                                      {isBreached ? `🔴 ${Math.abs(slaDays)}wd` : `🟢 ${slaDays}wd`}
-                                    </span>
+                                    <span style={{ fontWeight: 600, color: isBreached ? '#dc2626' : '#059669' }}>{isBreached ? `🔴 ${Math.abs(slaDays)}wd` : `🟢 ${slaDays}wd`}</span>
                                   )}
                                 </td>
                                 <td style={{ textAlign: 'center', fontWeight: 600, color: respondentCount > 0 ? '#2563eb' : '#94a3b8' }}>{respondentCount}</td>
-                                <td>
-                                  <div style={{ fontSize: '12px', fontWeight: 500, color: '#334155' }}>{modifierName}</div>
-                                  <div style={{ fontSize: '11px', color: '#94a3b8' }}>{formatTimeAgo(c.last_modified)}</div>
-                                </td>
-                                <td>
-                                  <button onClick={() => handleCaseClick(c.case_number)} className="btn-action">{selectedCase === c.case_number ? 'Hide' : 'View'}</button>
-                                  {c.case_status === 'IN PROGRESS' && <button onClick={() => handleUpdateStatus(c.case_number, 'COMPLETED')} className="btn-action btn-complete">✓</button>}
-                                </td>
+                                <td><div style={{ fontSize: '12px', fontWeight: 500, color: '#334155' }}>{modifierName}</div><div style={{ fontSize: '11px', color: '#94a3b8' }}>{formatTimeAgo(c.last_modified)}</div></td>
+                                <td><button onClick={() => handleCaseClick(c.case_number)} className="btn-action">{selectedCase === c.case_number ? 'Hide' : 'View'}</button></td>
                               </tr>
                               
                               {selectedCase === c.case_number && (
@@ -760,7 +804,7 @@ function Dashboard({ userEmail, onSignOut }) {
                                         <div>
                                           <span className="expanded-label">CASE DETAILS</span>
                                           <div className="expanded-value">{c.case_number}</div>
-                                          <div className="expanded-sub">Country: {c.country || '—'} | Priority: {c.priority || '—'} | Stage: {c.stage || '—'}</div>
+                                          <div className="expanded-sub">Priority: {c.priority || '—'} | Stage: {c.stage || '—'}</div>
                                         </div>
                                         <div style={{ textAlign: 'right' }}>
                                           <span className="expanded-label">SLA DUE DATE</span>
@@ -769,30 +813,28 @@ function Dashboard({ userEmail, onSignOut }) {
                                         </div>
                                       </div>
                                       
+                                      <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+                                        {c.case_status === 'IN PROGRESS' && <button onClick={() => handleUpdateStatus(c.case_number, 'COMPLETED')} className="btn-action btn-success">Complete Case</button>}
+                                        {c.case_status === 'COMPLETED' && <button onClick={() => handleUpdateStatus(c.case_number, 'IN PROGRESS')} className="btn-action btn-warning">Reactivate Case</button>}
+                                      </div>
+
                                       <div className="section-divider">
                                         <div className="section-title">
                                           <span>⏳ WIP Tracker (Daily Actions)</span>
-                                          <button onClick={() => setShowWipForm(!showWipForm)} className="btn-action btn-purple" style={{ color: 'white' }}>{showWipForm ? 'Cancel' : '+ Log Action'}</button>
+                                          {!showWipForm && <button onClick={() => { setEditingWipId(null); setShowWipForm(true); }} className="btn-action btn-purple" style={{ color: 'white' }}>+ Log Action</button>}
                                         </div>
 
                                         {showWipForm && (
                                           <form onSubmit={handleAddWIP} className="wip-form">
-                                            <div className="wip-input-group">
-                                              <label>Action Type</label>
-                                              <select value={wipActionType} onChange={(e) => setWipActionType(e.target.value)} required>
-                                                <option value="">Select...</option>
-                                                {mappingRules.map(rule => <option key={rule.id} value={rule.action_type}>{rule.action_type}</option>)}
-                                              </select>
+                                            <div className="wip-input-group"><label>Action Type</label><select value={wipActionType} onChange={(e) => setWipActionType(e.target.value)} required><option value="">Select...</option>{mappingRules.map(rule => <option key={rule.id} value={rule.action_type}>{rule.action_type}</option>)}</select></div>
+                                            <div className="wip-input-group"><label>Description</label><input type="text" value={wipDesc} onChange={(e) => setWipDesc(e.target.value)} required /></div>
+                                            <div className="wip-input-group"><label>Date Sent</label><input type="date" value={wipDateSent} onChange={(e) => setWipDateSent(e.target.value)} required /></div>
+                                            <div className="wip-input-group"><label>SLA Days</label><input type="number" value={wipSlaDays} onChange={(e) => setWipSlaDays(parseInt(e.target.value) || 2)} required /></div>
+                                            <div className="wip-input-group"><label>Notes / Replies</label><textarea value={wipNotes} onChange={(e) => setWipNotes(e.target.value)} rows="1" placeholder="e.g., Reply 1 (Date)..."></textarea></div>
+                                            <div style={{ display: 'flex', gap: '4px' }}>
+                                              <button type="submit" className="btn-log">{editingWipId ? 'Update' : 'Log'}</button>
+                                              <button type="button" onClick={resetWipForm} className="btn-action">Cancel</button>
                                             </div>
-                                            <div className="wip-input-group">
-                                              <label>Description</label>
-                                              <input type="text" value={wipDesc} onChange={(e) => setWipDesc(e.target.value)} required />
-                                            </div>
-                                            <div className="wip-input-group">
-                                              <label>Date Sent</label>
-                                              <input type="date" value={wipDateSent} onChange={(e) => setWipDateSent(e.target.value)} />
-                                            </div>
-                                            <button type="submit" className="btn-log">Log</button>
                                           </form>
                                         )}
 
@@ -803,20 +845,28 @@ function Dashboard({ userEmail, onSignOut }) {
                                             {wipList.map((w, i) => {
                                               const wipSlaDays = calculateBusinessDays(w.expiry_date);
                                               return (
-                                                <div key={i} className="list-item">
+                                                <div key={w.id} className={`list-item ${w.status === 'Done' ? 'done' : ''}`}>
                                                   <div className="step-circle">{i + 1}</div>
                                                   <div className="item-content">
-                                                    <div className="item-title">{w.action_type}</div>
+                                                    <div className="item-title">{w.action_type} {w.status === 'Done' && <span className="badge badge-green" style={{ marginLeft: '4px' }}>Done</span>}</div>
                                                     <div className="item-sub">{w.description}</div>
+                                                    {w.notes && <div className="item-sub" style={{ marginTop: '4px', color: '#475569', fontStyle: 'italic' }}>Notes: {w.notes}</div>}
+                                                    <div className="item-sub" style={{ marginTop: '4px' }}>By: {w.pic?.split('@')[0] || '—'} | Logged: {formatDateTime(w.date_sent)} | Modified: {formatTimeAgo(w.last_modified)}</div>
                                                   </div>
                                                   <div className="item-meta">
                                                     <div className="expanded-label">Stage</div>
                                                     <span className="badge badge-blue">{w.stage_auto || '—'}</span>
                                                   </div>
                                                   <div className="item-meta">
-                                                    <div className="expanded-label">SLA</div>
+                                                    <div className="expanded-label">SLA Timer</div>
                                                     <span style={{ fontWeight: 600, color: wipSlaDays < 0 ? '#dc2626' : '#059669' }}>{wipSlaDays < 0 ? `🔴 ${Math.abs(wipSlaDays)}wd` : `🟢 ${wipSlaDays}wd`}</span>
                                                   </div>
+                                                  {w.status !== 'Done' && (
+                                                    <div className="item-actions">
+                                                      <button onClick={() => handleEditWip(w)} className="btn-action">Edit</button>
+                                                      <button onClick={() => handleCompleteWip(w.id)} className="btn-action btn-success">Complete</button>
+                                                    </div>
+                                                  )}
                                                 </div>
                                               );
                                             })}
@@ -832,9 +882,10 @@ function Dashboard({ userEmail, onSignOut }) {
                                           <div>
                                             {daList.map((da, i) => {
                                               const colors = getActionColor(da.current_action);
+                                              const isExpanded = expandedDAs[da.id];
                                               return (
-                                                <div key={i} style={{ border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px', marginBottom: '12px' }}>
-                                                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
+                                                <div key={da.id} style={{ border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px', marginBottom: '12px' }}>
+                                                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
                                                     <div>
                                                       <span className="expanded-label">Respondent: </span>
                                                       <span className="item-title">{da.respondent_name || '—'}</span>
@@ -846,32 +897,37 @@ function Dashboard({ userEmail, onSignOut }) {
                                                     </div>
                                                   </div>
                                                   
-                                                  <div className="expanded-label">Action Timeline</div>
-                                                  {da.action_history && da.action_history.length > 0 ? (
-                                                    <div>
-                                                      {da.action_history.map((h, idx) => {
+                                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', padding: '8px', backgroundColor: '#f8fafc', borderRadius: '6px' }} onClick={() => toggleExpandDA(da.id)}>
+                                                    <span className="expanded-label" style={{ margin: 0 }}>Action Timeline ({da.action_history?.length || 0})</span>
+                                                    <span style={{ fontSize: '12px', color: '#64748b' }}>{isExpanded ? '▲ Hide' : '▼ Show'}</span>
+                                                  </div>
+
+                                                  {isExpanded && (
+                                                    <div style={{ marginTop: '8px' }}>
+                                                      {da.action_history && da.action_history.map((h, idx) => {
                                                         const hColors = getActionColor(h.action);
                                                         return (
                                                           <div key={idx} className="list-item">
                                                             <div className="step-circle">{h.step}</div>
                                                             <div className="item-content">
                                                               <span className="badge" style={{ backgroundColor: hColors.bg, color: hColors.text }}>{h.action || '—'}</span>
-                                                            </div>
-                                                            <div className="item-meta">
-                                                              <span className="item-sub">{h.date || 'No date'}</span>
+                                                              <div className="item-sub" style={{ marginTop: '4px' }}>{h.date || 'No date'}</div>
+                                                              {h.added_by && <div className="item-sub" style={{ fontSize: '10px' }}>Added by: {h.added_by?.split('@')[0]} on {formatDateTime(h.added_at)}</div>}
                                                             </div>
                                                           </div>
                                                         );
                                                       })}
-                                                    </div>
-                                                  ) : (
-                                                    <div className="list-item">
-                                                      <div className="item-content">
-                                                        <span className="badge" style={{ backgroundColor: colors.bg, color: colors.text }}>{da.current_action || '—'}</span>
-                                                      </div>
-                                                      <div className="item-meta">
-                                                        <span className="item-sub">{da.execution_date || 'No date'}</span>
-                                                      </div>
+
+                                                      {addingDaFor === da.id ? (
+                                                        <form onSubmit={(e) => handleAddDaAction(e, da.id)} style={{ marginTop: '8px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                                                          <input type="text" placeholder="Action Name" value={newDaAction} onChange={(e) => setNewDaAction(e.target.value)} required style={{ flex: 1, minWidth: '150px', padding: '6px', border: '1px solid #e2e8f0', borderRadius: '6px' }} />
+                                                          <input type="date" value={newDaDate} onChange={(e) => setNewDaDate(e.target.value)} style={{ padding: '6px', border: '1px solid #e2e8f0', borderRadius: '6px' }} />
+                                                          <button type="submit" className="btn-log" style={{ backgroundColor: '#10b981' }}>Add</button>
+                                                          <button type="button" onClick={() => setAddingDaFor(null)} className="btn-action">Cancel</button>
+                                                        </form>
+                                                      ) : (
+                                                        <button onClick={() => setAddingDaFor(da.id)} className="btn-action" style={{ marginTop: '8px' }}>+ Add Action</button>
+                                                      )}
                                                     </div>
                                                   )}
                                                 </div>
@@ -917,13 +973,11 @@ function Dashboard({ userEmail, onSignOut }) {
                   <ChartRow label="Completed" value={completed} total={totalCases} color="#10b981" />
                   <ChartRow label="Cancelled" value={cases.filter(c => c.case_status === 'CANCELLED').length} total={totalCases} color="#ef4444" />
                 </div>
-
                 <div className="card">
                   <h3 className="card-header">SLA Compliance (Active Cases)</h3>
                   <ChartRow label="Within SLA" value={inProgress - outOfSlaCases.length} total={inProgress} color="#10b981" />
                   <ChartRow label="Out of SLA" value={outOfSlaCases.length} total={inProgress} color="#ef4444" />
                 </div>
-
                 <div className="card">
                   <h3 className="card-header">Priority Distribution</h3>
                   <ChartRow label="High Priority" value={cases.filter(c => c.priority === 'High').length} total={totalCases} color="#ef4444" />
