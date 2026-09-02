@@ -61,7 +61,6 @@ const calculatePriority = (slaDate) => {
   return 'Low';
 };
 
-// Format exact date and time using local timezone
 const formatDateTime = (timestamp) => {
   if (!timestamp) return '—';
   const date = new Date(timestamp);
@@ -70,18 +69,6 @@ const formatDateTime = (timestamp) => {
     hour: '2-digit', minute: '2-digit', 
     timeZone: 'Asia/Kuala_Lumpur' 
   });
-};
-
-const formatTimeAgo = (timestamp) => {
-  if (!timestamp) return '—';
-  const date = new Date(timestamp);
-  const now = new Date();
-  const diff = Math.floor((now - date) / 1000);
-  if (diff < 60) return 'Just now';
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-  if (diff < 172800) return 'Yesterday';
-  return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
 };
 
 function App() {
@@ -143,15 +130,14 @@ function Dashboard({ userEmail, onSignOut }) {
   const pageSize = 25;
 
   const [sortConfig, setSortConfig] = useState({ key: 'sla_due_date', direction: 'ascending' });
+  const [filters, setFilters] = useState({ pic: '', status: '', da_in_force: '' });
 
-  // Add Case Form State (simplified - no priority, no stage, SLA auto-calculated)
   const [showCaseForm, setShowCaseForm] = useState(false);
   const [newCaseNum, setNewCaseNum] = useState('');
   const [newPic, setNewPic] = useState('');
   const [newCountry, setNewCountry] = useState('');
   const [newSlaDays, setNewSlaDays] = useState(20);
 
-  // WIP Form State
   const [wipActionType, setWipActionType] = useState('');
   const [wipDesc, setWipDesc] = useState('');
   const [wipDateSent, setWipDateSent] = useState(new Date().toISOString().split('T')[0]);
@@ -159,22 +145,29 @@ function Dashboard({ userEmail, onSignOut }) {
   const [wipNotes, setWipNotes] = useState('');
   const [editingWipId, setEditingWipId] = useState(null);
 
-  // DA Add Action State
   const [addingDaFor, setAddingDaFor] = useState(null);
   const [newDaAction, setNewDaAction] = useState('');
   const [newDaDate, setNewDaDate] = useState(new Date().toISOString().split('T')[0]);
   const [expandedDAs, setExpandedDAs] = useState({});
   const [newViolation, setNewViolation] = useState({});
-
-  // Add Complainant/Respondent State
-  const [showAddPersonForm, setShowAddPersonForm] = useState(null); // 'complainant' | 'respondent' | null
+  
+  const [showAddPersonForm, setShowAddPersonForm] = useState(null);
   const [newPersonName, setNewPersonName] = useState('');
   const [newPersonId, setNewPersonId] = useState('');
   const [newPersonCountry, setNewPersonCountry] = useState('');
 
+  const [editingDaAction, setEditingDaAction] = useState(null);
+  const [editDaActionName, setEditDaActionName] = useState('');
+  const [editDaActionDate, setEditDaActionDate] = useState('');
+  const [addingSubAction, setAddingSubAction] = useState(null);
+  const [newSubActionDesc, setNewSubActionDesc] = useState('');
+  const [newSubActionDate, setNewSubActionDate] = useState(new Date().toISOString().split('T')[0]);
+
+  const [hideRespondents, setHideRespondents] = useState(true);
+
   const fetchCases = async () => {
     setLoading(true);
-    const { data, error } = await supabase.from('cases').select('*, disciplinary_actions(respondent_name, respondent_id, complainant_name, complainant_id, current_action, violations), wip_actions(status)').order('sla_due_date', { ascending: true });
+    const { data, error } = await supabase.from('cases').select('*, disciplinary_actions(*), wip_actions(status)').order('sla_due_date', { ascending: true });
     if (error) console.error('Error:', error);
     else setCases(data);
     setLoading(false);
@@ -336,32 +329,25 @@ function Dashboard({ userEmail, onSignOut }) {
     setEditingWipId(null);
     setAddingDaFor(null);
     setShowAddPersonForm(null);
+    setHideRespondents(true);
     const { data: daData } = await supabase.from('disciplinary_actions').select('*').eq('case_number', caseNum);
     const { data: wipData } = await supabase.from('wip_actions').select('*').eq('case_number', caseNum).order('date_sent', { ascending: false });
     setDaList(daData || []); setWipList(wipData || []);
   };
 
-  // --- ADD CASE (Simplified: No Priority, No Stage, SLA auto-calculated) ---
   const handleAddCase = async (e) => {
     e.preventDefault();
     const today = new Date().toISOString().split('T')[0];
     const slaDate = addBusinessDays(today, newSlaDays);
     const priority = calculatePriority(slaDate);
-    
     const { error } = await supabase.from('cases').insert([{ 
       case_number: newCaseNum, pic: newPic, country: newCountry, case_status: 'IN PROGRESS', 
       sla_due_date: slaDate, priority: priority, stage: 'Stage 1', created_on: today
     }]);
-    if (error) {
-      alert('Error saving case: ' + error.message);
-    } else {
-      setShowCaseForm(false);
-      setNewCaseNum(''); setNewPic(''); setNewCountry(''); setNewSlaDays(20);
-      fetchCases(); 
-    }
+    if (error) alert('Error saving case: ' + error.message);
+    else { setShowCaseForm(false); setNewCaseNum(''); setNewPic(''); setNewCountry(''); setNewSlaDays(20); fetchCases(); }
   };
 
-  // --- COMPLETE / REACTIVATE CASE ---
   const handleCompleteCase = async (caseNum) => {
     const { error } = await supabase.from('cases').update({ 
       case_status: 'COMPLETED', date_completed: new Date().toISOString().split('T')[0], modified_by_email: userEmail 
@@ -374,13 +360,12 @@ function Dashboard({ userEmail, onSignOut }) {
     const today = new Date().toISOString().split('T')[0];
     const newSlaDate = addBusinessDays(today, STANDARD_CASE_SLA_DAYS);
     const { error } = await supabase.from('cases').update({ 
-      case_status: 'IN PROGRESS', date_completed: null, sla_due_date: newSlaDate, priority: calculatePriority(newSlaDate), modified_by_email: userEmail 
+      case_status: 'IN PROGRESS', date_completed: null, sla_due_date: newSlaDate, priority: calculatePriority(newSlaDate), modified_by_email: userEmail, reactivated_at: new Date().toISOString()
     }).eq('case_number', caseNum);
     if (error) alert('Error reactivating case: ' + error.message);
     else fetchCases();
   };
 
-  // --- WIP LOGIC ---
   const resetWipForm = () => {
     setWipActionType(''); setWipDesc(''); setWipDateSent(new Date().toISOString().split('T')[0]); setWipSlaDays(2); setWipNotes(''); setEditingWipId(null); setShowWipForm(false);
   };
@@ -390,13 +375,11 @@ function Dashboard({ userEmail, onSignOut }) {
     const rule = mappingRules.find(r => r.action_type === wipActionType);
     let stageToAssign = rule?.default_stage || null;
     let slaDays = Math.max(1, Math.min(100, wipSlaDays || rule?.default_sla_days || 2));
-
     if (rule && rule.initial_stage && rule.concluding_stage) {
       const currentCase = cases.find(c => c.case_number === selectedCase);
       const currentStageNum = parseInt(currentCase?.stage?.replace('Stage ', '') || '0', 10);
       stageToAssign = currentStageNum >= 6 ? rule.concluding_stage : rule.initial_stage;
     }
-    
     let expiryDate = addBusinessDays(wipDateSent, slaDays);
 
     if (editingWipId) {
@@ -408,13 +391,13 @@ function Dashboard({ userEmail, onSignOut }) {
     } else {
       const { error } = await supabase.from('wip_actions').insert([{ 
         case_number: selectedCase, action_type: wipActionType, description: wipDesc, stage_auto: stageToAssign,
-        date_sent: wipDateSent, sla_days: slaDays, expiry_date: expiryDate, status: 'Pending', notes: wipNotes, pic: userEmail,
-        last_modified: new Date().toISOString()
+        date_sent: wipDateSent, sla_days: slaDays, expiry_date: expiryDate, status: 'Pending', notes: wipNotes, pic: userEmail, last_modified: new Date().toISOString()
       }]);
       if (error) alert('Error logging WIP: ' + error.message);
     }
 
-    if (stageToAssign) await supabase.from('cases').update({ stage: stageToAssign, modified_by_email: userEmail }).eq('case_number', selectedCase);
+    await supabase.from('cases').update({ modified_by_email: userEmail, last_modified: new Date().toISOString() }).eq('case_number', selectedCase);
+    if (stageToAssign) await supabase.from('cases').update({ stage: stageToAssign }).eq('case_number', selectedCase);
     
     const { data: newWipData } = await supabase.from('wip_actions').select('*').eq('case_number', selectedCase).order('date_sent', { ascending: false });
     setWipList(newWipData || []);
@@ -440,41 +423,67 @@ function Dashboard({ userEmail, onSignOut }) {
     else {
       const { data: newWipData } = await supabase.from('wip_actions').select('*').eq('case_number', selectedCase).order('date_sent', { ascending: false });
       setWipList(newWipData || []);
+      await supabase.from('cases').update({ modified_by_email: userEmail, last_modified: new Date().toISOString() }).eq('case_number', selectedCase);
       fetchCases();
     }
   };
 
-  // --- DA LOGIC ---
+  const refreshDaList = async () => {
+    const { data: newDaData } = await supabase.from('disciplinary_actions').select('*').eq('case_number', selectedCase);
+    setDaList(newDaData || []);
+    await supabase.from('cases').update({ modified_by_email: userEmail, last_modified: new Date().toISOString() }).eq('case_number', selectedCase);
+    fetchCases();
+  };
+
   const handleAddDaAction = async (e, daId) => {
     e.preventDefault();
     const da = daList.find(d => d.id === daId);
     if (!da) return;
-    
     const history = da.action_history || [];
-    history.push({ 
-      step: history.length + 1, 
-      action: newDaAction, 
-      date: newDaDate, 
-      added_by: userEmail, 
-      added_at: new Date().toISOString() 
-    });
-
+    history.push({ step: history.length + 1, action: newDaAction, date: newDaDate, added_by: userEmail, added_at: new Date().toISOString(), sub_actions: [] });
     const { error } = await supabase.from('disciplinary_actions').update({ 
-      action_history: history, 
-      current_action: newDaAction, 
-      execution_date: newDaDate,
-      modified_by_email: userEmail,
-      last_modified: new Date().toISOString()
+      action_history: history, current_action: newDaAction, execution_date: newDaDate, modified_by_email: userEmail, last_modified: new Date().toISOString()
     }).eq('id', daId);
-
     if (error) alert('Error adding action: ' + error.message);
     else {
-      const { data: newDaData } = await supabase.from('disciplinary_actions').select('*').eq('case_number', selectedCase);
-      setDaList(newDaData || []);
-      setAddingDaFor(null);
-      setNewDaAction('');
-      setNewDaDate(new Date().toISOString().split('T')[0]);
-      fetchCases();
+      setAddingDaFor(null); setNewDaAction(''); setNewDaDate(new Date().toISOString().split('T')[0]);
+      refreshDaList();
+    }
+  };
+
+  const handleEditDaAction = async (e, daId, stepIndex) => {
+    e.preventDefault();
+    const da = daList.find(d => d.id === daId);
+    const history = [...da.action_history];
+    history[stepIndex].action = editDaActionName;
+    history[stepIndex].date = editDaActionDate;
+    history[stepIndex].modified_by = userEmail;
+    history[stepIndex].modified_at = new Date().toISOString();
+    
+    if (stepIndex === history.length - 1) {
+      await supabase.from('disciplinary_actions').update({ current_action: editDaActionName, execution_date: editDaActionDate }).eq('id', daId);
+    }
+    
+    const { error } = await supabase.from('disciplinary_actions').update({ action_history: history, last_modified: new Date().toISOString() }).eq('id', daId);
+    if (error) alert('Error editing action: ' + error.message);
+    else {
+      setEditingDaAction(null);
+      refreshDaList();
+    }
+  };
+
+  const handleAddSubAction = async (e, daId, stepIndex) => {
+    e.preventDefault();
+    const da = daList.find(d => d.id === daId);
+    const history = [...da.action_history];
+    history[stepIndex].sub_actions = history[stepIndex].sub_actions || [];
+    history[stepIndex].sub_actions.push({ desc: newSubActionDesc, date: newSubActionDate, added_by: userEmail, added_at: new Date().toISOString() });
+    
+    const { error } = await supabase.from('disciplinary_actions').update({ action_history: history, last_modified: new Date().toISOString() }).eq('id', daId);
+    if (error) alert('Error adding journal entry: ' + error.message);
+    else {
+      setAddingSubAction(null); setNewSubActionDesc(''); setNewSubActionDate(new Date().toISOString().split('T')[0]);
+      refreshDaList();
     }
   };
 
@@ -484,110 +493,74 @@ function Dashboard({ userEmail, onSignOut }) {
     const da = daList.find(d => d.id === daId);
     const violations = da.violations || [];
     violations.push(violationText);
-
-    const { error } = await supabase.from('disciplinary_actions').update({ 
-      violations: violations, modified_by_email: userEmail, last_modified: new Date().toISOString()
-    }).eq('id', daId);
-
+    const { error } = await supabase.from('disciplinary_actions').update({ violations: violations, modified_by_email: userEmail, last_modified: new Date().toISOString() }).eq('id', daId);
     if (error) alert('Error adding violation: ' + error.message);
-    else {
-      const { data: newDaData } = await supabase.from('disciplinary_actions').select('*').eq('case_number', selectedCase);
-      setDaList(newDaData || []);
-      setNewViolation(prev => ({ ...prev, [daId]: '' }));
-    }
+    else { refreshDaList(); setNewViolation(prev => ({ ...prev, [daId]: '' })); }
   };
 
   const handleDeleteViolation = async (daId, index) => {
     const da = daList.find(d => d.id === daId);
     const violations = da.violations || [];
     violations.splice(index, 1);
-
-    const { error } = await supabase.from('disciplinary_actions').update({ 
-      violations: violations, modified_by_email: userEmail, last_modified: new Date().toISOString()
-    }).eq('id', daId);
-
+    const { error } = await supabase.from('disciplinary_actions').update({ violations: violations, modified_by_email: userEmail, last_modified: new Date().toISOString() }).eq('id', daId);
     if (error) alert('Error deleting violation: ' + error.message);
-    else {
-      const { data: newDaData } = await supabase.from('disciplinary_actions').select('*').eq('case_number', selectedCase);
-      setDaList(newDaData || []);
-    }
+    else refreshDaList();
   };
 
-  const toggleExpandDA = (daId) => {
-    setExpandedDAs(prev => ({ ...prev, [daId]: !prev[daId] }));
-  };
+  const toggleExpandDA = (daId) => setExpandedDAs(prev => ({ ...prev, [daId]: !prev[daId] }));
 
-  // --- ADD COMPLAINANT / RESPONDENT ---
   const handleAddPerson = async (e) => {
     e.preventDefault();
     const timestamp = Date.now();
     const uniqueKey = `${selectedCase}|${showAddPersonForm}_${timestamp}`;
-    
-    const insertData = {
-      case_number: selectedCase,
-      unique_key: uniqueKey,
-      modified_by_email: userEmail,
-      last_modified: new Date().toISOString()
-    };
-
+    const insertData = { case_number: selectedCase, unique_key: uniqueKey, modified_by_email: userEmail, last_modified: new Date().toISOString() };
     if (showAddPersonForm === 'complainant') {
-      insertData.complainant_name = newPersonName;
-      insertData.complainant_id = newPersonId;
-      insertData.complainant_country = newPersonCountry;
+      insertData.complainant_name = newPersonName; insertData.complainant_id = newPersonId; insertData.complainant_country = newPersonCountry;
     } else {
-      insertData.respondent_name = newPersonName;
-      insertData.respondent_id = newPersonId;
-      insertData.respondent_country = newPersonCountry;
+      insertData.respondent_name = newPersonName; insertData.respondent_id = newPersonId; insertData.respondent_country = newPersonCountry;
     }
-
     const { error } = await supabase.from('disciplinary_actions').insert([insertData]);
-    
-    if (error) {
-      alert('Error adding ' + showAddPersonForm + ': ' + error.message);
-    } else {
-      const { data: newDaData } = await supabase.from('disciplinary_actions').select('*').eq('case_number', selectedCase);
-      setDaList(newDaData || []);
-      setShowAddPersonForm(null);
-      setNewPersonName(''); setNewPersonId(''); setNewPersonCountry('');
-      fetchCases();
+    if (error) alert('Error adding ' + showAddPersonForm + ': ' + error.message);
+    else {
+      setShowAddPersonForm(null); setNewPersonName(''); setNewPersonId(''); setNewPersonCountry('');
+      refreshDaList();
     }
   };
 
-  // --- SORTING LOGIC ---
   const requestSort = (key) => {
     let direction = 'ascending';
-    if (sortConfig.key === key && sortConfig.direction === 'ascending') {
-      direction = 'descending';
-    }
+    if (sortConfig.key === key && sortConfig.direction === 'ascending') direction = 'descending';
     setSortConfig({ key, direction });
   };
 
   const filteredCases = cases.filter(c => {
-    if (!searchTerm) return true;
-    const search = searchTerm.toLowerCase();
-    const matchCase = c.case_number?.toLowerCase().includes(search);
-    const matchPic = c.pic?.toLowerCase().includes(search);
-    const matchCountry = c.country?.toLowerCase().includes(search);
-    const matchRespondent = c.disciplinary_actions?.some(da => da.respondent_name?.toLowerCase().includes(search) || da.respondent_id?.toLowerCase().includes(search));
-    const matchComplainant = c.disciplinary_actions?.some(da => da.complainant_name?.toLowerCase().includes(search) || da.complainant_id?.toLowerCase().includes(search));
-    return matchCase || matchPic || matchCountry || matchRespondent || matchComplainant;
+    if (searchTerm) {
+      const search = searchTerm.toLowerCase();
+      const matchCase = c.case_number?.toLowerCase().includes(search);
+      const matchPic = c.pic?.toLowerCase().includes(search);
+      const matchCountry = c.country?.toLowerCase().includes(search);
+      const matchRespondent = c.disciplinary_actions?.some(da => da.respondent_name?.toLowerCase().includes(search) || da.respondent_id?.toLowerCase().includes(search));
+      const matchComplainant = c.disciplinary_actions?.some(da => da.complainant_name?.toLowerCase().includes(search) || da.complainant_id?.toLowerCase().includes(search));
+      if (!matchCase && !matchPic && !matchCountry && !matchRespondent && !matchComplainant) return false;
+    }
+    
+    if (filters.pic && c.pic !== filters.pic) return false;
+    if (filters.status && c.case_status !== filters.status) return false;
+    if (filters.da_in_force) {
+      const daCount = c.disciplinary_actions?.filter(da => {
+        const action = da.current_action?.toLowerCase() || '';
+        return action.includes('suspend') || action.includes('terminat');
+      }).length || 0;
+      if (filters.da_in_force === 'yes' && daCount === 0) return false;
+      if (filters.da_in_force === 'no' && daCount > 0) return false;
+    }
+    
+    return true;
   });
 
   const sortedCases = React.useMemo(() => {
     let sortableCases = [...filteredCases];
-    if (sortConfig.key === 'da_in_force') {
-      sortableCases.sort((a, b) => {
-        const aCount = a.disciplinary_actions?.filter(da => {
-          const action = da.current_action?.toLowerCase() || '';
-          return action.includes('suspend') || action.includes('terminat');
-        }).length || 0;
-        const bCount = b.disciplinary_actions?.filter(da => {
-          const action = da.current_action?.toLowerCase() || '';
-          return action.includes('suspend') || action.includes('terminat');
-        }).length || 0;
-        return sortConfig.direction === 'ascending' ? aCount - bCount : bCount - aCount;
-      });
-    } else if (sortConfig.key === 'active_wip') {
+    if (sortConfig.key === 'active_wip') {
       sortableCases.sort((a, b) => {
         const aCount = a.wip_actions?.filter(w => w.status === 'Pending').length || 0;
         const bCount = b.wip_actions?.filter(w => w.status === 'Pending').length || 0;
@@ -615,7 +588,7 @@ function Dashboard({ userEmail, onSignOut }) {
     if (!action) return { text: '#64748b', bg: '#f1f5f9' };
     const lower = action.toLowerCase();
     if (lower.includes('terminat')) return { text: '#dc2626', bg: '#fee2e2' };
-    if (lower.includes('suspend')) return { text: '#d97706', bg: '#fef3c7' };
+    if (lower.includes('suspend')) return { text: '#d67706', bg: '#fef3c7' };
     if (lower.includes('release') || lower.includes('issued warning')) return { text: '#059669', bg: '#d1fae5' };
     return { text: '#2563eb', bg: '#dbeafe' };
   };
@@ -671,7 +644,7 @@ function Dashboard({ userEmail, onSignOut }) {
         .main-content { flex: 1; padding: 24px; overflow-y: auto; }
         .page-header { margin-bottom: 24px; display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px; }
         .page-header-text h2 { font-size: 22px; font-weight: 600; margin: 0 0 5px 0; }
-        .page-header-text p { color: '#64748b'; margin: 0; font-size: 13px; }
+        .page-header-text p { color: #64748b; margin: 0; font-size: 13px; }
         .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; margin-bottom: 24px; }
         .card-header { margin-top: 0; margin-bottom: 8px; font-size: 16px; font-weight: 600; }
         .card-subtitle { color: #64748b; font-size: 13px; margin-bottom: 16px; }
@@ -719,10 +692,10 @@ function Dashboard({ userEmail, onSignOut }) {
         .section-divider { border-top: 1px solid #e2e8f0; padding-top: 16px; margin-top: 16px; }
         .section-title { margin: 0 0 12px 0; font-size: 14px; font-weight: 600; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
         .wip-form { background: #f8fafc; padding: 12px; border-radius: 8px; margin-bottom: 12px; display: grid; grid-template-columns: 1fr; gap: 8px; }
-        @media (min-width: 768px) { .wip-form { grid-template-columns: 2fr 2fr 1fr 1fr 2fr auto; align-items: end; } }
+        @media (min-width: 768px) { .wip-form { grid-template-columns: 2fr 2fr 1fr 1fr auto; align-items: end; } .wip-notes-row { grid-column: 1 / -1; } }
         .wip-input-group label { font-size: 10px; color: #64748b; font-weight: 600; display: block; margin-bottom: 2px; }
         .wip-input-group select, .wip-input-group input, .wip-input-group textarea { width: 100%; padding: 6px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 13px; }
-        .wip-input-group textarea { resize: vertical; min-height: 32px; }
+        .wip-input-group textarea { resize: vertical; min-height: 38px; }
         .btn-log { padding: 8px 12px; background-color: #0f172a; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; }
         .list-item { display: flex; align-items: flex-start; gap: 10px; padding: 10px; background-color: #f8fafc; border-radius: 8px; margin-bottom: 8px; flex-wrap: wrap; }
         .list-item.done { opacity: 0.5; background-color: #f1f5f9; }
@@ -741,11 +714,8 @@ function Dashboard({ userEmail, onSignOut }) {
         .chart-fill { height: 100%; border-radius: 6px; transition: width 0.5s ease; }
         .person-form { background: #f8fafc; padding: 12px; border-radius: 8px; margin-bottom: 12px; display: grid; grid-template-columns: 1fr; gap: 8px; }
         @media (min-width: 768px) { .person-form { grid-template-columns: 2fr 2fr 2fr auto; align-items: end; } }
-        @media (max-width: 768px) {
-          .sidebar { position: fixed; left: 0; top: 0; bottom: 0; z-index: 100; box-shadow: 2px 0 10px rgba(0,0,0,0.1); }
-          .sidebar.collapsed { transform: translateX(-100%); width: 260px; }
-          .main-content { padding: 16px; }
-        }
+        .sub-action-form { display: flex; gap: 4px; margin-top: 8px; flex-wrap: wrap; }
+        @media (max-width: 768px) { .sidebar { position: fixed; left: 0; top: 0; bottom: 0; z-index: 100; box-shadow: 2px 0 10px rgba(0,0,0,0.1); } .sidebar.collapsed { transform: translateX(-100%); width: 260px; } .main-content { padding: 16px; } }
       `}</style>
       
       <div className="app-container">
@@ -826,7 +796,7 @@ function Dashboard({ userEmail, onSignOut }) {
               <div className="page-header">
                 <div className="page-header-text">
                   <h2>Case Tracker</h2>
-                  <p>Search and manage all disciplinary cases. Click column headers to sort.</p>
+                  <p>Search, filter, and manage all disciplinary cases. Click "Active WIP" to sort.</p>
                 </div>
                 <button onClick={() => setShowCaseForm(!showCaseForm)} className="btn-add-case">{showCaseForm ? 'Close Form' : '+ Add New Case'}</button>
               </div>
@@ -844,8 +814,23 @@ function Dashboard({ userEmail, onSignOut }) {
               )}
 
               <div className="table-container">
-                <div style={{ padding: '16px', borderBottom: '1px solid #e2e8f0' }}>
-                  <input type="text" placeholder="Search cases, PICs, respondents, complainants..." value={searchTerm} onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }} style={{ width: '100%', padding: '10px 16px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '14px', outline: 'none' }} />
+                <div style={{ padding: '16px', borderBottom: '1px solid #e2e8f0', display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
+                  <input type="text" placeholder="Search cases, PICs, respondents, complainants..." value={searchTerm} onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }} style={{ flex: 1, minWidth: '200px', padding: '10px 16px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '14px', outline: 'none' }} />
+                  <select value={filters.pic} onChange={(e) => setFilters(f => ({ ...f, pic: e.target.value }))} style={{ padding: '10px 16px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '14px' }}>
+                    <option value="">All PICs</option>
+                    {[...new Set(cases.map(c => c.pic).filter(Boolean))].map(pic => <option key={pic} value={pic}>{pic}</option>)}
+                  </select>
+                  <select value={filters.status} onChange={(e) => setFilters(f => ({ ...f, status: e.target.value }))} style={{ padding: '10px 16px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '14px' }}>
+                    <option value="">All Status</option>
+                    <option value="IN PROGRESS">IN PROGRESS</option>
+                    <option value="COMPLETED">COMPLETED</option>
+                    <option value="CANCELLED">CANCELLED</option>
+                  </select>
+                  <select value={filters.da_in_force} onChange={(e) => setFilters(f => ({ ...f, da_in_force: e.target.value }))} style={{ padding: '10px 16px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '14px' }}>
+                    <option value="">All DA Status</option>
+                    <option value="yes">DA In Force</option>
+                    <option value="no">No DA In Force</option>
+                  </select>
                 </div>
                 
                 {loading ? (
@@ -895,7 +880,15 @@ function Dashboard({ userEmail, onSignOut }) {
                                           <div className="expanded-value">{c.case_number}</div>
                                           <div className="expanded-sub">Priority: {c.priority || '—'} | Stage: {c.stage || '—'}</div>
                                           {c.date_completed && <div className="expanded-sub" style={{ color: '#059669', marginTop: '4px' }}>Completed on: {c.date_completed}</div>}
+                                          {c.reactivated_at && <div className="expanded-sub" style={{ color: '#3b82f6', marginTop: '4px' }}>Reactivated on: {formatDateTime(c.reactivated_at)}</div>}
                                           {c.modified_by_email && <div className="expanded-sub" style={{ marginTop: '4px' }}>Last modified by {c.modified_by_email.split('@')[0]} on {formatDateTime(c.last_modified)}</div>}
+                                          {(() => {
+                                            const complainants = [...new Map(c.disciplinary_actions?.filter(da => da.complainant_name).map(da => [da.complainant_name, da])).values()];
+                                            if (complainants.length > 0) {
+                                              return <div className="expanded-sub" style={{ marginTop: '4px' }}>Complainant(s): {complainants.map(comp => `${comp.complainant_name} (${comp.complainant_id || '—'})`).join(', ')}</div>;
+                                            }
+                                            return null;
+                                          })()}
                                         </div>
                                         <div style={{ textAlign: 'right' }}>
                                           <span className="expanded-label">SLA DUE DATE</span>
@@ -935,10 +928,13 @@ function Dashboard({ userEmail, onSignOut }) {
                                             <div className="wip-input-group"><label>Description</label><input type="text" value={wipDesc} onChange={(e) => setWipDesc(e.target.value)} required /></div>
                                             <div className="wip-input-group"><label>Date Sent</label><input type="date" value={wipDateSent} onChange={(e) => setWipDateSent(e.target.value)} required /></div>
                                             <div className="wip-input-group"><label>SLA Days (1-100)</label><input type="number" min="1" max="100" value={wipSlaDays} onChange={(e) => setWipSlaDays(Math.max(1, Math.min(100, parseInt(e.target.value) || 2)))} required /></div>
-                                            <div className="wip-input-group"><label>Notes / Replies</label><textarea value={wipNotes} onChange={(e) => setWipNotes(e.target.value)} rows="1" placeholder="e.g., Reply 1 (Date)..."></textarea></div>
                                             <div style={{ display: 'flex', gap: '4px' }}>
                                               <button type="submit" className="btn-log">{editingWipId ? 'Update' : 'Log'}</button>
                                               <button type="button" onClick={resetWipForm} className="btn-action">Cancel</button>
+                                            </div>
+                                            <div className="wip-input-group wip-notes-row" style={{ gridColumn: '1 / -1' }}>
+                                              <label>Notes / Replies</label>
+                                              <textarea value={wipNotes} onChange={(e) => setWipNotes(e.target.value)} rows="2" placeholder="e.g., Reply 1 (Date)..."></textarea>
                                             </div>
                                           </form>
                                         )}
@@ -969,21 +965,38 @@ function Dashboard({ userEmail, onSignOut }) {
                                       </div>
 
                                       <div className="section-divider">
-                                        <div className="section-title">⚖️ Disciplinary Actions (Respondents)</div>
+                                        <div className="section-title" style={{ cursor: 'pointer' }} onClick={() => setHideRespondents(!hideRespondents)}>
+                                          <span>⚖️ Disciplinary Actions (Respondents) {daList.length > 3 && (hideRespondents ? '▼ Show' : '▲ Hide')}</span>
+                                        </div>
                                         {daList.length === 0 ? (
                                           <div style={{ padding: '16px', textAlign: 'center', backgroundColor: '#f8fafc', borderRadius: '8px', color: '#94a3b8' }}>No respondents linked to this case. Use "+ Add Respondent" above.</div>
                                         ) : (
                                           <div>
-                                            {daList.map((da, i) => {
+                                            {(hideRespondents && daList.length > 3 ? daList.slice(0, 3) : daList).map((da, i) => {
                                               const colors = getActionColor(da.current_action);
                                               const isExpanded = expandedDAs[da.id];
                                               return (
                                                 <div key={da.id} style={{ border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px', marginBottom: '12px' }}>
                                                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
                                                     <div><span className="expanded-label">Respondent: </span><span className="item-title">{da.respondent_name || '—'}</span><span className="item-sub" style={{ marginLeft: '8px' }}>({da.respondent_id || '—'})</span></div>
-                                                    <div style={{ textAlign: 'right' }}><span className="expanded-label">Complainant: </span><span className="item-title">{da.complainant_name || '—'}</span></div>
                                                   </div>
                                                   
+                                                  <div style={{ marginBottom: '12px', padding: '8px', backgroundColor: '#f8fafc', borderRadius: '6px' }}>
+                                                    <div className="expanded-label">Violations</div>
+                                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '4px' }}>
+                                                      {(da.violations || []).map((v, vIdx) => (
+                                                        <span key={vIdx} className="badge badge-red" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                                          {v}
+                                                          <button onClick={() => handleDeleteViolation(da.id, vIdx)} style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontWeight: 'bold', padding: 0 }}>×</button>
+                                                        </span>
+                                                      ))}
+                                                    </div>
+                                                    <div style={{ display: 'flex', gap: '4px', marginTop: '8px' }}>
+                                                      <input type="text" placeholder="Add violation..." value={newViolation[da.id] || ''} onChange={(e) => setNewViolation(prev => ({ ...prev, [da.id]: e.target.value }))} style={{ flex: 1, padding: '6px', border: '1px solid #e2e8f0', borderRadius: '6px' }} />
+                                                      <button onClick={() => handleAddViolation(da.id)} className="btn-action">Add</button>
+                                                    </div>
+                                                  </div>
+
                                                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', padding: '8px', backgroundColor: '#f8fafc', borderRadius: '6px' }} onClick={() => toggleExpandDA(da.id)}>
                                                     <span className="expanded-label" style={{ margin: 0 }}>Action Timeline ({da.action_history?.length || 0})</span>
                                                     <span style={{ fontSize: '12px', color: '#64748b' }}>{isExpanded ? '▲ Hide' : '▼ Show'}</span>
@@ -994,12 +1007,45 @@ function Dashboard({ userEmail, onSignOut }) {
                                                       {da.action_history && da.action_history.map((h, idx) => {
                                                         const hColors = getActionColor(h.action);
                                                         return (
-                                                          <div key={idx} className="list-item">
-                                                            <div className="step-circle">{h.step}</div>
-                                                            <div className="item-content">
-                                                              <span className="badge" style={{ backgroundColor: hColors.bg, color: hColors.text }}>{h.action || '—'}</span>
-                                                              <div className="item-sub" style={{ marginTop: '4px' }}>Date: {h.date || 'No date'}</div>
-                                                              {h.added_by && <div className="item-sub" style={{ fontSize: '10px' }}>Added by: {h.added_by?.split('@')[0]} on {formatDateTime(h.added_at)}</div>}
+                                                          <div key={idx} className="list-item" style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
+                                                            <div style={{ display: 'flex', gap: '10px', width: '100%' }}>
+                                                              <div className="step-circle">{h.step}</div>
+                                                              <div className="item-content">
+                                                                <span className="badge" style={{ backgroundColor: hColors.bg, color: hColors.text }}>{h.action || '—'}</span>
+                                                                <div className="item-sub" style={{ marginTop: '4px' }}>Date: {h.date || 'No date'}</div>
+                                                                {h.added_by && <div className="item-sub" style={{ fontSize: '10px' }}>Added by: {h.added_by?.split('@')[0]} on {formatDateTime(h.added_at)}</div>}
+                                                              </div>
+                                                              <button onClick={() => { setEditingDaAction({ daId: da.id, step: idx }); setEditDaActionName(h.action); setEditDaActionDate(h.date); }} className="btn-action">Edit</button>
+                                                            </div>
+                                                            
+                                                            {editingDaAction && editingDaAction.daId === da.id && editingDaAction.step === idx && (
+                                                              <form onSubmit={(e) => handleEditDaAction(e, da.id, idx)} style={{ width: '100%', display: 'flex', gap: '8px', marginTop: '8px', flexWrap: 'wrap' }}>
+                                                                <input type="text" value={editDaActionName} onChange={(e) => setEditDaActionName(e.target.value)} required style={{ flex: 1, minWidth: '150px', padding: '6px', border: '1px solid #e2e8f0', borderRadius: '6px' }} />
+                                                                <input type="date" value={editDaActionDate} onChange={(e) => setEditDaActionDate(e.target.value)} style={{ padding: '6px', border: '1px solid #e2e8f0', borderRadius: '6px' }} />
+                                                                <button type="submit" className="btn-log" style={{ backgroundColor: '#10b981' }}>Update</button>
+                                                                <button type="button" onClick={() => setEditingDaAction(null)} className="btn-action">Cancel</button>
+                                                              </form>
+                                                            )}
+
+                                                            <div style={{ width: '100%', marginTop: '8px', paddingLeft: '32px', borderLeft: '2px solid #e2e8f0' }}>
+                                                              <div className="expanded-label">Journal / Sub-Actions</div>
+                                                              {h.sub_actions && h.sub_actions.map((sa, saIdx) => (
+                                                                <div key={saIdx} style={{ fontSize: '12px', color: '#475569', marginBottom: '4px', display: 'flex', gap: '8px' }}>
+                                                                  <span>{sa.date}</span> - <span>{sa.desc}</span>
+                                                                  <span style={{ fontSize: '10px', color: '#94a3b8' }}>(by {sa.added_by?.split('@')[0]})</span>
+                                                                </div>
+                                                              ))}
+                                                              
+                                                              {addingSubAction && addingSubAction.daId === da.id && addingSubAction.step === idx ? (
+                                                                <form onSubmit={(e) => handleAddSubAction(e, da.id, idx)} className="sub-action-form">
+                                                                  <input type="text" placeholder="Journal entry (e.g., Sent for approval)" value={newSubActionDesc} onChange={(e) => setNewSubActionDesc(e.target.value)} required style={{ flex: 1, minWidth: '150px', padding: '6px', border: '1px solid #e2e8f0', borderRadius: '6px' }} />
+                                                                  <input type="date" value={newSubActionDate} onChange={(e) => setNewSubActionDate(e.target.value)} style={{ padding: '6px', border: '1px solid #e2e8f0', borderRadius: '6px' }} />
+                                                                  <button type="submit" className="btn-log" style={{ backgroundColor: '#10b981' }}>Add</button>
+                                                                  <button type="button" onClick={() => setAddingSubAction(null)} className="btn-action">Cancel</button>
+                                                                </form>
+                                                              ) : (
+                                                                <button onClick={() => setAddingSubAction({ daId: da.id, step: idx })} className="btn-action" style={{ marginTop: '4px', fontSize: '10px' }}>+ Add Journal Entry</button>
+                                                              )}
                                                             </div>
                                                           </div>
                                                         );
@@ -1017,25 +1063,14 @@ function Dashboard({ userEmail, onSignOut }) {
                                                       )}
                                                     </div>
                                                   )}
-
-                                                  <div style={{ marginTop: '12px', padding: '8px', backgroundColor: '#f8fafc', borderRadius: '6px' }}>
-                                                    <div className="expanded-label">Violations</div>
-                                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '4px' }}>
-                                                      {(da.violations || []).map((v, vIdx) => (
-                                                        <span key={vIdx} className="badge badge-red" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                          {v}
-                                                          <button onClick={() => handleDeleteViolation(da.id, vIdx)} style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontWeight: 'bold', padding: 0 }}>×</button>
-                                                        </span>
-                                                      ))}
-                                                    </div>
-                                                    <div style={{ display: 'flex', gap: '4px', marginTop: '8px' }}>
-                                                      <input type="text" placeholder="Add violation..." value={newViolation[da.id] || ''} onChange={(e) => setNewViolation(prev => ({ ...prev, [da.id]: e.target.value }))} style={{ flex: 1, padding: '6px', border: '1px solid #e2e8f0', borderRadius: '6px' }} />
-                                                      <button onClick={() => handleAddViolation(da.id)} className="btn-action">Add</button>
-                                                    </div>
-                                                  </div>
                                                 </div>
                                               );
                                             })}
+                                            {hideRespondents && daList.length > 3 && (
+                                              <div style={{ textAlign: 'center', padding: '8px', color: '#3b82f6', cursor: 'pointer', fontSize: '13px' }} onClick={() => setHideRespondents(false)}>
+                                                Show {daList.length - 3} more respondents...
+                                              </div>
+                                            )}
                                           </div>
                                         )}
                                       </div>
