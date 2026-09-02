@@ -120,6 +120,7 @@ function Dashboard({ userEmail, onSignOut }) {
   const [uploadMessage, setUploadMessage] = useState('');
   const [activeTab, setActiveTab] = useState('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarHovered, setSidebarHovered] = useState(false);
   const [selectedCase, setSelectedCase] = useState(null);
   const [daList, setDaList] = useState([]);
   const [wipList, setWipList] = useState([]);
@@ -623,6 +624,7 @@ function Dashboard({ userEmail, onSignOut }) {
         .app-container { display: flex; min-height: 100vh; background-color: #f8fafc; color: #0f172a; }
         .sidebar { width: 260px; background-color: #0f172a; color: white; padding: 24px 16px; display: flex; flex-direction: column; transition: width 0.3s ease; flex-shrink: 0; }
         .sidebar.collapsed { width: 80px; }
+        .sidebar.hovered { width: 260px; }
         .sidebar-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 40px; }
         .sidebar-header.collapsed { justify-content: center; }
         .sidebar-header h1 { font-size: 20px; font-weight: 600; margin: 0; white-space: nowrap; }
@@ -719,7 +721,11 @@ function Dashboard({ userEmail, onSignOut }) {
       `}</style>
 
       <div className="app-container">
-        <aside className={`sidebar ${sidebarOpen ? '' : 'collapsed'}`}>
+        <aside
+          className={`sidebar ${sidebarOpen ? '' : 'collapsed'} ${sidebarHovered && !sidebarOpen ? 'hovered' : ''}`}
+          onMouseEnter={() => setSidebarHovered(true)}
+          onMouseLeave={() => setSidebarHovered(false)}
+        >
           <div className={`sidebar-header ${sidebarOpen ? '' : 'collapsed'}`}>
             {sidebarOpen && <h1>SLA Tracker</h1>}
             <button onClick={() => setSidebarOpen(!sidebarOpen)} className="sidebar-toggle">☰</button>
