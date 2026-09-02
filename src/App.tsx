@@ -7,9 +7,8 @@ const supabaseUrl = 'https://yymvagbwxdaxrldrhmtm.supabase.co';
 const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl5bXZhZ2J3eGRheHJsZHJobXRtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY2OTEyMjcsImV4cCI6MjEwMjI2NzIyN30.W6WFGXzR7gMU0ln-vfMIJlsxwctWqnCv5Cb7qW8UXXY';
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-// --- CONFIGURATION ---
 const PUBLIC_HOLIDAYS = [];
-const STANDARD_CASE_SLA_DAYS = 20; // Used for Reactivate Case logic
+const STANDARD_CASE_SLA_DAYS = 20;
 
 const isHoliday = (dateObj) => {
   const dateStr = dateObj.toISOString().split('T')[0];
@@ -62,11 +61,27 @@ const calculatePriority = (slaDate) => {
   return 'Low';
 };
 
-// Format exact date and time (e.g., "28 Aug 2026, 14:30")
+// Format exact date and time using local timezone
 const formatDateTime = (timestamp) => {
   if (!timestamp) return '—';
   const date = new Date(timestamp);
-  return date.toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  return date.toLocaleString('en-GB', { 
+    day: '2-digit', month: 'short', year: 'numeric', 
+    hour: '2-digit', minute: '2-digit', 
+    timeZone: 'Asia/Kuala_Lumpur' 
+  });
+};
+
+const formatTimeAgo = (timestamp) => {
+  if (!timestamp) return '—';
+  const date = new Date(timestamp);
+  const now = new Date();
+  const diff = Math.floor((now - date) / 1000);
+  if (diff < 60) return 'Just now';
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  if (diff < 172800) return 'Yesterday';
+  return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
 };
 
 function App() {
@@ -127,15 +142,14 @@ function Dashboard({ userEmail, onSignOut }) {
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 25;
 
-  // Sorting State
   const [sortConfig, setSortConfig] = useState({ key: 'sla_due_date', direction: 'ascending' });
 
-  // Add Case Form State
+  // Add Case Form State (simplified - no priority, no stage, SLA auto-calculated)
   const [showCaseForm, setShowCaseForm] = useState(false);
   const [newCaseNum, setNewCaseNum] = useState('');
   const [newPic, setNewPic] = useState('');
   const [newCountry, setNewCountry] = useState('');
-  const [newSlaDays, setNewSlaDays] = useState(20); // Replaced SLA Date with SLA Days
+  const [newSlaDays, setNewSlaDays] = useState(20);
 
   // WIP Form State
   const [wipActionType, setWipActionType] = useState('');
@@ -152,9 +166,14 @@ function Dashboard({ userEmail, onSignOut }) {
   const [expandedDAs, setExpandedDAs] = useState({});
   const [newViolation, setNewViolation] = useState({});
 
+  // Add Complainant/Respondent State
+  const [showAddPersonForm, setShowAddPersonForm] = useState(null); // 'complainant' | 'respondent' | null
+  const [newPersonName, setNewPersonName] = useState('');
+  const [newPersonId, setNewPersonId] = useState('');
+  const [newPersonCountry, setNewPersonCountry] = useState('');
+
   const fetchCases = async () => {
     setLoading(true);
-    // Added wip_actions status to count active WIPs
     const { data, error } = await supabase.from('cases').select('*, disciplinary_actions(respondent_name, respondent_id, complainant_name, complainant_id, current_action, violations), wip_actions(status)').order('sla_due_date', { ascending: true });
     if (error) console.error('Error:', error);
     else setCases(data);
@@ -275,9 +294,7 @@ function Dashboard({ userEmail, onSignOut }) {
           }).filter(item => item && item.case_number && item.unique_key);
         }
 
-        if (casesToUpsert.length === 0 && daDataToInsert.length === 0) {
-          setUploadMessage('❌ Error: No valid data found.'); setUploading(false); return;
-        }
+        if (casesToUpsert.length === 0 && daDataToInsert.length === 0) { setUploadMessage('❌ Error: No valid data found.'); setUploading(false); return; }
 
         setUploadMessage('3/5 Syncing Cases...');
         if (casesToUpsert.length > 0) for (let chunk of chunkArray(casesToUpsert, 100)) await supabase.from('cases').upsert(chunk, { onConflict: 'case_number' });
@@ -307,9 +324,7 @@ function Dashboard({ userEmail, onSignOut }) {
         if (errorCount > 0) finalMsg = `⚠️ Completed with ${errorCount} errors. First: ${firstError}`;
         setUploadMessage(finalMsg);
         fetchCases(); setUploading(false);
-      } catch (err) {
-        setUploadMessage(`❌ Unexpected Error: ${err.message}`); setUploading(false);
-      }
+      } catch (err) { setUploadMessage(`❌ Unexpected Error: ${err.message}`); setUploading(false); }
     };
     reader.readAsArrayBuffer(file);
   };
@@ -320,11 +335,13 @@ function Dashboard({ userEmail, onSignOut }) {
     setShowWipForm(false);
     setEditingWipId(null);
     setAddingDaFor(null);
+    setShowAddPersonForm(null);
     const { data: daData } = await supabase.from('disciplinary_actions').select('*').eq('case_number', caseNum);
     const { data: wipData } = await supabase.from('wip_actions').select('*').eq('case_number', caseNum).order('date_sent', { ascending: false });
     setDaList(daData || []); setWipList(wipData || []);
   };
 
+  // --- ADD CASE (Simplified: No Priority, No Stage, SLA auto-calculated) ---
   const handleAddCase = async (e) => {
     e.preventDefault();
     const today = new Date().toISOString().split('T')[0];
@@ -344,6 +361,7 @@ function Dashboard({ userEmail, onSignOut }) {
     }
   };
 
+  // --- COMPLETE / REACTIVATE CASE ---
   const handleCompleteCase = async (caseNum) => {
     const { error } = await supabase.from('cases').update({ 
       case_status: 'COMPLETED', date_completed: new Date().toISOString().split('T')[0], modified_by_email: userEmail 
@@ -371,7 +389,7 @@ function Dashboard({ userEmail, onSignOut }) {
     e.preventDefault();
     const rule = mappingRules.find(r => r.action_type === wipActionType);
     let stageToAssign = rule?.default_stage || null;
-    let slaDays = wipSlaDays || rule?.default_sla_days || 2;
+    let slaDays = Math.max(1, Math.min(100, wipSlaDays || rule?.default_sla_days || 2));
 
     if (rule && rule.initial_stage && rule.concluding_stage) {
       const currentCase = cases.find(c => c.case_number === selectedCase);
@@ -390,7 +408,8 @@ function Dashboard({ userEmail, onSignOut }) {
     } else {
       const { error } = await supabase.from('wip_actions').insert([{ 
         case_number: selectedCase, action_type: wipActionType, description: wipDesc, stage_auto: stageToAssign,
-        date_sent: wipDateSent, sla_days: slaDays, expiry_date: expiryDate, status: 'Pending', notes: wipNotes, pic: userEmail 
+        date_sent: wipDateSent, sla_days: slaDays, expiry_date: expiryDate, status: 'Pending', notes: wipNotes, pic: userEmail,
+        last_modified: new Date().toISOString()
       }]);
       if (error) alert('Error logging WIP: ' + error.message);
     }
@@ -462,7 +481,6 @@ function Dashboard({ userEmail, onSignOut }) {
   const handleAddViolation = async (daId) => {
     const violationText = newViolation[daId];
     if (!violationText) return;
-    
     const da = daList.find(d => d.id === daId);
     const violations = da.violations || [];
     violations.push(violationText);
@@ -499,6 +517,42 @@ function Dashboard({ userEmail, onSignOut }) {
     setExpandedDAs(prev => ({ ...prev, [daId]: !prev[daId] }));
   };
 
+  // --- ADD COMPLAINANT / RESPONDENT ---
+  const handleAddPerson = async (e) => {
+    e.preventDefault();
+    const timestamp = Date.now();
+    const uniqueKey = `${selectedCase}|${showAddPersonForm}_${timestamp}`;
+    
+    const insertData = {
+      case_number: selectedCase,
+      unique_key: uniqueKey,
+      modified_by_email: userEmail,
+      last_modified: new Date().toISOString()
+    };
+
+    if (showAddPersonForm === 'complainant') {
+      insertData.complainant_name = newPersonName;
+      insertData.complainant_id = newPersonId;
+      insertData.complainant_country = newPersonCountry;
+    } else {
+      insertData.respondent_name = newPersonName;
+      insertData.respondent_id = newPersonId;
+      insertData.respondent_country = newPersonCountry;
+    }
+
+    const { error } = await supabase.from('disciplinary_actions').insert([insertData]);
+    
+    if (error) {
+      alert('Error adding ' + showAddPersonForm + ': ' + error.message);
+    } else {
+      const { data: newDaData } = await supabase.from('disciplinary_actions').select('*').eq('case_number', selectedCase);
+      setDaList(newDaData || []);
+      setShowAddPersonForm(null);
+      setNewPersonName(''); setNewPersonId(''); setNewPersonCountry('');
+      fetchCases();
+    }
+  };
+
   // --- SORTING LOGIC ---
   const requestSort = (key) => {
     let direction = 'ascending';
@@ -508,7 +562,6 @@ function Dashboard({ userEmail, onSignOut }) {
     setSortConfig({ key, direction });
   };
 
-  // --- FILTERING & SORTING ---
   const filteredCases = cases.filter(c => {
     if (!searchTerm) return true;
     const search = searchTerm.toLowerCase();
@@ -524,8 +577,14 @@ function Dashboard({ userEmail, onSignOut }) {
     let sortableCases = [...filteredCases];
     if (sortConfig.key === 'da_in_force') {
       sortableCases.sort((a, b) => {
-        const aCount = a.disciplinary_actions?.filter(da => da.current_action?.toLowerCase().includes('suspend') || da.current_action?.toLowerCase().includes('terminat')).length || 0;
-        const bCount = b.disciplinary_actions?.filter(da => da.current_action?.toLowerCase().includes('suspend') || da.current_action?.toLowerCase().includes('terminat')).length || 0;
+        const aCount = a.disciplinary_actions?.filter(da => {
+          const action = da.current_action?.toLowerCase() || '';
+          return action.includes('suspend') || action.includes('terminat');
+        }).length || 0;
+        const bCount = b.disciplinary_actions?.filter(da => {
+          const action = da.current_action?.toLowerCase() || '';
+          return action.includes('suspend') || action.includes('terminat');
+        }).length || 0;
         return sortConfig.direction === 'ascending' ? aCount - bCount : bCount - aCount;
       });
     } else if (sortConfig.key === 'active_wip') {
@@ -534,7 +593,7 @@ function Dashboard({ userEmail, onSignOut }) {
         const bCount = b.wip_actions?.filter(w => w.status === 'Pending').length || 0;
         return sortConfig.direction === 'ascending' ? aCount - bCount : bCount - aCount;
       });
-    } else if (sortConfig.key === 'pic' || sortConfig.key === 'case_status' || sortConfig.key === 'sla_due_date') {
+    } else if (sortConfig.key) {
       sortableCases.sort((a, b) => {
         if (a[sortConfig.key] < b[sortConfig.key]) return sortConfig.direction === 'ascending' ? -1 : 1;
         if (a[sortConfig.key] > b[sortConfig.key]) return sortConfig.direction === 'ascending' ? 1 : -1;
@@ -585,8 +644,7 @@ function Dashboard({ userEmail, onSignOut }) {
         .auth-header p { color: #64748b; margin-top: 5px; font-size: 14px; }
         .form-group { margin-bottom: 16px; }
         .form-group label { display: block; margin-bottom: 6px; font-size: 14px; font-weight: 500; color: #334155; }
-        .form-group input { width: 100%; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 14px; outline: none; transition: border-color 0.2s; }
-        .form-group input:focus { border-color: #3b82f6; }
+        .form-group input { width: 100%; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 14px; outline: none; }
         .error-box { color: #ef4444; font-size: 14px; margin-bottom: 16px; padding: 10px; background-color: #fee2e2; border-radius: 6px; }
         .btn-primary { width: 100%; background-color: #0f172a; color: white; padding: 14px; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 15px; }
         .app-container { display: flex; min-height: 100vh; background-color: #f8fafc; color: #0f172a; }
@@ -613,7 +671,7 @@ function Dashboard({ userEmail, onSignOut }) {
         .main-content { flex: 1; padding: 24px; overflow-y: auto; }
         .page-header { margin-bottom: 24px; display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px; }
         .page-header-text h2 { font-size: 22px; font-weight: 600; margin: 0 0 5px 0; }
-        .page-header-text p { color: #64748b; margin: 0; font-size: 13px; }
+        .page-header-text p { color: '#64748b'; margin: 0; font-size: 13px; }
         .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; margin-bottom: 24px; }
         .card-header { margin-top: 0; margin-bottom: 8px; font-size: 16px; font-weight: 600; }
         .card-subtitle { color: #64748b; font-size: 13px; margin-bottom: 16px; }
@@ -659,7 +717,7 @@ function Dashboard({ userEmail, onSignOut }) {
         .expanded-value { font-weight: 600; font-size: 15px; }
         .expanded-sub { font-size: 12px; color: #64748b; margin-top: 4px; }
         .section-divider { border-top: 1px solid #e2e8f0; padding-top: 16px; margin-top: 16px; }
-        .section-title { margin: 0 0 12px 0; font-size: 14px; font-weight: 600; display: flex; justify-content: space-between; align-items: center; }
+        .section-title { margin: 0 0 12px 0; font-size: 14px; font-weight: 600; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
         .wip-form { background: #f8fafc; padding: 12px; border-radius: 8px; margin-bottom: 12px; display: grid; grid-template-columns: 1fr; gap: 8px; }
         @media (min-width: 768px) { .wip-form { grid-template-columns: 2fr 2fr 1fr 1fr 2fr auto; align-items: end; } }
         .wip-input-group label { font-size: 10px; color: #64748b; font-weight: 600; display: block; margin-bottom: 2px; }
@@ -681,6 +739,8 @@ function Dashboard({ userEmail, onSignOut }) {
         .chart-label { display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 13px; }
         .chart-track { width: 100%; background-color: #f1f5f9; border-radius: 6px; height: 8px; overflow: hidden; }
         .chart-fill { height: 100%; border-radius: 6px; transition: width 0.5s ease; }
+        .person-form { background: #f8fafc; padding: 12px; border-radius: 8px; margin-bottom: 12px; display: grid; grid-template-columns: 1fr; gap: 8px; }
+        @media (min-width: 768px) { .person-form { grid-template-columns: 2fr 2fr 2fr auto; align-items: end; } }
         @media (max-width: 768px) {
           .sidebar { position: fixed; left: 0; top: 0; bottom: 0; z-index: 100; box-shadow: 2px 0 10px rgba(0,0,0,0.1); }
           .sidebar.collapsed { transform: translateX(-100%); width: 260px; }
@@ -766,7 +826,7 @@ function Dashboard({ userEmail, onSignOut }) {
               <div className="page-header">
                 <div className="page-header-text">
                   <h2>Case Tracker</h2>
-                  <p>Search and manage all disciplinary cases.</p>
+                  <p>Search and manage all disciplinary cases. Click column headers to sort.</p>
                 </div>
                 <button onClick={() => setShowCaseForm(!showCaseForm)} className="btn-add-case">{showCaseForm ? 'Close Form' : '+ Add New Case'}</button>
               </div>
@@ -777,7 +837,7 @@ function Dashboard({ userEmail, onSignOut }) {
                     <div className="wip-input-group"><label>Case Number</label><input type="text" value={newCaseNum} onChange={(e) => setNewCaseNum(e.target.value)} required /></div>
                     <div className="wip-input-group"><label>PIC</label><input type="text" value={newPic} onChange={(e) => setNewPic(e.target.value)} /></div>
                     <div className="wip-input-group"><label>Country</label><input type="text" value={newCountry} onChange={(e) => setNewCountry(e.target.value)} required /></div>
-                    <div className="wip-input-group"><label>SLA Days</label><input type="number" min="1" max="100" value={newSlaDays} onChange={(e) => setNewSlaDays(parseInt(e.target.value) || 20)} required /></div>
+                    <div className="wip-input-group"><label>SLA Days (auto-calculates due date)</label><input type="number" min="1" max="100" value={newSlaDays} onChange={(e) => setNewSlaDays(parseInt(e.target.value) || 20)} required /></div>
                     <button type="submit" className="btn-log" style={{ backgroundColor: '#10b981' }}>Save Case</button>
                   </div>
                 </form>
@@ -807,7 +867,10 @@ function Dashboard({ userEmail, onSignOut }) {
                       <tbody>
                         {currentCases.map((c, index) => {
                           const slaDays = calculateBusinessDays(c.sla_due_date);
-                          const daInForce = c.disciplinary_actions?.filter(da => da.current_action?.toLowerCase().includes('suspend') || da.current_action?.toLowerCase().includes('terminat')).length || 0;
+                          const daInForce = c.disciplinary_actions?.filter(da => {
+                            const action = da.current_action?.toLowerCase() || '';
+                            return action.includes('suspend') || action.includes('terminat');
+                          }).length || 0;
                           const activeWip = c.wip_actions?.filter(w => w.status === 'Pending').length || 0;
                           const isBreached = slaDays < 0 && c.case_status === 'IN PROGRESS';
                           return (
@@ -841,10 +904,24 @@ function Dashboard({ userEmail, onSignOut }) {
                                         </div>
                                       </div>
                                       
-                                      <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+                                      <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
                                         {c.case_status === 'IN PROGRESS' && <button onClick={() => handleCompleteCase(c.case_number)} className="btn-action btn-success">Complete Case</button>}
                                         {c.case_status === 'COMPLETED' && <button onClick={() => handleReactivateCase(c.case_number)} className="btn-action btn-warning">Reactivate Case</button>}
+                                        {!showAddPersonForm && <button onClick={() => setShowAddPersonForm('complainant')} className="btn-action">+ Add Complainant</button>}
+                                        {!showAddPersonForm && <button onClick={() => setShowAddPersonForm('respondent')} className="btn-action">+ Add Respondent</button>}
                                       </div>
+
+                                      {showAddPersonForm && (
+                                        <form onSubmit={handleAddPerson} className="person-form">
+                                          <div className="wip-input-group"><label>{showAddPersonForm === 'complainant' ? 'Complainant Name' : 'Respondent Name'}</label><input type="text" value={newPersonName} onChange={(e) => setNewPersonName(e.target.value)} required /></div>
+                                          <div className="wip-input-group"><label>Qnet ID#</label><input type="text" value={newPersonId} onChange={(e) => setNewPersonId(e.target.value)} /></div>
+                                          <div className="wip-input-group"><label>Country</label><input type="text" value={newPersonCountry} onChange={(e) => setNewPersonCountry(e.target.value)} /></div>
+                                          <div style={{ display: 'flex', gap: '4px', alignItems: 'end' }}>
+                                            <button type="submit" className="btn-log" style={{ backgroundColor: '#10b981' }}>Add</button>
+                                            <button type="button" onClick={() => { setShowAddPersonForm(null); setNewPersonName(''); setNewPersonId(''); setNewPersonCountry(''); }} className="btn-action">Cancel</button>
+                                          </div>
+                                        </form>
+                                      )}
 
                                       <div className="section-divider">
                                         <div className="section-title">
@@ -879,7 +956,7 @@ function Dashboard({ userEmail, onSignOut }) {
                                                     <div className="item-title">{w.action_type} {w.status === 'Done' && <span className="badge badge-green" style={{ marginLeft: '4px' }}>Done</span>}</div>
                                                     <div className="item-sub">{w.description}</div>
                                                     {w.notes && <div className="item-sub" style={{ marginTop: '4px', color: '#475569', fontStyle: 'italic' }}>Notes: {w.notes}</div>}
-                                                    <div className="item-sub" style={{ marginTop: '4px' }}>By: {w.pic?.split('@')[0] || '—'} | Logged: {formatDateTime(w.date_sent)} | Modified: {formatDateTime(w.last_modified)}</div>
+                                                    <div className="item-sub" style={{ marginTop: '4px' }}>By: {w.pic?.split('@')[0] || '—'} | Sent: {w.date_sent} | Modified: {formatDateTime(w.last_modified)}</div>
                                                   </div>
                                                   <div className="item-meta"><div className="expanded-label">Stage</div><span className="badge badge-blue">{w.stage_auto || '—'}</span></div>
                                                   <div className="item-meta"><div className="expanded-label">SLA Timer</div><span style={{ fontWeight: 600, color: wipSlaDays < 0 ? '#dc2626' : '#059669' }}>{wipSlaDays < 0 ? `🔴 ${Math.abs(wipSlaDays)}wd` : `🟢 ${wipSlaDays}wd`}</span></div>
@@ -894,7 +971,7 @@ function Dashboard({ userEmail, onSignOut }) {
                                       <div className="section-divider">
                                         <div className="section-title">⚖️ Disciplinary Actions (Respondents)</div>
                                         {daList.length === 0 ? (
-                                          <div style={{ padding: '16px', textAlign: 'center', backgroundColor: '#f8fafc', borderRadius: '8px', color: '#94a3b8' }}>No respondents linked to this case.</div>
+                                          <div style={{ padding: '16px', textAlign: 'center', backgroundColor: '#f8fafc', borderRadius: '8px', color: '#94a3b8' }}>No respondents linked to this case. Use "+ Add Respondent" above.</div>
                                         ) : (
                                           <div>
                                             {daList.map((da, i) => {
