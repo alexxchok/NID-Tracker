@@ -64,10 +64,10 @@ const calculatePriority = (slaDate) => {
 const formatDateTime = (timestamp) => {
   if (!timestamp) return '—';
   const date = new Date(timestamp);
-  return date.toLocaleString('en-GB', { 
-    day: '2-digit', month: 'short', year: 'numeric', 
-    hour: '2-digit', minute: '2-digit', 
-    timeZone: 'Asia/Kuala_Lumpur' 
+  return date.toLocaleString('en-GB', {
+    day: '2-digit', month: 'short', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+    timeZone: 'Asia/Kuala_Lumpur'
   });
 };
 
@@ -150,7 +150,7 @@ function Dashboard({ userEmail, onSignOut }) {
   const [newDaDate, setNewDaDate] = useState(new Date().toISOString().split('T')[0]);
   const [expandedDAs, setExpandedDAs] = useState({});
   const [newViolation, setNewViolation] = useState({});
-  
+
   const [showAddPersonForm, setShowAddPersonForm] = useState(null);
   const [newPersonName, setNewPersonName] = useState('');
   const [newPersonId, setNewPersonId] = useState('');
@@ -165,16 +165,16 @@ function Dashboard({ userEmail, onSignOut }) {
 
   const [hideRespondents, setHideRespondents] = useState(true);
 
-  const fetchCases = async () => {
-    setLoading(true);
+  const fetchCases = async (silent = false) => {
+    if (!silent) setLoading(true);
     const { data, error } = await supabase.from('cases').select('*, disciplinary_actions(*), wip_actions(status)').order('sla_due_date', { ascending: true });
     if (error) console.error('Error:', error);
     else setCases(data);
     setLoading(false);
   };
 
-  useEffect(() => { 
-    fetchCases(); 
+  useEffect(() => {
+    fetchCases();
     supabase.from('mapping_rules').select('*').then(({ data }) => setMappingRules(data || []));
   }, []);
 
@@ -316,7 +316,7 @@ function Dashboard({ userEmail, onSignOut }) {
         if (missingCases.length > 0) finalMsg += `Auto-created ${missingCases.length} missing Cases. `;
         if (errorCount > 0) finalMsg = `⚠️ Completed with ${errorCount} errors. First: ${firstError}`;
         setUploadMessage(finalMsg);
-        fetchCases(); setUploading(false);
+        fetchCases(true); setUploading(false);
       } catch (err) { setUploadMessage(`❌ Unexpected Error: ${err.message}`); setUploading(false); }
     };
     reader.readAsArrayBuffer(file);
@@ -340,30 +340,30 @@ function Dashboard({ userEmail, onSignOut }) {
     const today = new Date().toISOString().split('T')[0];
     const slaDate = addBusinessDays(today, newSlaDays);
     const priority = calculatePriority(slaDate);
-    const { error } = await supabase.from('cases').insert([{ 
-      case_number: newCaseNum, pic: newPic, country: newCountry, case_status: 'IN PROGRESS', 
+    const { error } = await supabase.from('cases').insert([{
+      case_number: newCaseNum, pic: newPic, country: newCountry, case_status: 'IN PROGRESS',
       sla_due_date: slaDate, priority: priority, stage: 'Stage 1', created_on: today
     }]);
     if (error) alert('Error saving case: ' + error.message);
-    else { setShowCaseForm(false); setNewCaseNum(''); setNewPic(''); setNewCountry(''); setNewSlaDays(20); fetchCases(); }
+    else { setShowCaseForm(false); setNewCaseNum(''); setNewPic(''); setNewCountry(''); setNewSlaDays(20); fetchCases(true); }
   };
 
   const handleCompleteCase = async (caseNum) => {
-    const { error } = await supabase.from('cases').update({ 
-      case_status: 'COMPLETED', date_completed: new Date().toISOString().split('T')[0], modified_by_email: userEmail 
+    const { error } = await supabase.from('cases').update({
+      case_status: 'COMPLETED', date_completed: new Date().toISOString().split('T')[0], modified_by_email: userEmail
     }).eq('case_number', caseNum);
     if (error) alert('Error completing case: ' + error.message);
-    else fetchCases();
+    else fetchCases(true);
   };
 
   const handleReactivateCase = async (caseNum) => {
     const today = new Date().toISOString().split('T')[0];
     const newSlaDate = addBusinessDays(today, STANDARD_CASE_SLA_DAYS);
-    const { error } = await supabase.from('cases').update({ 
+    const { error } = await supabase.from('cases').update({
       case_status: 'IN PROGRESS', date_completed: null, sla_due_date: newSlaDate, priority: calculatePriority(newSlaDate), modified_by_email: userEmail, reactivated_at: new Date().toISOString()
     }).eq('case_number', caseNum);
     if (error) alert('Error reactivating case: ' + error.message);
-    else fetchCases();
+    else fetchCases(true);
   };
 
   const resetWipForm = () => {
@@ -383,13 +383,13 @@ function Dashboard({ userEmail, onSignOut }) {
     let expiryDate = addBusinessDays(wipDateSent, slaDays);
 
     if (editingWipId) {
-      const { error } = await supabase.from('wip_actions').update({ 
+      const { error } = await supabase.from('wip_actions').update({
         action_type: wipActionType, description: wipDesc, stage_auto: stageToAssign,
         date_sent: wipDateSent, sla_days: slaDays, expiry_date: expiryDate, notes: wipNotes, pic: userEmail, last_modified: new Date().toISOString()
       }).eq('id', editingWipId);
       if (error) alert('Error updating WIP: ' + error.message);
     } else {
-      const { error } = await supabase.from('wip_actions').insert([{ 
+      const { error } = await supabase.from('wip_actions').insert([{
         case_number: selectedCase, action_type: wipActionType, description: wipDesc, stage_auto: stageToAssign,
         date_sent: wipDateSent, sla_days: slaDays, expiry_date: expiryDate, status: 'Pending', notes: wipNotes, pic: userEmail, last_modified: new Date().toISOString()
       }]);
@@ -398,11 +398,11 @@ function Dashboard({ userEmail, onSignOut }) {
 
     await supabase.from('cases').update({ modified_by_email: userEmail, last_modified: new Date().toISOString() }).eq('case_number', selectedCase);
     if (stageToAssign) await supabase.from('cases').update({ stage: stageToAssign }).eq('case_number', selectedCase);
-    
+
     const { data: newWipData } = await supabase.from('wip_actions').select('*').eq('case_number', selectedCase).order('date_sent', { ascending: false });
     setWipList(newWipData || []);
     resetWipForm();
-    fetchCases();
+    fetchCases(true);
   };
 
   const handleEditWip = (w) => {
@@ -416,7 +416,7 @@ function Dashboard({ userEmail, onSignOut }) {
   };
 
   const handleCompleteWip = async (wipId) => {
-    const { error } = await supabase.from('wip_actions').update({ 
+    const { error } = await supabase.from('wip_actions').update({
       status: 'Done', completed_at: new Date().toISOString(), pic: userEmail, last_modified: new Date().toISOString()
     }).eq('id', wipId);
     if (error) alert('Error completing WIP: ' + error.message);
@@ -424,7 +424,7 @@ function Dashboard({ userEmail, onSignOut }) {
       const { data: newWipData } = await supabase.from('wip_actions').select('*').eq('case_number', selectedCase).order('date_sent', { ascending: false });
       setWipList(newWipData || []);
       await supabase.from('cases').update({ modified_by_email: userEmail, last_modified: new Date().toISOString() }).eq('case_number', selectedCase);
-      fetchCases();
+      fetchCases(true);
     }
   };
 
@@ -432,7 +432,7 @@ function Dashboard({ userEmail, onSignOut }) {
     const { data: newDaData } = await supabase.from('disciplinary_actions').select('*').eq('case_number', selectedCase);
     setDaList(newDaData || []);
     await supabase.from('cases').update({ modified_by_email: userEmail, last_modified: new Date().toISOString() }).eq('case_number', selectedCase);
-    fetchCases();
+    fetchCases(true);
   };
 
   const handleAddDaAction = async (e, daId) => {
@@ -441,7 +441,7 @@ function Dashboard({ userEmail, onSignOut }) {
     if (!da) return;
     const history = da.action_history || [];
     history.push({ step: history.length + 1, action: newDaAction, date: newDaDate, added_by: userEmail, added_at: new Date().toISOString(), sub_actions: [] });
-    const { error } = await supabase.from('disciplinary_actions').update({ 
+    const { error } = await supabase.from('disciplinary_actions').update({
       action_history: history, current_action: newDaAction, execution_date: newDaDate, modified_by_email: userEmail, last_modified: new Date().toISOString()
     }).eq('id', daId);
     if (error) alert('Error adding action: ' + error.message);
@@ -459,11 +459,11 @@ function Dashboard({ userEmail, onSignOut }) {
     history[stepIndex].date = editDaActionDate;
     history[stepIndex].modified_by = userEmail;
     history[stepIndex].modified_at = new Date().toISOString();
-    
+
     if (stepIndex === history.length - 1) {
       await supabase.from('disciplinary_actions').update({ current_action: editDaActionName, execution_date: editDaActionDate }).eq('id', daId);
     }
-    
+
     const { error } = await supabase.from('disciplinary_actions').update({ action_history: history, last_modified: new Date().toISOString() }).eq('id', daId);
     if (error) alert('Error editing action: ' + error.message);
     else {
@@ -478,7 +478,7 @@ function Dashboard({ userEmail, onSignOut }) {
     const history = [...da.action_history];
     history[stepIndex].sub_actions = history[stepIndex].sub_actions || [];
     history[stepIndex].sub_actions.push({ desc: newSubActionDesc, date: newSubActionDate, added_by: userEmail, added_at: new Date().toISOString() });
-    
+
     const { error } = await supabase.from('disciplinary_actions').update({ action_history: history, last_modified: new Date().toISOString() }).eq('id', daId);
     if (error) alert('Error adding journal entry: ' + error.message);
     else {
@@ -543,7 +543,7 @@ function Dashboard({ userEmail, onSignOut }) {
       const matchComplainant = c.disciplinary_actions?.some(da => da.complainant_name?.toLowerCase().includes(search) || da.complainant_id?.toLowerCase().includes(search));
       if (!matchCase && !matchPic && !matchCountry && !matchRespondent && !matchComplainant) return false;
     }
-    
+
     if (filters.pic && c.pic !== filters.pic) return false;
     if (filters.status && c.case_status !== filters.status) return false;
     if (filters.da_in_force) {
@@ -554,7 +554,7 @@ function Dashboard({ userEmail, onSignOut }) {
       if (filters.da_in_force === 'yes' && daCount === 0) return false;
       if (filters.da_in_force === 'no' && daCount > 0) return false;
     }
-    
+
     return true;
   });
 
@@ -717,7 +717,7 @@ function Dashboard({ userEmail, onSignOut }) {
         .sub-action-form { display: flex; gap: 4px; margin-top: 8px; flex-wrap: wrap; }
         @media (max-width: 768px) { .sidebar { position: fixed; left: 0; top: 0; bottom: 0; z-index: 100; box-shadow: 2px 0 10px rgba(0,0,0,0.1); } .sidebar.collapsed { transform: translateX(-100%); width: 260px; } .main-content { padding: 16px; } }
       `}</style>
-      
+
       <div className="app-container">
         <aside className={`sidebar ${sidebarOpen ? '' : 'collapsed'}`}>
           <div className={`sidebar-header ${sidebarOpen ? '' : 'collapsed'}`}>
@@ -742,7 +742,7 @@ function Dashboard({ userEmail, onSignOut }) {
         </aside>
 
         <main className="main-content">
-          
+
           {activeTab === 'dashboard' && (
             <>
               <div className="page-header">
@@ -832,7 +832,7 @@ function Dashboard({ userEmail, onSignOut }) {
                     <option value="no">No DA In Force</option>
                   </select>
                 </div>
-                
+
                 {loading ? (
                   <div style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>Loading data...</div>
                 ) : (
@@ -869,7 +869,7 @@ function Dashboard({ userEmail, onSignOut }) {
                                 <td style={{ textAlign: 'center', fontWeight: 600, color: activeWip > 0 ? '#8b5cf6' : '#94a3b8' }}>{activeWip}</td>
                                 <td><button onClick={() => handleCaseClick(c.case_number)} className="btn-action">{selectedCase === c.case_number ? 'Hide' : 'View'}</button></td>
                               </tr>
-                              
+
                               {selectedCase === c.case_number && (
                                 <tr>
                                   <td colSpan="7" className="expanded-content">
@@ -878,17 +878,14 @@ function Dashboard({ userEmail, onSignOut }) {
                                         <div>
                                           <span className="expanded-label">CASE DETAILS</span>
                                           <div className="expanded-value">{c.case_number}</div>
-                                          <div className="expanded-sub">Priority: {c.priority || '—'} | Stage: {c.stage || '—'}</div>
-                                          {c.date_completed && <div className="expanded-sub" style={{ color: '#059669', marginTop: '4px' }}>Completed on: {c.date_completed}</div>}
-                                          {c.reactivated_at && <div className="expanded-sub" style={{ color: '#3b82f6', marginTop: '4px' }}>Reactivated on: {formatDateTime(c.reactivated_at)}</div>}
-                                          {c.modified_by_email && <div className="expanded-sub" style={{ marginTop: '4px' }}>Last modified by {c.modified_by_email.split('@')[0]} on {formatDateTime(c.last_modified)}</div>}
                                           {(() => {
                                             const complainants = [...new Map(c.disciplinary_actions?.filter(da => da.complainant_name).map(da => [da.complainant_name, da])).values()];
                                             if (complainants.length > 0) {
-                                              return <div className="expanded-sub" style={{ marginTop: '4px' }}>Complainant(s): {complainants.map(comp => `${comp.complainant_name} (${comp.complainant_id || '—'})`).join(', ')}</div>;
+                                              return <div className="expanded-sub" style={{ marginTop: '4px', fontWeight: '600' }}>Complainant(s): {complainants.map(comp => `${comp.complainant_name} (${comp.complainant_id || '—'})`).join(', ')}</div>;
                                             }
                                             return null;
                                           })()}
+                                          <div className="expanded-sub">Priority: {c.priority || '—'} | Stage: {c.stage || '—'}</div>
                                         </div>
                                         <div style={{ textAlign: 'right' }}>
                                           <span className="expanded-label">SLA DUE DATE</span>
@@ -896,7 +893,7 @@ function Dashboard({ userEmail, onSignOut }) {
                                           <div className="expanded-sub">Created: {c.created_on || '—'}</div>
                                         </div>
                                       </div>
-                                      
+
                                       <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
                                         {c.case_status === 'IN PROGRESS' && <button onClick={() => handleCompleteCase(c.case_number)} className="btn-action btn-success">Complete Case</button>}
                                         {c.case_status === 'COMPLETED' && <button onClick={() => handleReactivateCase(c.case_number)} className="btn-action btn-warning">Reactivate Case</button>}
@@ -980,7 +977,7 @@ function Dashboard({ userEmail, onSignOut }) {
                                                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
                                                     <div><span className="expanded-label">Respondent: </span><span className="item-title">{da.respondent_name || '—'}</span><span className="item-sub" style={{ marginLeft: '8px' }}>({da.respondent_id || '—'})</span></div>
                                                   </div>
-                                                  
+
                                                   <div style={{ marginBottom: '12px', padding: '8px', backgroundColor: '#f8fafc', borderRadius: '6px' }}>
                                                     <div className="expanded-label">Violations</div>
                                                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '4px' }}>
@@ -1017,7 +1014,7 @@ function Dashboard({ userEmail, onSignOut }) {
                                                               </div>
                                                               <button onClick={() => { setEditingDaAction({ daId: da.id, step: idx }); setEditDaActionName(h.action); setEditDaActionDate(h.date); }} className="btn-action">Edit</button>
                                                             </div>
-                                                            
+
                                                             {editingDaAction && editingDaAction.daId === da.id && editingDaAction.step === idx && (
                                                               <form onSubmit={(e) => handleEditDaAction(e, da.id, idx)} style={{ width: '100%', display: 'flex', gap: '8px', marginTop: '8px', flexWrap: 'wrap' }}>
                                                                 <input type="text" value={editDaActionName} onChange={(e) => setEditDaActionName(e.target.value)} required style={{ flex: 1, minWidth: '150px', padding: '6px', border: '1px solid #e2e8f0', borderRadius: '6px' }} />
@@ -1035,7 +1032,7 @@ function Dashboard({ userEmail, onSignOut }) {
                                                                   <span style={{ fontSize: '10px', color: '#94a3b8' }}>(by {sa.added_by?.split('@')[0]})</span>
                                                                 </div>
                                                               ))}
-                                                              
+
                                                               {addingSubAction && addingSubAction.daId === da.id && addingSubAction.step === idx ? (
                                                                 <form onSubmit={(e) => handleAddSubAction(e, da.id, idx)} className="sub-action-form">
                                                                   <input type="text" placeholder="Journal entry (e.g., Sent for approval)" value={newSubActionDesc} onChange={(e) => setNewSubActionDesc(e.target.value)} required style={{ flex: 1, minWidth: '150px', padding: '6px', border: '1px solid #e2e8f0', borderRadius: '6px' }} />
