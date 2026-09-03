@@ -6,9 +6,15 @@ import * as XLSX from 'xlsx';
 const supabaseUrl = 'https://yymvagbwxdaxrldrhmtm.supabase.co';
 const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl5bXZhZ2J3eGRheHJsZHJobXRtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY2OTEyMjcsImV4cCI6MjEwMjI2NzIyN30.W6WFGXzR7gMU0ln-vfMIJlsxwctWqnCv5Cb7qW8UXXY';
 const supabase = createClient(supabaseUrl, supabaseKey);
+// ==== ADMIN ACCESS CONTROL ====
+// Enter admin emails in lowercase. Only these users see edit buttons.
+const ADMIN_EMAILS = [
+  'alex.chok@qigroup.com',
+  // 'second-admin@company.com',
+];
 
 const PUBLIC_HOLIDAYS = [];
-const STANDARD_CASE_SLA_DAYS = 20;
+const STANDARD_CASE_SLA_DAYS = 30;
 
 const isHoliday = (dateObj) => {
   const dateStr = dateObj.toISOString().split('T')[0];
@@ -54,6 +60,20 @@ const addBusinessDays = (startDate, daysToAdd) => {
   return date.toISOString().split('T')[0];
 };
 
+// ==== ADMIN: count business days between a start date and a due date ====
+const businessDaysFromStart = (startDate, dueDate) => {
+  if (!startDate || !dueDate) return null;
+  const start = new Date(startDate); const due = new Date(dueDate);
+  if (isNaN(start.getTime()) || isNaN(due.getTime())) return null;
+  start.setHours(0, 0, 0, 0); due.setHours(0, 0, 0, 0);
+  let count = 0; let cur = new Date(start);
+  while (cur < due) {
+    cur.setDate(cur.getDate() + 1);
+    const day = cur.getDay();
+    if (day !== 0 && day !== 6 && !isHoliday(cur)) count++;
+  }
+  return count;
+};
 const calculatePriority = (slaDate) => {
   const days = calculateBusinessDays(slaDate);
   if (days <= 5) return 'High';
@@ -137,7 +157,7 @@ function Dashboard({ userEmail, onSignOut }) {
   const [newCaseNum, setNewCaseNum] = useState('');
   const [newPic, setNewPic] = useState('');
   const [newCountry, setNewCountry] = useState('');
-  const [newSlaDays, setNewSlaDays] = useState(20);
+  const [newSlaDays, setNewSlaDays] = useState(30);
 
   const [wipActionType, setWipActionType] = useState('');
   const [wipDesc, setWipDesc] = useState('');
@@ -165,6 +185,19 @@ function Dashboard({ userEmail, onSignOut }) {
   const [newSubActionDate, setNewSubActionDate] = useState(new Date().toISOString().split('T')[0]);
 
   const [hideRespondents, setHideRespondents] = useState(true);
+  // ==== ADMIN: case edit state ====
+const isAdmin = ADMIN_EMAILS.includes((userEmail || '').toLowerCase());
+const [editingCase, setEditingCase] = useState(false);
+const [caseForm, setCaseForm] = useState({
+  case_number: '', pic: '', country: '', sla_due_date: '', created_on: '', sla_days: '', priority: 'Medium',
+  stage: '', case_status: 'IN PROGRESS', remarks: '',
+  complainant_name: '', complainant_id: '', complainant_country: ''
+});
+// ==== ADMIN: respondent edit state ====
+const [editingRespondentId, setEditingRespondentId] = useState(null);
+const [respondentEdits, setRespondentEdits] = useState({});
+// ==== Close-case chooser state ====
+const [showCloseOptions, setShowCloseOptions] = useState(false);
 
   const fetchCases = async (silent = false) => {
     if (!silent) setLoading(true);
@@ -331,6 +364,9 @@ function Dashboard({ userEmail, onSignOut }) {
     setAddingDaFor(null);
     setShowAddPersonForm(null);
     setHideRespondents(true);
+    setEditingCase(false);
+setShowCloseOptions(false);
+setEditingRespondentId(null);
     const { data: daData } = await supabase.from('disciplinary_actions').select('*').eq('case_number', caseNum);
     const { data: wipData } = await supabase.from('wip_actions').select('*').eq('case_number', caseNum).order('date_sent', { ascending: false });
     setDaList(daData || []); setWipList(wipData || []);
@@ -346,27 +382,170 @@ function Dashboard({ userEmail, onSignOut }) {
       sla_due_date: slaDate, priority: priority, stage: 'Stage 1', created_on: today
     }]);
     if (error) alert('Error saving case: ' + error.message);
-    else { setShowCaseForm(false); setNewCaseNum(''); setNewPic(''); setNewCountry(''); setNewSlaDays(20); fetchCases(true); }
+    else { setShowCaseForm(false); setNewCaseNum(''); setNewPic(''); setNewCountry(''); setNewSlaDays(30); fetchCases(true); }
   };
 
-  const handleCompleteCase = async (caseNum) => {
+  const handleCompleteCase = async (caseNum, closeStatus = 'COMPLETED') => {
     const { error } = await supabase.from('cases').update({
-      case_status: 'COMPLETED', date_completed: new Date().toISOString().split('T')[0], modified_by_email: userEmail
+      case_status: closeStatus, date_completed: new Date().toISOString().split('T')[0], modified_by_email: userEmail, last_modified: new Date().toISOString()
     }).eq('case_number', caseNum);
-    if (error) alert('Error completing case: ' + error.message);
-    else fetchCases(true);
+    if (error) alert('Error closing case: ' + error.message);
+    else { setShowCloseOptions(false); fetchCases(true); }
   };
 
   const handleReactivateCase = async (caseNum) => {
     const today = new Date().toISOString().split('T')[0];
     const newSlaDate = addBusinessDays(today, STANDARD_CASE_SLA_DAYS);
     const { error } = await supabase.from('cases').update({
-      case_status: 'IN PROGRESS', date_completed: null, sla_due_date: newSlaDate, priority: calculatePriority(newSlaDate), modified_by_email: userEmail, reactivated_at: new Date().toISOString()
+      case_status: 'IN PROGRESS', date_completed: null, sla_due_date: newSlaDate, priority: calculatePriority(newSlaDate), modified_by_email: userEmail, reactivated_at: new Date().toISOString(), last_modified: new Date().toISOString()
     }).eq('case_number', caseNum);
     if (error) alert('Error reactivating case: ' + error.message);
     else fetchCases(true);
   };
 
+  // ==== ADMIN: open the edit form pre-filled with current case values ====
+const openCaseEdit = () => {
+  const c = cases.find(x => x.case_number === selectedCase);
+  if (!c) return;
+  const daWithComplainant = daList.find(d => d.complainant_name || d.complainant_id);
+  setCaseForm({
+    case_number: c.case_number || '',
+    pic: c.pic || '', country: c.country || '', sla_due_date: c.sla_due_date || '',
+    created_on: c.created_on || '',
+    sla_days: businessDaysFromStart(c.created_on, c.sla_due_date) ?? '',
+    priority: c.priority || 'Medium', stage: c.stage || '',
+    case_status: c.case_status || 'IN PROGRESS', remarks: c.remarks || '',
+    complainant_name: daWithComplainant?.complainant_name || '',
+    complainant_id: daWithComplainant?.complainant_id || '',
+    complainant_country: daWithComplainant?.complainant_country || ''
+  });
+  setEditingCase(true);
+};
+
+// ==== ADMIN: save the edited case (handles rename + complainant sync) ====
+const handleUpdateCase = async (e) => {
+  e.preventDefault();
+  const c = cases.find(x => x.case_number === selectedCase);
+  if (!c) return;
+
+  // 1) Case-number rename — moves respondents & WIP actions along with it
+  const newCaseNum = cleanVal(caseForm.case_number);
+  let caseNumToUse = selectedCase;
+  if (newCaseNum && newCaseNum !== selectedCase) {
+    const { data: clash } = await supabase.from('cases').select('case_number').eq('case_number', newCaseNum);
+    if (clash && clash.length > 0) { alert('Cannot rename: case number "' + newCaseNum + '" already exists.'); return; }
+    // Move respondent rows (and their unique_keys) first
+    const { data: daRows } = await supabase.from('disciplinary_actions').select('id, unique_key').eq('case_number', selectedCase);
+    let renameError = null;
+    for (const row of (daRows || [])) {
+      const patch = { case_number: newCaseNum };
+      if (row.unique_key && row.unique_key.startsWith(selectedCase + '|')) {
+        patch.unique_key = newCaseNum + row.unique_key.slice(selectedCase.length);
+      }
+      const { error } = await supabase.from('disciplinary_actions').update(patch).eq('id', row.id);
+      if (error) renameError = error.message;
+    }
+    const { error: wipError } = await supabase.from('wip_actions').update({ case_number: newCaseNum }).eq('case_number', selectedCase);
+    if (renameError || wipError) { alert('Rename failed: ' + (renameError || wipError)); return; }
+    await supabase.from('cases').update({ case_number: newCaseNum }).eq('case_number', selectedCase);
+    caseNumToUse = newCaseNum;
+    setSelectedCase(newCaseNum);
+  }
+
+  // 2) Complainant details — saved on every respondent row of this case
+  const compName = cleanVal(caseForm.complainant_name);
+  const compId = cleanVal(caseForm.complainant_id);
+  const compCountry = cleanVal(caseForm.complainant_country);
+  if (daList.length > 0) {
+    await supabase.from('disciplinary_actions').update({
+      complainant_name: compName, complainant_id: compId, complainant_country: compCountry,
+      modified_by_email: userEmail, last_modified: new Date().toISOString()
+    }).eq('case_number', caseNumToUse);
+  } else if (compName || compId) {
+    // No respondent rows yet — create one so the complainant can be stored
+    await supabase.from('disciplinary_actions').insert([{
+      case_number: caseNumToUse, unique_key: `${caseNumToUse}|complainant_${Date.now()}`,
+      complainant_name: compName, complainant_id: compId, complainant_country: compCountry,
+      modified_by_email: userEmail, last_modified: new Date().toISOString()
+    }]);
+  }
+
+  // 3) Case fields
+  const updates = {
+    pic: cleanVal(caseForm.pic),
+    country: cleanVal(caseForm.country),
+    sla_due_date: cleanVal(caseForm.sla_due_date) || c.sla_due_date,
+    created_on: cleanVal(caseForm.created_on) || c.created_on,
+    priority: caseForm.priority,
+    stage: cleanVal(caseForm.stage),
+    case_status: caseForm.case_status,
+    remarks: cleanVal(caseForm.remarks),
+    modified_by_email: userEmail,
+    last_modified: new Date().toISOString()
+  };
+  const isClosed = (s) => s === 'COMPLETED' || s === 'CANCELLED';
+  if (isClosed(caseForm.case_status) && !isClosed(c.case_status)) {
+    updates.date_completed = new Date().toISOString().split('T')[0];
+  } else if (!isClosed(caseForm.case_status) && isClosed(c.case_status)) {
+    updates.date_completed = null;
+  }
+  const { error } = await supabase.from('cases').update(updates).eq('case_number', caseNumToUse);
+  if (error) { alert('Error updating case: ' + error.message); return; }
+
+  setEditingCase(false);
+  fetchCases(true);
+  const { data: refreshedDa } = await supabase.from('disciplinary_actions').select('*').eq('case_number', caseNumToUse);
+  setDaList(refreshedDa || []);
+};
+
+// ==== ADMIN: open the respondent editor ====
+// ==== ADMIN: delete a respondent row ====
+const handleDeleteRespondent = async (daId) => {
+  const da = daList.find(d => d.id === daId);
+  if (!da) return;
+  const isLastRow = daList.length <= 1;
+  let msg = `Delete this respondent row?\n\n${da.respondent_name || '(unnamed)'}${da.respondent_id ? ' · ' + da.respondent_id : ''}`;
+  if (isLastRow) {
+    msg += `\n\n⚠️ This is the LAST respondent row for this case.`;
+    if (da.complainant_name || da.complainant_id) {
+      msg += `\nThe complainant details (${da.complainant_name || da.complainant_id}) are stored on this row and will be deleted too. Re-add them via ✏️ Edit Case if still needed.`;
+    }
+  }
+  if (!window.confirm(msg)) return;
+  const { error } = await supabase.from('disciplinary_actions').delete().eq('id', daId);
+  if (error) alert('Error deleting respondent: ' + error.message);
+  else { setEditingRespondentId(null); refreshDaList(); }
+};
+const startRespondentEdit = (da) => {
+  setEditingRespondentId(da.id);
+  setRespondentEdits(prev => ({
+    ...prev,
+    [da.id]: { name: da.respondent_name || '', id: da.respondent_id || '', country: da.respondent_country || '' }
+  }));
+};
+
+// ==== ADMIN: save respondent details ====
+const handleUpdateRespondent = async (e, daId) => {
+  e.preventDefault();
+  const edits = respondentEdits[daId];
+  if (!edits) return;
+  const oldDa = daList.find(d => d.id === daId);
+  const newId = cleanVal(edits.id);
+  const updates = {
+    respondent_name: cleanVal(edits.name),
+    respondent_id: newId,
+    respondent_country: cleanVal(edits.country),
+    modified_by_email: userEmail,
+    last_modified: new Date().toISOString()
+  };
+  // Keep unique_key in sync when the ID changes (so future Excel uploads match)
+  if (newId && newId !== oldDa?.respondent_id) {
+    updates.unique_key = `${selectedCase}|${newId}`;
+  }
+  const { error } = await supabase.from('disciplinary_actions').update(updates).eq('id', daId);
+  if (error) alert('Error updating respondent: ' + error.message);
+  else { setEditingRespondentId(null); refreshDaList(); }
+};
   const resetWipForm = () => {
     setWipActionType(''); setWipDesc(''); setWipDateSent(new Date().toISOString().split('T')[0]); setWipSlaDays(2); setWipNotes(''); setEditingWipId(null); setShowWipForm(false);
   };
@@ -465,7 +644,7 @@ function Dashboard({ userEmail, onSignOut }) {
       await supabase.from('disciplinary_actions').update({ current_action: editDaActionName, execution_date: editDaActionDate }).eq('id', daId);
     }
 
-    const { error } = await supabase.from('disciplinary_actions').update({ action_history: history, last_modified: new Date().toISOString() }).eq('id', daId);
+    const { error } = await supabase.from('disciplinary_actions').update({ action_history: history, modified_by_email: userEmail, last_modified: new Date().toISOString() }).eq('id', daId);
     if (error) alert('Error editing action: ' + error.message);
     else {
       setEditingDaAction(null);
@@ -480,7 +659,7 @@ function Dashboard({ userEmail, onSignOut }) {
     history[stepIndex].sub_actions = history[stepIndex].sub_actions || [];
     history[stepIndex].sub_actions.push({ desc: newSubActionDesc, date: newSubActionDate, added_by: userEmail, added_at: new Date().toISOString() });
 
-    const { error } = await supabase.from('disciplinary_actions').update({ action_history: history, last_modified: new Date().toISOString() }).eq('id', daId);
+    const { error } = await supabase.from('disciplinary_actions').update({ action_history: history, modified_by_email: userEmail, last_modified: new Date().toISOString() }).eq('id', daId);
     if (error) alert('Error adding journal entry: ' + error.message);
     else {
       setAddingSubAction(null); setNewSubActionDesc(''); setNewSubActionDate(new Date().toISOString().split('T')[0]);
@@ -583,6 +762,7 @@ function Dashboard({ userEmail, onSignOut }) {
   const totalCases = cases.length;
   const inProgress = cases.filter(c => c.case_status === 'IN PROGRESS').length;
   const completed = cases.filter(c => c.case_status === 'COMPLETED').length;
+  const cancelled = cases.filter(c => c.case_status === 'CANCELLED').length;
   const outOfSlaCases = cases.filter(c => calculateBusinessDays(c.sla_due_date) < 0 && c.case_status === 'IN PROGRESS');
 
   const getActionColor = (action) => {
@@ -594,7 +774,39 @@ function Dashboard({ userEmail, onSignOut }) {
     return { text: '#2563eb', bg: '#dbeafe' };
   };
 
-  const navItems = [
+  // ==== Complainant display: name + QNET ID# + country ====
+const renderComplainantLine = () => {
+  const da = daList.find(d => d.complainant_name || d.complainant_id || d.complainant_country);
+  if (!da) return <span style={{ color: '#94a3b8' }}>—</span>;
+  return (
+    <span className="complainant-line">
+      <span className="complainant-name">{da.complainant_name || '(unnamed)'}</span>
+      {da.complainant_id && <span className="badge badge-purple" style={{ marginLeft: '6px' }}>QNET ID#: {da.complainant_id}</span>}
+      {da.complainant_country && <span className="badge badge-grey" style={{ marginLeft: '6px' }}>{da.complainant_country}</span>}
+    </span>
+  );
+};
+// ==== Closure / reactivation dates display ====
+// ==== Last-modified display ====
+const renderModifiedInfo = (c) => {
+  if (!c.last_modified) return null;
+  return (
+    <div className="expanded-sub" style={{ color: '#94a3b8', fontSize: '11px' }}>
+      Modified: {formatDateTime(c.last_modified)}{c.modified_by_email ? ` (by ${c.modified_by_email.split('@')[0]})` : ''}
+    </div>
+  );
+};
+const renderClosureInfo = (c) => {
+  const isClosed = c.case_status === 'COMPLETED' || c.case_status === 'CANCELLED';
+  const label = c.case_status === 'CANCELLED' ? 'Closed (Cancelled): ' : 'Completed: ';
+  return (
+    <>
+      {isClosed && c.date_completed && <div className="expanded-sub">{label}{c.date_completed}</div>}
+      {c.reactivated_at && <div className="expanded-sub" style={{ color: '#64748b' }}>Reactivated: {formatDateTime(c.reactivated_at)}</div>}
+    </>
+  );
+};  
+const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: '📊' },
     { id: 'cases', label: 'Cases', icon: '📁' },
     { id: 'analytics', label: 'Analytics', icon: '📈' },
@@ -651,7 +863,7 @@ function Dashboard({ userEmail, onSignOut }) {
         .card-header { margin-top: 0; margin-bottom: 8px; font-size: 16px; font-weight: 600; }
         .card-subtitle { color: #64748b; font-size: 13px; margin-bottom: 16px; }
         .stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 24px; }
-        @media (min-width: 768px) { .stats-grid { grid-template-columns: repeat(4, 1fr); gap: 16px; } }
+        @media (min-width: 768px) { .stats-grid { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px; } }
         .stat-card { background: white; padding: 16px; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; }
         .stat-title { font-size: 12px; color: #64748b; margin-bottom: 4px; font-weight: 500; }
         .stat-value { display: flex; align-items: baseline; gap: 6px; }
@@ -718,6 +930,32 @@ function Dashboard({ userEmail, onSignOut }) {
         @media (min-width: 768px) { .person-form { grid-template-columns: 2fr 2fr 2fr auto; align-items: end; } }
         .sub-action-form { display: flex; gap: 4px; margin-top: 8px; flex-wrap: wrap; }
         @media (max-width: 768px) { .sidebar { position: fixed; left: 0; top: 0; bottom: 0; z-index: 100; box-shadow: 2px 0 10px rgba(0,0,0,0.1); } .sidebar.collapsed { transform: translateX(-100%); width: 260px; } .main-content { padding: 16px; } }
+        /* ==== ADMIN edit styles ==== */
+        .btn-admin { padding: 6px 10px; background-color: #8b5cf6; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 500; white-space: nowrap; margin-right: 4px; }
+        .btn-admin:hover { background-color: #7c3aed; }
+        .admin-edit-form { background: #f5f3ff; padding: 16px; border-radius: 8px; margin-bottom: 16px; border: 1px solid #c4b5fd; flex-basis: 100%; }
+        .admin-edit-form .form-title { margin: 0 0 4px 0; font-size: 14px; font-weight: 600; color: #6d28d9; }
+        .admin-edit-form .form-sub { font-size: 11px; color: #94a3b8; margin: 0 0 12px 0; }
+        .admin-form-grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
+        @media (min-width: 768px) { .admin-form-grid { grid-template-columns: repeat(3, 1fr); } }
+        .admin-form-grid .full-width { grid-column: 1 / -1; }
+        .admin-form-actions { display: flex; gap: 8px; margin-top: 12px; }
+        .btn-save-admin { padding: 8px 16px; background-color: #7c3aed; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; }
+        .btn-cancel-admin { padding: 8px 16px; background-color: white; color: #64748b; border: 1px solid #e2e8f0; border-radius: 6px; cursor: pointer; font-size: 13px; }
+        /* ==== ADMIN respondent editor ==== */
+.respondent-admin-strip { background: #f5f3ff; border: 1px solid #c4b5fd; border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; }
+.respondent-admin-label { margin: 0 0 6px 0; font-size: 11px; font-weight: 600; color: #6d28d9; text-transform: uppercase; letter-spacing: 0.04em; }
+.respondent-admin-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px dashed #ddd6fe; flex-wrap: wrap; }
+.respondent-admin-row:last-child { border-bottom: none; }
+.respondent-admin-name { font-size: 13px; color: #0f172a; }
+.respondent-admin-form { padding: 4px 0 8px 0; }
+.btn-admin-danger { padding: 6px 10px; background-color: #ef4444; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 500; white-space: nowrap; }
+.btn-admin-danger:hover { background-color: #dc2626; }
+.complainant-line { display: inline-flex; align-items: center; flex-wrap: wrap; }
+.complainant-name { font-weight: 600; color: #0f172a; }
+.close-case-panel { flex-basis: 100%; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 10px 12px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.close-case-label { font-size: 13px; font-weight: 600; color: #0f172a; }
+.btn-cancel-status { background-color: #64748b; color: white; border: none; }
       `}</style>
 
       <div className="app-container">
@@ -739,11 +977,11 @@ function Dashboard({ userEmail, onSignOut }) {
             ))}
           </nav>
           <div className="sidebar-footer">
-            <div className={`user-info ${sidebarOpen ? '' : 'collapsed'}`}>
-              <div className="user-avatar">{userEmail?.charAt(0).toUpperCase()}</div>
-              {sidebarOpen && (<div className="user-details"><div className="email">{userEmail}</div><div className="role">Administrator</div></div>)}
-            </div>
-            {sidebarOpen && <button onClick={onSignOut} className="btn-signout">Sign Out</button>}
+          <div className={`user-info ${sidebarOpen ? '' : 'collapsed'}`}>
+  <div className="user-avatar">{userEmail?.charAt(0).toUpperCase()}</div>
+  {sidebarOpen && (<div className="user-details"><div className="email">{userEmail}</div><div className="role">{isAdmin ? 'Administrator' : 'Standard User'}</div></div>)}
+</div>
+{sidebarOpen && <button onClick={onSignOut} className="btn-signout">Sign Out</button>}
           </div>
         </aside>
 
@@ -761,6 +999,7 @@ function Dashboard({ userEmail, onSignOut }) {
                 <div className="stat-card"><div className="stat-title">Total Cases</div><div className="stat-value"><span className="stat-number">{totalCases}</span><span className="stat-badge badge-grey">cases</span></div></div>
                 <div className="stat-card"><div className="stat-title">In Progress</div><div className="stat-value"><span className="stat-number" style={{color: '#d97706'}}>{inProgress}</span><span className="stat-badge badge-yellow">cases</span></div></div>
                 <div className="stat-card"><div className="stat-title">Completed</div><div className="stat-value"><span className="stat-number" style={{color: '#059669'}}>{completed}</span><span className="stat-badge badge-green">cases</span></div></div>
+                <div className="stat-card"><div className="stat-title">Cancelled</div><div className="stat-value"><span className="stat-number" style={{color: '#64748b'}}>{cancelled}</span><span className="stat-badge badge-grey">cases</span></div></div>
                 <div className="stat-card"><div className="stat-title">Out of SLA</div><div className="stat-value"><span className="stat-number" style={{color: '#dc2626'}}>{outOfSlaCases.length}</span><span className="stat-badge badge-red">cases</span></div></div>
               </div>
               <div className="card">
@@ -813,7 +1052,7 @@ function Dashboard({ userEmail, onSignOut }) {
                     <div className="wip-input-group"><label>Case Number</label><input type="text" value={newCaseNum} onChange={(e) => setNewCaseNum(e.target.value)} required /></div>
                     <div className="wip-input-group"><label>PIC</label><input type="text" value={newPic} onChange={(e) => setNewPic(e.target.value)} /></div>
                     <div className="wip-input-group"><label>Country</label><input type="text" value={newCountry} onChange={(e) => setNewCountry(e.target.value)} required /></div>
-                    <div className="wip-input-group"><label>SLA Days (auto-calculates due date)</label><input type="number" min="1" max="100" value={newSlaDays} onChange={(e) => setNewSlaDays(parseInt(e.target.value) || 20)} required /></div>
+                    <div className="wip-input-group"><label>SLA Days (auto-calculates due date)</label><input type="number" min="1" max="100" value={newSlaDays} onChange={(e) => setNewSlaDays(parseInt(e.target.value) || 30)} required /></div>
                     <button type="submit" className="btn-log" style={{ backgroundColor: '#10b981' }}>Save Case</button>
                   </div>
                 </form>
@@ -885,24 +1124,85 @@ function Dashboard({ userEmail, onSignOut }) {
                                           <span className="expanded-label">CASE DETAILS</span>
                                           <div className="expanded-value">{c.case_number}</div>
                                           {(() => {
-                                            const complainants = [...new Map(c.disciplinary_actions?.filter(da => da.complainant_name).map(da => [da.complainant_name, da])).values()];
-                                            if (complainants.length > 0) {
-                                              return <div className="expanded-sub" style={{ marginTop: '4px', fontWeight: '600' }}>Complainant(s): {complainants.map(comp => `${comp.complainant_name} (${comp.complainant_id || '—'})`).join(', ')}</div>;
-                                            }
-                                            return null;
-                                          })()}
+  const complainants = [...new Map(c.disciplinary_actions?.filter(da => da.complainant_name).map(da => [da.complainant_name, da])).values()];
+  if (complainants.length > 0) {
+    return (
+      <div className="expanded-sub" style={{ marginTop: '4px', fontWeight: '600', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '4px' }}>
+        Complainant(s):
+        {complainants.map((comp, i) => (
+          <span key={i} className="complainant-line">
+            <span className="complainant-name">{comp.complainant_name}</span>
+            <span className="badge badge-purple" style={{ marginLeft: '4px' }}>QNET ID#: {comp.complainant_id || '—'}</span>
+            {comp.complainant_country && <span className="badge badge-grey" style={{ marginLeft: '4px' }}>{comp.complainant_country}</span>}
+          </span>
+        ))}
+      </div>
+    );
+  }
+  return null;
+})()}
                                           <div className="expanded-sub">Priority: {c.priority || '—'} | Stage: {c.stage || '—'}</div>
                                         </div>
                                         <div style={{ textAlign: 'right' }}>
                                           <span className="expanded-label">SLA DUE DATE</span>
                                           <div className="expanded-value">{c.sla_due_date || '—'}</div>
                                           <div className="expanded-sub">Created: {c.created_on || '—'}</div>
+{renderClosureInfo(c)}
+{renderModifiedInfo(c)}
                                         </div>
                                       </div>
 
                                       <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
-                                        {c.case_status === 'IN PROGRESS' && <button onClick={() => handleCompleteCase(c.case_number)} className="btn-action btn-success">Complete Case</button>}
-                                        {c.case_status === 'COMPLETED' && <button onClick={() => handleReactivateCase(c.case_number)} className="btn-action btn-warning">Reactivate Case</button>}
+                                      {c.case_status === 'IN PROGRESS' && !showCloseOptions && <button onClick={() => setShowCloseOptions(true)} className="btn-action btn-success">Complete Case</button>}
+{(c.case_status === 'COMPLETED' || c.case_status === 'CANCELLED') && <button onClick={() => handleReactivateCase(c.case_number)} className="btn-action btn-warning">Reactivate Case</button>}
+{showCloseOptions && c.case_status === 'IN PROGRESS' && (
+  <div className="close-case-panel">
+    <span className="close-case-label">Close this case as:</span>
+    <button onClick={() => handleCompleteCase(c.case_number, 'COMPLETED')} className="btn-action btn-success">✅ Completed</button>
+    <button onClick={() => handleCompleteCase(c.case_number, 'CANCELLED')} className="btn-action btn-cancel-status">🚫 Cancelled</button>
+    <button onClick={() => setShowCloseOptions(false)} className="btn-action">↩ Back</button>
+  </div>
+)}
+{isAdmin && !editingCase && (
+  <button className="btn-admin" onClick={openCaseEdit}>✏️ Edit Case</button>
+)}
+{editingCase && (
+  <form className="admin-edit-form" onSubmit={handleUpdateCase}>
+    <p className="form-title">✏️ Edit Case — {selectedCase}</p>
+    <p className="form-sub">Admin only. Changing the case number moves all respondents &amp; WIP actions to the new number.</p>
+    <div className="admin-form-grid">
+      <div className="wip-input-group"><label>Case Number *</label><input type="text" value={caseForm.case_number} onChange={(e) => setCaseForm({ ...caseForm, case_number: e.target.value })} required /></div>
+      <div className="wip-input-group"><label>PIC</label><input type="text" value={caseForm.pic} onChange={(e) => setCaseForm({ ...caseForm, pic: e.target.value })} /></div>
+      <div className="wip-input-group"><label>Country</label><input type="text" value={caseForm.country} onChange={(e) => setCaseForm({ ...caseForm, country: e.target.value })} /></div>
+      <div className="wip-input-group"><label>SLA Days (working days)</label><input type="number" placeholder="auto from Created On" value={caseForm.sla_days} onChange={(e) => { const days = parseInt(e.target.value, 10); const base = caseForm.created_on || (cases.find(x => x.case_number === selectedCase) || {}).created_on; if (!isNaN(days) && days > 0 && base) { setCaseForm({ ...caseForm, sla_days: days, sla_due_date: addBusinessDays(base, days) }); } else { setCaseForm({ ...caseForm, sla_days: e.target.value }); } }} /></div>
+      <div className="wip-input-group"><label>SLA Due Date</label><input type="date" value={caseForm.sla_due_date} onChange={(e) => setCaseForm({ ...caseForm, sla_due_date: e.target.value })} /></div>
+      <div className="wip-input-group"><label>Created On</label><input type="date" value={caseForm.created_on} onChange={(e) => setCaseForm({ ...caseForm, created_on: e.target.value })} /></div>
+      <div className="wip-input-group"><label>Priority</label>
+        <select value={caseForm.priority} onChange={(e) => setCaseForm({ ...caseForm, priority: e.target.value })}>
+          <option>High</option><option>Medium</option><option>Low</option>
+        </select>
+      </div>
+      <div className="wip-input-group"><label>Stage</label><input type="text" placeholder="e.g. Stage 3" value={caseForm.stage} onChange={(e) => setCaseForm({ ...caseForm, stage: e.target.value })} /></div>
+      <div className="wip-input-group"><label>Case Status</label>
+        <select value={caseForm.case_status} onChange={(e) => setCaseForm({ ...caseForm, case_status: e.target.value })}>
+        <option>IN PROGRESS</option><option>COMPLETED</option><option>CANCELLED</option>
+        </select>
+      </div>
+      <div className="wip-input-group full-width"><label>Remarks</label><textarea value={caseForm.remarks} onChange={(e) => setCaseForm({ ...caseForm, remarks: e.target.value })} /></div>
+    </div>
+    <p className="form-title" style={{ marginTop: '16px' }}>👤 Complainant Details</p>
+    <p className="form-sub">Applies to this case (saved on all respondent rows).</p>
+    <div className="admin-form-grid">
+      <div className="wip-input-group"><label>Complainant Name</label><input type="text" value={caseForm.complainant_name} onChange={(e) => setCaseForm({ ...caseForm, complainant_name: e.target.value })} /></div>
+      <div className="wip-input-group"><label>Complainant ID</label><input type="text" value={caseForm.complainant_id} onChange={(e) => setCaseForm({ ...caseForm, complainant_id: e.target.value })} /></div>
+      <div className="wip-input-group"><label>Complainant Country</label><input type="text" value={caseForm.complainant_country} onChange={(e) => setCaseForm({ ...caseForm, complainant_country: e.target.value })} /></div>
+    </div>
+    <div className="admin-form-actions">
+      <button type="submit" className="btn-save-admin">💾 Save Changes</button>
+      <button type="button" className="btn-cancel-admin" onClick={() => setEditingCase(false)}>Cancel</button>
+    </div>
+  </form>
+)}
                                         {!showAddPersonForm && <button onClick={() => setShowAddPersonForm('complainant')} className="btn-action">+ Add Complainant</button>}
                                         {!showAddPersonForm && <button onClick={() => setShowAddPersonForm('respondent')} className="btn-action">+ Add Respondent</button>}
                                       </div>
@@ -975,13 +1275,41 @@ function Dashboard({ userEmail, onSignOut }) {
                                           <div style={{ padding: '16px', textAlign: 'center', backgroundColor: '#f8fafc', borderRadius: '8px', color: '#94a3b8' }}>No respondents linked to this case. Use "+ Add Respondent" above.</div>
                                         ) : (
                                           <div>
+                                            {isAdmin && daList.length > 0 && (
+  <div className="respondent-admin-strip">
+    <p className="respondent-admin-label">Admin — Respondent Details</p>
+    {daList.map(da => (
+      editingRespondentId === da.id ? (
+        <form key={da.id} className="respondent-admin-form" onSubmit={(e) => handleUpdateRespondent(e, da.id)}>
+          <div className="admin-form-grid">
+            <div className="wip-input-group"><label>Respondent Name</label><input type="text" value={(respondentEdits[da.id] || {}).name || ''} onChange={(e) => setRespondentEdits(prev => ({ ...prev, [da.id]: { ...(prev[da.id] || {}), name: e.target.value } }))} /></div>
+            <div className="wip-input-group"><label>Respondent ID</label><input type="text" value={(respondentEdits[da.id] || {}).id || ''} onChange={(e) => setRespondentEdits(prev => ({ ...prev, [da.id]: { ...(prev[da.id] || {}), id: e.target.value } }))} /></div>
+            <div className="wip-input-group"><label>Respondent Country</label><input type="text" value={(respondentEdits[da.id] || {}).country || ''} onChange={(e) => setRespondentEdits(prev => ({ ...prev, [da.id]: { ...(prev[da.id] || {}), country: e.target.value } }))} /></div>
+          </div>
+          <div className="admin-form-actions">
+            <button type="submit" className="btn-save-admin">💾 Save Respondent</button>
+            <button type="button" className="btn-cancel-admin" onClick={() => setEditingRespondentId(null)}>Cancel</button>
+          </div>
+        </form>
+      ) : (
+        <div key={da.id} className="respondent-admin-row">
+        <span className="respondent-admin-name">{da.respondent_name || '(unnamed)'}{da.respondent_id ? ` · ${da.respondent_id}` : ''}{da.respondent_country ? ` · ${da.respondent_country}` : ''}</span>
+        <div style={{ display: 'flex', gap: '4px' }}>
+          <button type="button" className="btn-admin" onClick={() => startRespondentEdit(da)}>✏️ Edit</button>
+          <button type="button" className="btn-admin-danger" onClick={() => handleDeleteRespondent(da.id)}>🗑 Delete</button>
+        </div>
+      </div>
+      )
+    ))}
+  </div>
+)}
                                             {(hideRespondents && daList.length > 3 ? daList.slice(0, 3) : daList).map((da, i) => {
                                               const colors = getActionColor(da.current_action);
                                               const isExpanded = expandedDAs[da.id];
                                               return (
                                                 <div key={da.id} style={{ border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px', marginBottom: '12px' }}>
                                                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
-                                                    <div><span className="expanded-label">Respondent: </span><span className="item-title">{da.respondent_name || '—'}</span><span className="item-sub" style={{ marginLeft: '8px' }}>({da.respondent_id || '—'})</span></div>
+                                                    <div><span className="expanded-label">Respondent: </span><span className="item-title">{da.respondent_name || '—'}</span><span className="item-sub" style={{ marginLeft: '8px' }}>({da.respondent_id || '—'})</span>{da.respondent_country && <span className="badge badge-grey" style={{ marginLeft: '6px' }}>{da.respondent_country}</span>}</div>
                                                   </div>
 
                                                   <div style={{ marginBottom: '12px', padding: '8px', backgroundColor: '#f8fafc', borderRadius: '6px' }}>
