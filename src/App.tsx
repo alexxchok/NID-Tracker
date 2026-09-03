@@ -855,7 +855,7 @@ const navItems = [
         .user-details .email { font-size: 14px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .user-details .role { font-size: 12px; color: #94a3b8; }
         .btn-signout { width: 100%; padding: 8px; background-color: transparent; border: 1px solid #334155; color: #94a3b8; border-radius: 6px; cursor: pointer; font-size: 13px; }
-        .main-content { flex: 1; padding: 24px; overflow-y: auto; }
+        .main-content { flex: 1; min-width: 0; padding: 24px; overflow-y: auto; }
         .page-header { margin-bottom: 24px; display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px; }
         .page-header-text h2 { font-size: 22px; font-weight: 600; margin: 0 0 5px 0; }
         .page-header-text p { color: #64748b; margin: 0; font-size: 13px; }
@@ -875,13 +875,13 @@ const navItems = [
         .btn-add-case { padding: 10px 16px; background-color: #3b82f6; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500; }
         .add-case-form { background: #f8fafc; padding: 16px; border-radius: 8px; margin-bottom: 16px; border: 1px solid #e2e8f0; }
         .form-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
-        @media (min-width: 768px) { .form-grid { grid-template-columns: repeat(4, 1fr); align-items: end; } }
+        @media (min-width: 768px) { .form-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: end; } }
         .table-container { overflow-x: auto; border-radius: 12px; border: 1px solid #e2e8f0; background: white; }
-        .table { width: 100%; border-collapse: collapse; text-align: left; min-width: 900px; }
+        .table { width: 100%; border-collapse: collapse; text-align: left; }
         .table thead tr { border-bottom: 1px solid #e2e8f0; background-color: #f8fafc; }
-        .table th { padding: 12px 16px; font-size: 11px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap; cursor: pointer; }
+        .table th { padding: 10px 12px; font-size: 11px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap; cursor: pointer; }
         .table th:hover { background-color: #f1f5f9; }
-        .table td { padding: 12px 16px; font-size: 13px; color: #475569; white-space: nowrap; border-bottom: 1px solid #f1f5f9; }
+        .table td { padding: 10px 12px; font-size: 12.5px; color: #475569; white-space: normal; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
         .table tbody tr { cursor: pointer; transition: background-color 0.2s; }
         .table tbody tr:hover { background-color: #f9fafb; }
         .table tbody tr.selected { background-color: #f8fafc; }
@@ -906,8 +906,9 @@ const navItems = [
         .section-divider { border-top: 1px solid #e2e8f0; padding-top: 16px; margin-top: 16px; }
         .section-title { margin: 0 0 12px 0; font-size: 14px; font-weight: 600; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
         .wip-form { background: #f8fafc; padding: 12px; border-radius: 8px; margin-bottom: 12px; display: grid; grid-template-columns: 1fr; gap: 8px; }
-        @media (min-width: 768px) { .wip-form { grid-template-columns: 2fr 2fr 1fr 1fr auto; align-items: end; } .wip-notes-row { grid-column: 1 / -1; } }
+        @media (min-width: 768px) { .wip-form { grid-template-columns: minmax(0,2fr) minmax(0,2fr) minmax(0,1fr) minmax(0,1fr) auto; align-items: end; } .wip-notes-row { grid-column: 1 / -1; } }
         .wip-input-group label { font-size: 10px; color: #64748b; font-weight: 600; display: block; margin-bottom: 2px; }
+        .wip-input-group { min-width: 0; }
         .wip-input-group select, .wip-input-group input, .wip-input-group textarea { width: 100%; padding: 6px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 13px; }
         .wip-input-group textarea { resize: vertical; min-height: 38px; }
         .btn-log { padding: 8px 12px; background-color: #0f172a; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; }
@@ -927,7 +928,7 @@ const navItems = [
         .chart-track { width: 100%; background-color: #f1f5f9; border-radius: 6px; height: 8px; overflow: hidden; }
         .chart-fill { height: 100%; border-radius: 6px; transition: width 0.5s ease; }
         .person-form { background: #f8fafc; padding: 12px; border-radius: 8px; margin-bottom: 12px; display: grid; grid-template-columns: 1fr; gap: 8px; }
-        @media (min-width: 768px) { .person-form { grid-template-columns: 2fr 2fr 2fr auto; align-items: end; } }
+        @media (min-width: 768px) { .person-form { grid-template-columns: minmax(0,2fr) minmax(0,2fr) minmax(0,2fr) auto; align-items: end; } }
         .sub-action-form { display: flex; gap: 4px; margin-top: 8px; flex-wrap: wrap; }
         @media (max-width: 768px) { .sidebar { position: fixed; left: 0; top: 0; bottom: 0; z-index: 100; box-shadow: 2px 0 10px rgba(0,0,0,0.1); } .sidebar.collapsed { transform: translateX(-100%); width: 260px; } .main-content { padding: 16px; } }
         /* ==== ADMIN edit styles ==== */
@@ -937,7 +938,7 @@ const navItems = [
         .admin-edit-form .form-title { margin: 0 0 4px 0; font-size: 14px; font-weight: 600; color: #6d28d9; }
         .admin-edit-form .form-sub { font-size: 11px; color: #94a3b8; margin: 0 0 12px 0; }
         .admin-form-grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
-        @media (min-width: 768px) { .admin-form-grid { grid-template-columns: repeat(3, 1fr); } }
+        @media (min-width: 768px) { .admin-form-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
         .admin-form-grid .full-width { grid-column: 1 / -1; }
         .admin-form-actions { display: flex; gap: 8px; margin-top: 12px; }
         .btn-save-admin { padding: 8px 16px; background-color: #7c3aed; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; }
