@@ -1075,10 +1075,11 @@ const navItems = [
                     <option value="CANCELLED">CANCELLED</option>
                   </select>
                   <select value={filters.da_in_force} onChange={(e) => setFilters(f => ({ ...f, da_in_force: e.target.value }))} style={{ padding: '10px 16px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '14px' }}>
-                    <option value="">All DA Status</option>
-                    <option value="yes">DA In Force</option>
-                    <option value="no">No DA In Force</option>
-                  </select>
+  <option value="">All DA Status</option>
+  <option value="yes">DA In Force</option>
+  <option value="no">No DA In Force</option>
+</select>
+<button onClick={() => { setSearchTerm(''); setFilters({ pic: '', status: '', da_in_force: '' }); setSortConfig({ key: 'sla_due_date', direction: 'ascending' }); setCurrentPage(1); }} style={{ padding: '10px 16px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '14px', cursor: 'pointer', backgroundColor: '#f8fafc', color: '#334155', whiteSpace: 'nowrap' }}>✕ Clear</button>
                 </div>
 
                 {loading ? (
@@ -1110,18 +1111,19 @@ const navItems = [
                           return (
                             <React.Fragment key={index}>
                               <tr className={selectedCase === c.case_number ? 'selected' : ''}>
-                                <td style={{ fontWeight: 600, color: '#0f172a' }}>{c.case_number}</td>
-                                <td>{c.pic || '—'}</td>
-                                <td><span className={`badge ${c.case_status === 'IN PROGRESS' ? 'badge-blue' : 'badge-green'}`}>{c.case_status}</span></td>
-                                <td style={{ color: isBreached ? '#dc2626' : '#059669', fontWeight: 600 }}>{c.sla_due_date || '—'}</td>
-                                <td style={{ textAlign: 'center', fontWeight: 600, color: daInForce > 0 ? '#dc2626' : '#94a3b8' }}>{daInForce}</td>
-                                <td style={{ textAlign: 'center', fontWeight: 600, color: activeWip > 0 ? '#8b5cf6' : '#94a3b8' }}>{activeWip}</td>
-                                <td><button onClick={() => handleCaseClick(c.case_number)} className="btn-action">{selectedCase === c.case_number ? 'Hide' : 'View'}</button></td>
-                              </tr>
+  <td style={{ fontWeight: 600, color: '#0f172a' }} onDoubleClick={() => handleCaseClick(c.case_number)} title="Double-click to open case details">{c.case_number}</td>
+  <td>{c.pic || '—'}</td>
+  <td><span className={`badge ${c.case_status === 'IN PROGRESS' ? 'badge-blue' : c.case_status === 'CANCELLED' ? 'badge-grey' : 'badge-green'}`}>{c.case_status}</span></td>
+  <td style={{ color: isBreached ? '#dc2626' : '#059669', fontWeight: 600 }}>{c.sla_due_date || '—'}</td>
+  <td style={{ textAlign: 'center', fontWeight: 600, color: daInForce > 0 ? '#dc2626' : '#94a3b8' }}>{daInForce}</td>
+  <td>{c.case_status !== 'IN PROGRESS' ? <span style={{ color: '#94a3b8' }}>—</span> : (slaDays < 0 ? <span style={{ color: '#dc2626', fontWeight: 600, whiteSpace: 'nowrap' }}>🔴 {Math.abs(slaDays)}d lapsed</span> : <span style={{ color: '#059669', fontWeight: 600, whiteSpace: 'nowrap' }}>🟢 {slaDays}d left</span>)}</td>
+  <td style={{ textAlign: 'center', fontWeight: 600, color: activeWip > 0 ? '#8b5cf6' : '#94a3b8' }}>{activeWip}</td>
+  <td><button onClick={() => handleCaseClick(c.case_number)} className="btn-action">{selectedCase === c.case_number ? 'Back' : 'View'}</button></td>
+</tr>
 
                               {selectedCase === c.case_number && (
                                 <tr>
-                                  <td colSpan="7" className="expanded-content">
+                                  <td colSpan="8" className="expanded-content">
                                     <div className="expanded-card">
                                       <div className="expanded-header">
                                         <div>
