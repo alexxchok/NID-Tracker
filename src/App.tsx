@@ -387,7 +387,7 @@ setEditingRespondentId(null);
 
   const handleCompleteCase = async (caseNum, closeStatus = 'COMPLETED') => {
     const { error } = await supabase.from('cases').update({
-      case_status: closeStatus, date_completed: new Date().toISOString().split('T')[0], modified_by_email: userEmail, last_modified: new Date().toISOString()
+      case_status: closeStatus, priority: 'Low', date_completed: new Date().toISOString().split('T')[0], modified_by_email: userEmail, last_modified: new Date().toISOString()
     }).eq('case_number', caseNum);
     if (error) alert('Error closing case: ' + error.message);
     else { setShowCloseOptions(false); fetchCases(true); }
@@ -486,6 +486,8 @@ const handleUpdateCase = async (e) => {
   const isClosed = (s) => s === 'COMPLETED' || s === 'CANCELLED';
   if (isClosed(caseForm.case_status) && !isClosed(c.case_status)) {
     updates.date_completed = new Date().toISOString().split('T')[0];
+    // Auto-set priority to Low when closing — unless the admin changed it in this same edit
+    if (caseForm.priority === c.priority) updates.priority = 'Low';
   } else if (!isClosed(caseForm.case_status) && isClosed(c.case_status)) {
     updates.date_completed = null;
   }
@@ -857,7 +859,7 @@ const navItems = [
         .btn-signout { width: 100%; padding: 8px; background-color: transparent; border: 1px solid #334155; color: #94a3b8; border-radius: 6px; cursor: pointer; font-size: 13px; }
         .main-content { flex: 1; min-width: 0; padding: 24px; overflow-y: auto; }
         .page-header { margin-bottom: 24px; display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px; }
-        .page-header-text h2 { font-size: 22px; font-weight: 600; margin: 0 0 5px 0; }
+        .page-header-text h2 { font-size: 22px; font-weight: 600; margin: 0 0 5px 0; color: #0f172a; }
         .page-header-text p { color: #64748b; margin: 0; font-size: 13px; }
         .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; margin-bottom: 24px; }
         .card-header { margin-top: 0; margin-bottom: 8px; font-size: 16px; font-weight: 600; }
@@ -1042,7 +1044,7 @@ const navItems = [
               <div className="page-header">
                 <div className="page-header-text">
                   <h2>Case Tracker</h2>
-                  <p>Search, filter, and manage all disciplinary cases. Click "Active WIP" to sort.</p>
+                  <p>Search, filter, and manage all disciplinary cases.</p>
                 </div>
                 <button onClick={() => setShowCaseForm(!showCaseForm)} className="btn-add-case">{showCaseForm ? 'Close Form' : '+ Add New Case'}</button>
               </div>
@@ -1091,6 +1093,7 @@ const navItems = [
                           <th onClick={() => requestSort('case_status')}>Status <SortIndicator column="case_status" /></th>
                           <th onClick={() => requestSort('sla_due_date')}>SLA Date <SortIndicator column="sla_due_date" /></th>
                           <th onClick={() => requestSort('da_in_force')}>DA In Force <SortIndicator column="da_in_force" /></th>
+                          <th style={{ cursor: 'default' }}>SLA Status</th>
                           <th onClick={() => requestSort('active_wip')}>Active WIP <SortIndicator column="active_wip" /></th>
                           <th style={{ width: '80px' }}>Actions</th>
                         </tr>
