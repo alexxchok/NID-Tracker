@@ -949,10 +949,7 @@ const handleUpdateRespondent = async (e, daId) => {
     if (filters.pic && c.pic !== filters.pic) return false;
     if (filters.status && c.case_status !== filters.status) return false;
     if (filters.da_in_force) {
-      const daInForce = c.disciplinary_actions?.filter(da => 
-        da.da_confirmed === true || 
-        (da.da_confirmed == null && (da.current_action?.toLowerCase().includes('suspend') || da.current_action?.toLowerCase().includes('terminat')))
-      ).length || 0;
+      const daInForce = c.disciplinary_actions?.filter(isDAInForce).length || 0;
       if (filters.da_in_force === 'yes' && daInForce === 0) return false;
       if (filters.da_in_force === 'no' && daInForce > 0) return false;
     }
@@ -1023,6 +1020,14 @@ const handleUpdateRespondent = async (e, daId) => {
   const cancelled = cases.filter(c => c.case_status === 'CANCELLED').length;
   const outOfSlaCases = cases.filter(c => calculateBusinessDays(c.sla_due_date) < 0 && c.case_status === 'IN PROGRESS');
 
+  // ==== DA In Force: latest action determines if the DA is still active ====
+// Release or Termination = resolved, no longer in force
+const isDAInForce = (da) => {
+  if (!da) return false;
+  const action = (da.current_action || '').toLowerCase();
+  if (action.includes('release') || action.includes('terminat')) return false;
+  return da.da_confirmed === true || (da.da_confirmed == null && action.includes('suspend'));
+};
   const getActionColor = (action) => {
     if (!action) return { text: '#64748b', bg: '#f1f5f9' };
     const lower = action.toLowerCase();
@@ -1512,10 +1517,7 @@ const renderClosureInfo = (c) => {
                       <tbody>
                         {currentCases.map((c, index) => {
                           const slaDays = calculateBusinessDays(c.sla_due_date);
-                          const daInForce = c.disciplinary_actions?.filter(da => 
-                            da.da_confirmed === true || 
-                            (da.da_confirmed == null && (da.current_action?.toLowerCase().includes('suspend') || da.current_action?.toLowerCase().includes('terminat')))
-                          ).length || 0;
+                          const daInForce = c.disciplinary_actions?.filter(isDAInForce).length || 0;
                           const activeWip = (c.wip_actions?.filter(w => w.status === 'Pending').length || 0) +
                           (c.disciplinary_actions?.reduce((sum, da) =>
                             sum + (da.action_history || []).reduce((s, h) =>
@@ -1788,6 +1790,7 @@ const renderClosureInfo = (c) => {
                                                               {da.da_confirmed == null && (da.current_action?.toLowerCase().includes('suspend') || da.current_action?.toLowerCase().includes('terminat')) && <div style={{ marginTop: '4px' }}><span className="badge badge-yellow">⚠ Counted (legacy) — review & confirm</span></div>}
                                                               {isAdmin && (da.da_confirmed === true || (da.da_confirmed == null && (da.current_action?.toLowerCase().includes('suspend') || da.current_action?.toLowerCase().includes('terminat')))) && <button onClick={() => handleClearDA(da.id)} className="btn-action btn-danger" style={{ marginTop: '4px', marginLeft: '4px' }}>✗ Clear DA Count</button>}
                                                               {da.da_confirmed === false && <div style={{ marginTop: '4px' }}><span className="badge badge-grey">✗ Not In Force — cleared by admin</span></div>}
+                                                              {da.da_confirmed !== false && (da.current_action?.toLowerCase().includes('release') || da.current_action?.toLowerCase().includes('terminat')) && <div style={{ marginTop: '4px' }}><span className="badge badge-grey">↳ DA Resolved — not counted (latest action is release/termination)</span></div>}
                                                                                                                     </div>
 
                                                             {editingDaAction && editingDaAction.daId === da.id && editingDaAction.step === idx && (
