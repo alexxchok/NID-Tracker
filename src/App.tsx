@@ -217,6 +217,9 @@ function Dashboard({ userEmail, onSignOut }) {
   const [addingSubAction, setAddingSubAction] = useState(null);
   const [newSubActionDesc, setNewSubActionDesc] = useState('');
   const [newSubActionDate, setNewSubActionDate] = useState(new Date().toISOString().split('T')[0]);
+  const [editingSubActionEntry, setEditingSubActionEntry] = useState(null);
+  const [editSubActionDesc, setEditSubActionDesc] = useState('');
+  const [editSubActionDate, setEditSubActionDate] = useState('');
 
   const [hideRespondents, setHideRespondents] = useState(true);
   // ==== ADMIN: case edit state ====
@@ -224,7 +227,7 @@ const isAdmin = ADMIN_EMAILS.includes((userEmail || '').toLowerCase());
 const [editingCase, setEditingCase] = useState(false);
 const [caseForm, setCaseForm] = useState({
   case_number: '', pic: '', country: '', sla_due_date: '', created_on: '', sla_days: '', priority: 'Medium',
-  stage: '', case_status: 'IN PROGRESS', remarks: '',
+  stage: '', case_status: 'IN PROGRESS', remarks: '', date_completed: '',
   complainant_name: '', complainant_id: '', complainant_country: ''
 });
 // ==== ADMIN: respondent edit state ====
@@ -576,7 +579,7 @@ const openCaseEdit = () => {
     created_on: c.created_on || '',
     sla_days: businessDaysFromStart(c.created_on, c.sla_due_date) ?? '',
     priority: c.priority || 'Medium', stage: c.stage || '',
-    case_status: c.case_status || 'IN PROGRESS', remarks: c.remarks || '',
+    case_status: c.case_status || 'IN PROGRESS', remarks: c.remarks || '', date_completed: c.date_completed || '',
     complainant_name: daWithComplainant?.complainant_name || '',
     complainant_id: daWithComplainant?.complainant_id || '',
     complainant_country: daWithComplainant?.complainant_country || ''
@@ -647,9 +650,14 @@ const handleUpdateCase = async (e) => {
   };
   const isClosed = (s) => s === 'COMPLETED' || s === 'CANCELLED';
   if (isClosed(caseForm.case_status) && !isClosed(c.case_status)) {
-    updates.date_completed = new Date().toISOString().split('T')[0];
+    updates.date_completed = cleanVal(caseForm.date_completed) || new Date().toISOString().split('T')[0];
     // Auto-set priority to Low when closing — unless the admin changed it in this same edit
     if (caseForm.priority === c.priority) updates.priority = 'Low';
+  } else if (isClosed(caseForm.case_status) && isClosed(c.case_status)) {
+    // Already closed — admin may be changing the closure date
+    if (caseForm.date_completed !== (c.date_completed || '')) {
+      updates.date_completed = cleanVal(caseForm.date_completed) || c.date_completed;
+    }
   } else if (!isClosed(caseForm.case_status) && isClosed(c.case_status)) {
     updates.date_completed = null;
   }
@@ -816,12 +824,42 @@ const handleUpdateRespondent = async (e, daId) => {
     }
   };
 
+  const handleEditSubAction = async (e, daId, stepIndex, saIndex) => {
+    e.preventDefault();
+    const da = daList.find(d => d.id === daId);
+    if (!da) return;
+    const history = [...da.action_history];
+    if (!history[stepIndex] || !history[stepIndex].sub_actions || !history[stepIndex].sub_actions[saIndex]) return;
+    history[stepIndex].sub_actions[saIndex].desc = editSubActionDesc;
+    history[stepIndex].sub_actions[saIndex].date = editSubActionDate;
+    history[stepIndex].sub_actions[saIndex].modified_by = userEmail;
+    history[stepIndex].sub_actions[saIndex].modified_at = new Date().toISOString();
+    const { error } = await supabase.from('disciplinary_actions').update({
+      action_history: history, modified_by_email: userEmail, last_modified: new Date().toISOString()
+    }).eq('id', daId);
+    if (error) alert('Error editing journal entry: ' + error.message);
+    else { setEditingSubActionEntry(null); refreshDaList(); }
+  };
+  const handleCompleteSubAction = async (daId, stepIndex, saIndex) => {
+    const da = daList.find(d => d.id === daId);
+    if (!da) return;
+    const history = [...da.action_history];
+    if (!history[stepIndex] || !history[stepIndex].sub_actions || !history[stepIndex].sub_actions[saIndex]) return;
+    history[stepIndex].sub_actions[saIndex].status = 'Done';
+    history[stepIndex].sub_actions[saIndex].completed_by = userEmail;
+    history[stepIndex].sub_actions[saIndex].completed_at = new Date().toISOString();
+    const { error } = await supabase.from('disciplinary_actions').update({
+      action_history: history, modified_by_email: userEmail, last_modified: new Date().toISOString()
+    }).eq('id', daId);
+    if (error) alert('Error completing journal entry: ' + error.message);
+    else refreshDaList();
+  };
   const handleAddSubAction = async (e, daId, stepIndex) => {
     e.preventDefault();
     const da = daList.find(d => d.id === daId);
     const history = [...da.action_history];
     history[stepIndex].sub_actions = history[stepIndex].sub_actions || [];
-    history[stepIndex].sub_actions.push({ desc: newSubActionDesc, date: newSubActionDate, added_by: userEmail, added_at: new Date().toISOString() });
+    history[stepIndex].sub_actions.push({ desc: newSubActionDesc, date: newSubActionDate, added_by: userEmail, added_at: new Date().toISOString(), status: 'Pending' });
 
     const { error } = await supabase.from('disciplinary_actions').update({ action_history: history, modified_by_email: userEmail, last_modified: new Date().toISOString() }).eq('id', daId);
     if (error) alert('Error adding journal entry: ' + error.message);
@@ -842,6 +880,25 @@ const handleUpdateRespondent = async (e, daId) => {
     else { refreshDaList(); setNewViolation(prev => ({ ...prev, [daId]: '' })); }
   };
 
+  const handleConfirmDA = async (daId) => {
+    if (!window.confirm('Confirm this Disciplinary Action is in force?')) return;
+    const { error } = await supabase.from('disciplinary_actions').update({
+      da_confirmed: true, da_confirmed_by: userEmail, da_confirmed_at: new Date().toISOString(),
+      modified_by_email: userEmail, last_modified: new Date().toISOString()
+    }).eq('id', daId);
+    if (error) alert('Error confirming DA: ' + error.message);
+    else refreshDaList();
+  };
+  const handleClearDA = async (daId) => {
+    if (!window.confirm('Remove this respondent from the DA In Force count?\n\nThe action stays in the timeline but is no longer counted as a Disciplinary Action taken.')) return;
+    const { error } = await supabase.from('disciplinary_actions').update({
+      da_confirmed: false,
+      modified_by_email: userEmail,
+      last_modified: new Date().toISOString()
+    }).eq('id', daId);
+    if (error) alert('Error clearing DA: ' + error.message);
+    else refreshDaList();
+  };
   const handleDeleteViolation = async (daId, index) => {
     const da = daList.find(d => d.id === daId);
     const violations = da.violations || [];
@@ -892,12 +949,12 @@ const handleUpdateRespondent = async (e, daId) => {
     if (filters.pic && c.pic !== filters.pic) return false;
     if (filters.status && c.case_status !== filters.status) return false;
     if (filters.da_in_force) {
-      const daCount = c.disciplinary_actions?.filter(da => {
-        const action = da.current_action?.toLowerCase() || '';
-        return action.includes('suspend') || action.includes('terminat');
-      }).length || 0;
-      if (filters.da_in_force === 'yes' && daCount === 0) return false;
-      if (filters.da_in_force === 'no' && daCount > 0) return false;
+      const daInForce = c.disciplinary_actions?.filter(da => 
+        da.da_confirmed === true || 
+        (da.da_confirmed == null && (da.current_action?.toLowerCase().includes('suspend') || da.current_action?.toLowerCase().includes('terminat')))
+      ).length || 0;
+      if (filters.da_in_force === 'yes' && daInForce === 0) return false;
+      if (filters.da_in_force === 'no' && daInForce > 0) return false;
     }
 
     return true;
@@ -910,6 +967,42 @@ const handleUpdateRespondent = async (e, daId) => {
         const aCount = a.wip_actions?.filter(w => w.status === 'Pending').length || 0;
         const bCount = b.wip_actions?.filter(w => w.status === 'Pending').length || 0;
         return sortConfig.direction === 'ascending' ? aCount - bCount : bCount - aCount;
+      });
+    } else if (sortConfig.key === 'sla_due_date') {
+      const asc = sortConfig.direction === 'ascending';
+      const currentYear = new Date().getFullYear();
+      const caseInfo = new Map();
+      sortableCases.forEach(c => {
+        const m = String(c.case_number || '').toUpperCase().match(/CXN-?(\d{4})(\d{2})(\d{2})/);
+        caseInfo.set(c.case_number, {
+          year: m ? parseInt(m[1], 10) : 0,
+          creationDate: m ? parseInt(m[1] + m[2] + m[3], 10) : 0
+        });
+      });
+      sortableCases.sort((a, b) => {
+        const aClosed = a.case_status === 'COMPLETED' || a.case_status === 'CANCELLED';
+        const bClosed = b.case_status === 'COMPLETED' || b.case_status === 'CANCELLED';
+        if (!aClosed && bClosed) return -1;
+        if (aClosed && !bClosed) return 1;
+        if (!aClosed && !bClosed) {
+          const aInfo = caseInfo.get(a.case_number) || { year: 0, creationDate: 0 };
+          const bInfo = caseInfo.get(b.case_number) || { year: 0, creationDate: 0 };
+          const aCurrent = aInfo.year >= currentYear;
+          const bCurrent = bInfo.year >= currentYear;
+          if (aCurrent && !bCurrent) return -1;
+          if (!aCurrent && bCurrent) return 1;
+          if (aCurrent && bCurrent) {
+            if (a.sla_due_date < b.sla_due_date) return asc ? -1 : 1;
+            if (a.sla_due_date > b.sla_due_date) return asc ? 1 : -1;
+          } else {
+            if (aInfo.creationDate < bInfo.creationDate) return -1;
+            if (aInfo.creationDate > bInfo.creationDate) return 1;
+          }
+        } else {
+          if (a.sla_due_date < b.sla_due_date) return asc ? 1 : -1;
+          if (a.sla_due_date > b.sla_due_date) return asc ? -1 : 1;
+        }
+        return 0;
       });
     } else if (sortConfig.key) {
       sortableCases.sort((a, b) => {
@@ -1411,6 +1504,7 @@ const renderClosureInfo = (c) => {
                           <th onClick={() => requestSort('sla_due_date')}>SLA Date <SortIndicator column="sla_due_date" /></th>
                           <th onClick={() => requestSort('da_in_force')}>DA In Force <SortIndicator column="da_in_force" /></th>
                           <th style={{ cursor: 'default' }}>SLA Status</th>
+                          <th style={{ cursor: 'default' }}>Closure SLA</th>
                           <th onClick={() => requestSort('active_wip')}>Active WIP <SortIndicator column="active_wip" /></th>
                           <th style={{ width: '80px' }}>Actions</th>
                         </tr>
@@ -1418,11 +1512,14 @@ const renderClosureInfo = (c) => {
                       <tbody>
                         {currentCases.map((c, index) => {
                           const slaDays = calculateBusinessDays(c.sla_due_date);
-                          const daInForce = c.disciplinary_actions?.filter(da => {
-                            const action = da.current_action?.toLowerCase() || '';
-                            return action.includes('suspend') || action.includes('terminat');
-                          }).length || 0;
-                          const activeWip = c.wip_actions?.filter(w => w.status === 'Pending').length || 0;
+                          const daInForce = c.disciplinary_actions?.filter(da => 
+                            da.da_confirmed === true || 
+                            (da.da_confirmed == null && (da.current_action?.toLowerCase().includes('suspend') || da.current_action?.toLowerCase().includes('terminat')))
+                          ).length || 0;
+                          const activeWip = (c.wip_actions?.filter(w => w.status === 'Pending').length || 0) +
+                          (c.disciplinary_actions?.reduce((sum, da) =>
+                            sum + (da.action_history || []).reduce((s, h) =>
+                              s + (h.sub_actions || []).filter(sa => sa.status !== 'Done').length, 0), 0) || 0);
                           const isBreached = slaDays < 0 && c.case_status === 'IN PROGRESS';
                           return (
                             <React.Fragment key={index}>
@@ -1433,13 +1530,24 @@ const renderClosureInfo = (c) => {
   <td style={{ color: isBreached ? '#dc2626' : '#059669', fontWeight: 600 }}>{c.sla_due_date || '—'}</td>
   <td style={{ textAlign: 'center', fontWeight: 600, color: daInForce > 0 ? '#dc2626' : '#94a3b8' }}>{daInForce}</td>
   <td>{c.case_status !== 'IN PROGRESS' ? <span style={{ color: '#94a3b8' }}>—</span> : (slaDays < 0 ? <span style={{ color: '#dc2626', fontWeight: 600, whiteSpace: 'nowrap' }}>🔴 {Math.abs(slaDays)}d lapsed</span> : <span style={{ color: '#059669', fontWeight: 600, whiteSpace: 'nowrap' }}>🟢 {slaDays}d left</span>)}</td>
+  <td>
+                                  {c.case_status !== 'IN PROGRESS' && c.date_completed && c.sla_due_date ? (
+                                    new Date(c.date_completed) <= new Date(c.sla_due_date) ? (
+                                      <span className="badge badge-green" style={{ whiteSpace: 'nowrap' }}>✓ Within SLA</span>
+                                    ) : (
+                                      <span className="badge badge-red" style={{ whiteSpace: 'nowrap' }}>✗ Out of SLA</span>
+                                    )
+                                  ) : (
+                                    <span style={{ color: '#94a3b8' }}>—</span>
+                                  )}
+                                </td>
   <td style={{ textAlign: 'center', fontWeight: 600, color: activeWip > 0 ? '#8b5cf6' : '#94a3b8' }}>{activeWip}</td>
   <td><button onClick={() => handleCaseClick(c.case_number)} className="btn-action">{selectedCase === c.case_number ? 'Back' : 'View'}</button></td>
 </tr>
 
                               {selectedCase === c.case_number && (
                                 <tr>
-                                  <td colSpan="8" className="expanded-content">
+                                  <td colSpan="9" className="expanded-content">
                                     <div className="expanded-card">
                                       <div className="expanded-header">
                                         <div>
@@ -1510,6 +1618,12 @@ const renderClosureInfo = (c) => {
         <option>IN PROGRESS</option><option>COMPLETED</option><option>CANCELLED</option>
         </select>
       </div>
+      {(caseForm.case_status === 'COMPLETED' || caseForm.case_status === 'CANCELLED') && (
+        <div className="wip-input-group">
+          <label>{caseForm.case_status === 'CANCELLED' ? 'Closed (Cancelled) Date' : 'Completed Date'}</label>
+          <input type="date" value={caseForm.date_completed} onChange={(e) => setCaseForm({ ...caseForm, date_completed: e.target.value })} />
+        </div>
+      )}
       <div className="wip-input-group full-width"><label>Remarks</label><textarea value={caseForm.remarks} onChange={(e) => setCaseForm({ ...caseForm, remarks: e.target.value })} /></div>
     </div>
     <p className="form-title" style={{ marginTop: '16px' }}>👤 Complainant Details</p>
@@ -1666,10 +1780,15 @@ const renderClosureInfo = (c) => {
                                                               <div className="item-content">
                                                                 <span className="badge" style={{ backgroundColor: hColors.bg, color: hColors.text }}>{h.action || '—'}</span>
                                                                 <div className="item-sub" style={{ marginTop: '4px' }}>Date: {h.date || 'No date'}</div>
-                                                                {h.added_by && <div className="item-sub" style={{ fontSize: '10px' }}>Added by: {h.added_by?.split('@')[0]} on {formatDateTime(h.added_at)}</div>}
+                                                                {h.added_by && <div className="item-sub" style={{ fontSize: '10px' }}>Added by: {h.added_by?.split('@')[0]} on {formatDateTime(h.added_at)}</div>}                                                            {h.modified_by && <div className="item-sub" style={{ fontSize: '10px', color: '#94a3b8' }}>Modified by: {h.modified_by?.split('@')[0]} on {formatDateTime(h.modified_at)}</div>}
                                                               </div>
                                                               <button onClick={() => { setEditingDaAction({ daId: da.id, step: idx }); setEditDaActionName(h.action); setEditDaActionDate(h.date); }} className="btn-action">Edit</button>
-                                                            </div>
+                                                                                                                            {da.da_confirmed !== true && <button onClick={() => handleConfirmDA(da.id)} className="btn-action btn-success" style={{ marginTop: '4px' }}>✓ Confirm DA</button>}
+                                                              {da.da_confirmed === true && <div style={{ marginTop: '4px' }}><span className="badge badge-green">✓ DA Confirmed</span>{da.da_confirmed_by && <span style={{ fontSize: '10px', color: '#059669', marginLeft: '4px' }}>by {da.da_confirmed_by.split('@')[0]} on {formatDateTime(da.da_confirmed_at)}</span>}</div>}
+                                                              {da.da_confirmed == null && (da.current_action?.toLowerCase().includes('suspend') || da.current_action?.toLowerCase().includes('terminat')) && <div style={{ marginTop: '4px' }}><span className="badge badge-yellow">⚠ Counted (legacy) — review & confirm</span></div>}
+                                                              {isAdmin && (da.da_confirmed === true || (da.da_confirmed == null && (da.current_action?.toLowerCase().includes('suspend') || da.current_action?.toLowerCase().includes('terminat')))) && <button onClick={() => handleClearDA(da.id)} className="btn-action btn-danger" style={{ marginTop: '4px', marginLeft: '4px' }}>✗ Clear DA Count</button>}
+                                                              {da.da_confirmed === false && <div style={{ marginTop: '4px' }}><span className="badge badge-grey">✗ Not In Force — cleared by admin</span></div>}
+                                                                                                                    </div>
 
                                                             {editingDaAction && editingDaAction.daId === da.id && editingDaAction.step === idx && (
                                                               <form onSubmit={(e) => handleEditDaAction(e, da.id, idx)} style={{ width: '100%', display: 'flex', gap: '8px', marginTop: '8px', flexWrap: 'wrap' }}>
@@ -1683,9 +1802,26 @@ const renderClosureInfo = (c) => {
                                                             <div style={{ width: '100%', marginTop: '8px', paddingLeft: '32px', borderLeft: '2px solid #e2e8f0' }}>
                                                               <div className="expanded-label">Journal / Sub-Actions</div>
                                                               {h.sub_actions && h.sub_actions.map((sa, saIdx) => (
-                                                                <div key={saIdx} style={{ fontSize: '12px', color: '#475569', marginBottom: '4px', display: 'flex', gap: '8px' }}>
+                                                                <div key={saIdx} style={{ fontSize: '12px', color: '#475569', marginBottom: '4px', display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
                                                                   <span>{sa.date}</span> - <span>{sa.desc}</span>
                                                                   <span style={{ fontSize: '10px', color: '#94a3b8' }}>(by {sa.added_by?.split('@')[0]})</span>
+                                                                  {sa.status === 'Done' ? (
+                                                                    <span className="badge badge-green" style={{ fontSize: '10px' }}>✓ Done</span>
+                                                                  ) : (
+                                                                    <span className="badge badge-yellow" style={{ fontSize: '10px' }}>⏳ Pending</span>
+                                                                  )}
+                                                                  {sa.status !== 'Done' && <button onClick={() => handleCompleteSubAction(da.id, idx, saIdx)} className="btn-action btn-success" style={{ fontSize: '10px', padding: '2px 6px' }}>✓ Complete</button>}
+                                                                  {sa.completed_by && <span style={{ fontSize: '10px', color: '#94a3b8' }}>✓ by {sa.completed_by?.split('@')[0]}</span>}
+                                                                  <button onClick={() => { setEditingSubActionEntry({ daId: da.id, step: idx, saIdx }); setEditSubActionDesc(sa.desc); setEditSubActionDate(sa.date); }} className="btn-action" style={{ fontSize: '10px', padding: '2px 6px' }}>✏️</button>
+                                                                  {sa.modified_by && <span style={{ fontSize: '10px', color: '#94a3b8' }}>modified by {sa.modified_by?.split('@')[0]} on {formatDateTime(sa.modified_at)}</span>}
+                                                                  {editingSubActionEntry && editingSubActionEntry.daId === da.id && editingSubActionEntry.step === idx && editingSubActionEntry.saIdx === saIdx && (
+                                                                    <form onSubmit={(e) => handleEditSubAction(e, da.id, idx, saIdx)} style={{ width: '100%', display: 'flex', gap: '8px', marginTop: '4px', flexWrap: 'wrap' }}>
+                                                                      <input type="text" value={editSubActionDesc} onChange={(e) => setEditSubActionDesc(e.target.value)} required style={{ flex: 1, minWidth: '200px', padding: '4px', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '12px' }} />
+                                                                      <input type="date" value={editSubActionDate} onChange={(e) => setEditSubActionDate(e.target.value)} style={{ padding: '4px', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '12px' }} />
+                                                                      <button type="submit" className="btn-log" style={{ backgroundColor: '#10b981', fontSize: '11px', padding: '4px 8px' }}>Update</button>
+                                                                      <button type="button" onClick={() => setEditingSubActionEntry(null)} className="btn-action" style={{ fontSize: '11px', padding: '4px 8px' }}>Cancel</button>
+                                                                    </form>
+                                                                  )}
                                                                 </div>
                                                               ))}
 
