@@ -91,6 +91,40 @@ const formatDateTime = (timestamp) => {
   });
 };
 
+// ==== IMPORT NORMALIZATION ====
+const normalizeCaseNumber = (val) => {
+  if (val === undefined || val === null) return null;
+  let s = String(val).trim();
+  if (s === '') return null;
+  s = s.toUpperCase().replace(/\s+/g, '');
+  if (s.includes('/')) {
+    const parts = s.split('/').filter(p => p !== '');
+    const cxnPart = parts.find(p => p.startsWith('CXN'));
+    if (cxnPart) return cxnPart;
+    if (parts.length > 0) return parts[0];
+  }
+  return s;
+};
+
+const normalizeStatus = (val) => {
+  if (val === undefined || val === null) return null;
+  const raw = String(val).trim();
+  if (raw === '') return null;
+  const s = raw.toUpperCase().replace(/[^A-Z]/g, '');
+  if (s.startsWith('CANCEL')) return 'CANCELLED';
+  if (s.startsWith('COMPLET') || s === 'DONE' || s === 'CLOSED' || s === 'PROBLEMSOLVED') return 'COMPLETED';
+  if (s === 'INPROGRESS' || s === 'OPEN' || s === 'ACTIVE' || s === 'PENDING' ||
+      s === 'WAITINGDISTRIBUTORRESPONSE' || s === 'PENDINGINFO' || s === 'FOLLOWUP' || s === 'PENDINGAPPROVAL') return 'IN PROGRESS';
+  return raw;
+};
+
+const normalizeCountry = (val) => {
+  if (val === undefined || val === null) return null;
+  const s = String(val).trim();
+  if (s === '') return null;
+  if (s.toUpperCase().includes('INDIA')) return 'India';
+  return s;
+};
 function App() {
   const [session, setSession] = useState(null);
   useEffect(() => {
@@ -263,38 +297,130 @@ const [showCloseOptions, setShowCloseOptions] = useState(false);
     const file = e.target.files[0];
     if (!file) return;
     setUploading(true);
-    setUploadMessage('1/5 Reading Excel file...');
+    setUploadMessage('1/6 Reading Excel file...');
     const reader = new FileReader();
     reader.onload = async (e) => {
       try {
         const data = new Uint8Array(e.target.result);
         const wb = XLSX.read(data, { type: 'array', cellDates: false });
-        setUploadMessage('2/5 Extracting sheets...');
+        setUploadMessage('2/6 Identifying sheets...');
+
+        const norm = (s) => String(s).toLowerCase().replace(/\s+/g, '');
+        const findSheetByHeaders = (phrases) => {
+          for (let name of wb.SheetNames) {
+            const ws = wb.Sheets[name];
+            const json = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
+            if (json.length > 0) {
+              const headers = json[0].map(h => String(h || '').trim().toLowerCase());
+              if (headers.some(h => phrases.some(p => norm(h).includes(norm(p))))) return name;
+            }
+          }
+          return null;
+        };
+
         let casesToUpsert = [];
+        let daDataToInsert = [];
+        let masterCaseCount = 0;
+        let indiaCaseCount = 0;
+
+        // A) MASTER: sheet named "sla_tracker"
         const slaSheetName = wb.SheetNames.find(name => name.trim().toLowerCase() === 'sla_tracker');
         if (slaSheetName) {
           const json = XLSX.utils.sheet_to_json(wb.Sheets[slaSheetName], { defval: null });
-          casesToUpsert = json.map(row => {
-            const getVal = (s) => { for (let k in row) { if (k.trim().toLowerCase().includes(s.toLowerCase())) return row[k]; } return null; };
-            const caseNum = cleanVal(getVal(["CASE NUMBER", "Case Number", "CXN No"]));
+          const masterCases = json.map(row => {
+            const getVal = (terms) => {
+              const list = Array.isArray(terms) ? terms : [terms];
+              for (const t of list) {
+                for (let k in row) { if (norm(k).includes(norm(t))) return row[k]; }
+              }
+              return null;
+            };
+            const caseNum = normalizeCaseNumber(cleanVal(getVal(['CASE NUMBER', 'Case Number', 'CXN No'])));
             if (!caseNum) return null;
             return {
-              case_number: caseNum, created_on: formatDateString(cleanVal(getVal(["CREATED ON"]))), sla_due_date: formatDateString(cleanVal(getVal(["CASE DUE DATE", "SLA DATE", "Due Date"]))),
-              country: cleanVal(getVal(["COUNTRY"])), pic: cleanVal(getVal(["PIC"])), priority: cleanVal(getVal(["PRIORITY"])) || 'Medium',
-              case_status: cleanVal(getVal(["CASE STATUS", "Status"])) || 'IN PROGRESS', stage: cleanVal(getVal(["STAGE OF CASE"])),
-              date_completed: formatDateString(cleanVal(getVal(["DATE COMPLETED"]))), remarks: cleanVal(getVal(["REMARKS"]))
+              case_number: caseNum, created_on: formatDateString(cleanVal(getVal(['CREATED ON']))),
+              sla_due_date: formatDateString(cleanVal(getVal(['CASE DUE DATE', 'SLA DATE', 'Due Date']))),
+              country: normalizeCountry(cleanVal(getVal(['COUNTRY']))), pic: cleanVal(getVal(['PIC'])),
+              priority: cleanVal(getVal(['PRIORITY'])) || 'Medium',
+              case_status: normalizeStatus(cleanVal(getVal(['CASE STATUS', 'Status']))) || 'IN PROGRESS',
+              stage: cleanVal(getVal(['STAGE OF CASE'])),
+              date_completed: formatDateString(cleanVal(getVal(['DATE COMPLETED']))),
+              remarks: cleanVal(getVal(['REMARKS']))
             };
           }).filter(Boolean);
+          masterCaseCount = masterCases.length;
+          casesToUpsert = masterCases;
         }
 
-        let daDataToInsert = [];
-        let daSheetName = findSheetByHeader(wb, "Action Taken 1") || findSheetByHeader(wb, "Current Action");
-        if (daSheetName) {
+        // B) INDIA FILE: correct column structure
+        const indiaSheetName = findSheetByHeaders(['Complaint/Respondent', 'Stage Status']);
+        if (indiaSheetName && indiaSheetName !== slaSheetName) {
+          const json = XLSX.utils.sheet_to_json(wb.Sheets[indiaSheetName], { defval: null });
+          const indiaCases = json.map(row => {
+            const getVal = (terms) => {
+              const list = Array.isArray(terms) ? terms : [terms];
+              for (const t of list) {
+                for (let k in row) { if (norm(k).includes(norm(t))) return row[k]; }
+              }
+              return null;
+            };
+            const caseNum = normalizeCaseNumber(cleanVal(getVal(['Case Number'])));
+            if (!caseNum) return null;
+            const role = String(cleanVal(getVal(['Complaint/Respondent'])) || '').trim();
+            const isRespondent = role.toLowerCase().includes('respondent');
+            const customerStr = String(cleanVal(getVal(['Customer'])) || '').trim();
+            let personName = null;
+            let personId = cleanVal(getVal(['IR ID']));
+            if (customerStr) {
+              const m = customerStr.match(/^IR:(\S+)\s+(.+)$/);
+              if (m) { if (!personId) personId = m[1]; personName = m[2].trim(); }
+              else { personName = customerStr; }
+            }
+            const status = normalizeStatus(cleanVal(getVal(['Case Status']))) || 'IN PROGRESS';
+            const country = normalizeCountry(cleanVal(getVal(['Country']))) || 'India';
+            const stage = cleanVal(getVal(['Stage Status']));
+            const pic = cleanVal(getVal(['In-Charge']));
+            const created = formatDateString(cleanVal(getVal(['Created On'])));
+            const dueRaw = formatDateString(cleanVal(getVal(['Due Date'])));
+            const priority = cleanVal(getVal(['Priority'])) || 'Medium';
+            const noticeType = cleanVal(getVal(['Type of Notices Issued']));
+            let slaDue = dueRaw;
+            if (!slaDue) { const base = created ? new Date(created) : new Date(); base.setDate(base.getDate() + 30); slaDue = base.toISOString().split('T')[0]; }
+            if (personName || personId) {
+              const pr = {
+                case_number: caseNum, current_action: noticeType,
+                remarks: cleanVal(getVal(['Remarks'])),
+                unique_key: isRespondent ? `${caseNum}|${personId || personName}` : `${caseNum}|complainant_${personId || personName}`
+              };
+              if (isRespondent) { pr.respondent_name = personName; pr.respondent_id = personId; pr.respondent_country = country; }
+              else { pr.complainant_name = personName; pr.complainant_id = personId; pr.complainant_country = country; }
+              daDataToInsert.push(pr);
+            }
+            return {
+              case_number: caseNum, created_on: created, sla_due_date: slaDue, country: country, pic: pic,
+              priority: priority, case_status: status, stage: stage,
+              remarks: noticeType ? `[${noticeType}]` : cleanVal(getVal(['Remarks']))
+            };
+          }).filter(Boolean);
+          indiaCaseCount = indiaCases.length;
+          casesToUpsert = casesToUpsert.concat(indiaCases);
+        }
+
+        // C) RESPONDENT SHEET (shared folder or master DA sheet)
+        const daSheetName = findSheetByHeaders(['Action Taken', 'Current Action', 'Respondent Name', "Respondent's Name"]);
+        if (daSheetName && daSheetName !== slaSheetName && daSheetName !== indiaSheetName) {
           const json = XLSX.utils.sheet_to_json(wb.Sheets[daSheetName], { defval: null });
-          daDataToInsert = json.map(row => {
-            const getVal = (s) => { for (let k in row) { if (k.trim().toLowerCase().includes(s.toLowerCase())) return row[k]; } return null; };
-            const caseNum = cleanVal(getVal(["CXN No", "CXN #"]));
-            const respId = cleanVal(getVal(["Respondent ID#", "Respondent ID No", "Respondents' IR ID No"]));
+          daDataToInsert = daDataToInsert.concat(json.map(row => {
+            const getVal = (terms) => {
+              const list = Array.isArray(terms) ? terms : [terms];
+              for (const t of list) {
+                for (let k in row) { if (norm(k).includes(norm(t))) return row[k]; }
+              }
+              return null;
+            };
+            const caseNum = normalizeCaseNumber(cleanVal(getVal(['CXN No', 'CXN #', 'Case Number', 'Case No'])));
+            const respId = cleanVal(getVal(["Respondent ID#", 'Respondent ID No', "Respondents' IR ID No", 'IR ID']));
+            const respName = cleanVal(getVal(['Respondent Name', "Respondent's Name"]));
             let history = [];
             for (let i = 1; i <= 4; i++) {
               const action = cleanVal(getVal([`Action Taken ${i}`]));
@@ -302,31 +428,36 @@ const [showCloseOptions, setShowCloseOptions] = useState(false);
               if (action) history.push({ step: i, action, date });
             }
             if (history.length === 0) {
-              const currAction = cleanVal(getVal(["Current Action"]));
-              const currDate = formatDateString(cleanVal(getVal(["Current Action (Execution Date)", "Execution Date"])));
+              const currAction = cleanVal(getVal(['Current Action', 'Action Taken', 'Action']));
+              const currDate = formatDateString(cleanVal(getVal(['Current Action (Execution Date)', 'Execution Date', 'Date of Execution'])));
               if (currAction) history.push({ step: 1, action: currAction, date: currDate });
-              const prevAction = cleanVal(getVal(["Previous Action"]));
-              const prevDate = formatDateString(cleanVal(getVal(["(Previous Action (Execution Date)"])));
+              const prevAction = cleanVal(getVal(['Previous Action']));
+              const prevDate = formatDateString(cleanVal(getVal(['(Previous Action (Execution Date)', 'Previous Action (Execution Date)'])));
               if (prevAction) history.push({ step: 2, action: prevAction, date: prevDate });
             }
-            const latestAction = history.length > 0 ? history[history.length - 1].action : null;
-            const latestDate = history.length > 0 ? history[history.length - 1].date : null;
+            const latestAction = history.length > 0 ? history[history.length - 1].action : cleanVal(getVal(['Current Action', 'Action Taken', 'Action']));
+            const latestDate = history.length > 0 ? history[history.length - 1].date : formatDateString(cleanVal(getVal(['Execution Date'])));
+            const violationType = cleanVal(getVal(['Violation Type', 'Type of Violation', 'Violation']));
+            const uniqueBase = respId || respName;
             return {
-              case_number: caseNum, complainant_name: cleanVal(getVal(["Complainant Name", "Complainant's Name and IR ID No"])), complainant_id: cleanVal(getVal(["Complainant ID#"])),
-              respondent_name: cleanVal(getVal(["Respondent Name", "Respondent's Name"])), respondent_id: respId,
+              case_number: caseNum, complainant_name: cleanVal(getVal(["Complainant Name", "Complainant's Name and IR ID No"])),
+              complainant_id: cleanVal(getVal(['Complainant ID#'])),
+              respondent_name: respName, respondent_id: respId,
               current_action: latestAction, execution_date: latestDate,
-              action_history: history.length > 0 ? history : null, remarks: cleanVal(getVal(["Remarks"])),
-              unique_key: caseNum && respId ? `${caseNum}|${respId}` : null
+              action_history: history.length > 0 ? history : null,
+              violations: violationType ? [violationType] : undefined,
+              remarks: cleanVal(getVal(['Remarks'])),
+              unique_key: caseNum && uniqueBase ? `${caseNum}|${uniqueBase}` : null
             };
-          }).filter(item => item && item.case_number && item.unique_key);
+          }).filter(item => item && item.case_number && item.unique_key));
         }
 
-        if (casesToUpsert.length === 0 && daDataToInsert.length === 0) { setUploadMessage('❌ Error: No valid data found.'); setUploading(false); return; }
+        if (casesToUpsert.length === 0 && daDataToInsert.length === 0) { setUploadMessage('❌ Error: No recognized sheets found.'); setUploading(false); return; }
 
-        setUploadMessage('3/5 Syncing Cases...');
+        setUploadMessage('3/6 Syncing cases...');
         if (casesToUpsert.length > 0) for (let chunk of chunkArray(casesToUpsert, 100)) await supabase.from('cases').upsert(chunk, { onConflict: 'case_number' });
 
-        setUploadMessage('4/5 Ensuring parent cases exist...');
+        setUploadMessage('4/6 Ensuring parent cases exist...');
         const { data: existingCases } = await supabase.from('cases').select('case_number');
         const existingSet = new Set(existingCases.map(c => c.case_number));
         const missingCases = [...new Set(daDataToInsert.map(item => item.case_number))].filter(cn => !existingSet.has(cn) && !casesToUpsert.some(c => c.case_number === cn)).map(cn => {
@@ -335,9 +466,38 @@ const [showCloseOptions, setShowCloseOptions] = useState(false);
         });
         if (missingCases.length > 0) for (let chunk of chunkArray(missingCases, 100)) await supabase.from('cases').upsert(chunk, { onConflict: 'case_number', ignoreDuplicates: true });
 
-        setUploadMessage('5/5 Uploading Respondents...');
+        setUploadMessage('5/6 Merging respondents...');
+        const daRowsToUpsert = [];
+        const daRowsToUpdate = [];
+        const involved = [...new Set(daDataToInsert.filter(i => !i.respondent_id && i.respondent_name).map(i => i.case_number))];
+        const nameToRow = new Map();
+        for (let chunk of chunkArray(involved, 50)) {
+          const { data: existingDa } = await supabase.from('disciplinary_actions').select('id, case_number, respondent_name, violations').in('case_number', chunk);
+          (existingDa || []).forEach(r => {
+            const nn = (r.respondent_name || '').toUpperCase().replace(/\s+/g, ' ').trim();
+            if (nn) nameToRow.set(`${r.case_number}|${nn}`, r);
+          });
+        }
+        daDataToInsert.forEach(item => {
+          if (!item.respondent_id && item.respondent_name) {
+            const nn = item.respondent_name.toUpperCase().replace(/\s+/g, ' ').trim();
+            const match = nameToRow.get(`${item.case_number}|${nn}`);
+            if (match) {
+              const patch = { modified_by_email: userEmail, last_modified: new Date().toISOString() };
+              if (item.violations && item.violations.length) patch.violations = [...new Set([...(match.violations || []), ...item.violations])];
+              if (item.current_action) patch.current_action = item.current_action;
+              if (item.remarks) patch.remarks = item.remarks;
+              daRowsToUpdate.push({ id: match.id, patch });
+              return;
+            }
+          }
+          daRowsToUpsert.push(item);
+        });
+        for (const u of daRowsToUpdate) { await supabase.from('disciplinary_actions').update(u.patch).eq('id', u.id); }
+
+        setUploadMessage('6/6 Uploading respondents...');
         const uniqueMap = new Map();
-        daDataToInsert.forEach(item => uniqueMap.set(item.unique_key, item));
+        daRowsToUpsert.forEach(item => uniqueMap.set(item.unique_key, item));
         const finalDataToInsert = Array.from(uniqueMap.values());
         let errorCount = 0; let firstError = null;
         for (let chunk of chunkArray(finalDataToInsert, 100)) {
@@ -345,9 +505,11 @@ const [showCloseOptions, setShowCloseOptions] = useState(false);
           if (error) { errorCount++; if (!firstError) firstError = error.message; }
         }
         let finalMsg = `✅ Sync Complete! `;
-        if (casesToUpsert.length > 0) finalMsg += `Updated ${casesToUpsert.length} Cases. `;
-        if (finalDataToInsert.length > 0) finalMsg += `Processed ${finalDataToInsert.length} Respondents. `;
-        if (missingCases.length > 0) finalMsg += `Auto-created ${missingCases.length} missing Cases. `;
+        if (masterCaseCount > 0) finalMsg += `Master: ${masterCaseCount} cases. `;
+        if (indiaCaseCount > 0) finalMsg += `India: ${indiaCaseCount} CVN cases. `;
+        if (daRowsToUpdate.length > 0) finalMsg += `Merged ${daRowsToUpdate.length} respondents. `;
+        if (finalDataToInsert.length > 0) finalMsg += `Processed ${finalDataToInsert.length} respondents. `;
+        if (missingCases.length > 0) finalMsg += `Auto-created ${missingCases.length} missing cases. `;
         if (errorCount > 0) finalMsg = `⚠️ Completed with ${errorCount} errors. First: ${firstError}`;
         setUploadMessage(finalMsg);
         fetchCases(true); setUploading(false);
@@ -716,6 +878,7 @@ const handleUpdateRespondent = async (e, daId) => {
   };
 
   const filteredCases = cases.filter(c => {
+    if ((c.case_number || '').toUpperCase().startsWith('CVN') && !c.promoted) return false;
     if (searchTerm) {
       const search = searchTerm.toLowerCase();
       const matchCase = c.case_number?.toLowerCase().includes(search);
@@ -807,11 +970,164 @@ const renderClosureInfo = (c) => {
       {c.reactivated_at && <div className="expanded-sub" style={{ color: '#64748b' }}>Reactivated: {formatDateTime(c.reactivated_at)}</div>}
     </>
   );
-};  
-const navItems = [
+};
+  // ==== INDIA STAGING: state, computations, handlers ====
+  const [indiaSearch, setIndiaSearch] = useState('');
+  const [indiaMatchFilter, setIndiaMatchFilter] = useState('');
+  const [indiaPage, setIndiaPage] = useState(1);
+
+  const indiaStaging = cases.filter(c => (c.case_number || '').toUpperCase().startsWith('CVN') && !c.promoted);
+  const promotedCases = cases.filter(c => !(c.case_number || '').toUpperCase().startsWith('CVN') || c.promoted);
+
+  const indiaPromotedIdMap = new Map();
+  promotedCases.forEach(pc => {
+    (pc.disciplinary_actions || []).forEach(pda => {
+      if (pda.respondent_id) indiaPromotedIdMap.set(pda.respondent_id, pc.case_number);
+    });
+  });
+
+  const indiaDuplicateMap = new Map();
+  indiaStaging.forEach(sc => {
+    const match = (sc.disciplinary_actions || []).find(da => da.respondent_id && indiaPromotedIdMap.has(da.respondent_id));
+    if (match) indiaDuplicateMap.set(sc.case_number, indiaPromotedIdMap.get(match.respondent_id));
+  });
+
+  const indiaNoIdCount = indiaStaging.filter(c => !(c.disciplinary_actions || []).some(da => da.respondent_id)).length;
+
+  const indiaFiltered = indiaStaging.filter(c => {
+    if (indiaSearch) {
+      const search = indiaSearch.toLowerCase();
+      const matchCase = c.case_number?.toLowerCase().includes(search);
+      const matchPerson = (c.disciplinary_actions || []).some(da =>
+        (da.respondent_id || '').toLowerCase().includes(search) ||
+        (da.respondent_name || '').toLowerCase().includes(search)
+      );
+      if (!matchCase && !matchPerson) return false;
+    }
+    if (indiaMatchFilter === 'matched' && !indiaDuplicateMap.has(c.case_number)) return false;
+    if (indiaMatchFilter === 'unmatched' && indiaDuplicateMap.has(c.case_number)) return false;
+    return true;
+  });
+
+  const handlePromoteCase = async (caseNum) => {
+    const { error } = await supabase.from('cases').update({
+      promoted: true, modified_by_email: userEmail, last_modified: new Date().toISOString()
+    }).eq('case_number', caseNum);
+    if (error) alert('Error promoting case: ' + error.message);
+    else fetchCases(true);
+  };
+
+  const handleDeleteStagingCase = async (caseNum) => {
+    if (!window.confirm(`Delete staging case ${caseNum}?\n\nThis removes the case and its respondent records permanently.`)) return;
+    await supabase.from('disciplinary_actions').delete().eq('case_number', caseNum);
+    await supabase.from('wip_actions').delete().eq('case_number', caseNum);
+    const { error } = await supabase.from('cases').delete().eq('case_number', caseNum);
+    if (error) alert('Error deleting: ' + error.message);
+    else fetchCases(true);
+  };
+  const handleBulkDeleteNoId = async () => {
+    const noIdCases = indiaStaging.filter(c => !(c.disciplinary_actions || []).some(da => da.respondent_id));
+    if (noIdCases.length === 0) { alert('No cases without ID# to delete.'); return; }
+    if (!window.confirm(`Delete ${noIdCases.length} cases without ID#?\n\nThese cannot be matched to any person.`)) return;
+    for (const c of noIdCases) {
+      await supabase.from('disciplinary_actions').delete().eq('case_number', c.case_number);
+      await supabase.from('cases').delete().eq('case_number', c.case_number);
+    }
+    fetchCases(true);
+    alert(`Deleted ${noIdCases.length} cases without ID#.`);
+  };
+
+  const [indiaSelectedCases, setIndiaSelectedCases] = useState({});
+  const [indiaSortConfig, setIndiaSortConfig] = useState({ key: '', direction: 'ascending' });
+
+  const requestIndiaSort = (key) => {
+    let direction = 'ascending';
+    if (indiaSortConfig.key === key && indiaSortConfig.direction === 'ascending') direction = 'descending';
+    setIndiaSortConfig({ key, direction });
+  };
+
+  const handleToggleIndiaCase = (caseNum) => {
+    setIndiaSelectedCases(prev => ({ ...prev, [caseNum]: !prev[caseNum] }));
+  };
+
+  const handleSelectAllIndia = () => {
+    const allSelected = indiaFiltered.length > 0 && indiaFiltered.every(c => indiaSelectedCases[c.case_number]);
+    if (allSelected) {
+      setIndiaSelectedCases({});
+    } else {
+      const newSel = {};
+      indiaFiltered.forEach(c => { newSel[c.case_number] = true; });
+      setIndiaSelectedCases(newSel);
+    }
+  };
+
+  const handleBatchPromote = async () => {
+    const selected = Object.keys(indiaSelectedCases).filter(k => indiaSelectedCases[k]);
+    if (selected.length === 0) { alert('No cases selected — tick the checkboxes first.'); return; }
+    if (!window.confirm(`Add ${selected.length} cases to the Cases tab?`)) return;
+    for (const caseNum of selected) {
+      await supabase.from('cases').update({
+        promoted: true, modified_by_email: userEmail, last_modified: new Date().toISOString()
+      }).eq('case_number', caseNum);
+    }
+    setIndiaSelectedCases({});
+    fetchCases(true);
+    alert(`✅ Added ${selected.length} cases to the Cases tab.`);
+  };
+
+  const handleBatchDelete = async () => {
+    const selected = Object.keys(indiaSelectedCases).filter(k => indiaSelectedCases[k]);
+    if (selected.length === 0) { alert('No cases selected — tick the checkboxes first.'); return; }
+    if (!window.confirm(`Delete ${selected.length} staging cases permanently?\n\nThis cannot be undone.`)) return;
+    for (const caseNum of selected) {
+      await supabase.from('disciplinary_actions').delete().eq('case_number', caseNum);
+      await supabase.from('wip_actions').delete().eq('case_number', caseNum);
+      await supabase.from('cases').delete().eq('case_number', caseNum);
+    }
+    setIndiaSelectedCases({});
+    fetchCases(true);
+    alert(`🗑 Deleted ${selected.length} cases.`);
+  };
+
+  const indiaSelectedCount = Object.keys(indiaSelectedCases).filter(k => indiaSelectedCases[k]).length;
+
+  const indiaSorted = [...indiaFiltered];
+  if (indiaSortConfig.key) {
+    indiaSorted.sort((a, b) => {
+      let aVal, bVal;
+      if (indiaSortConfig.key === 'person_id') {
+        const aDa = (a.disciplinary_actions || [])[0] || {};
+        const bDa = (b.disciplinary_actions || [])[0] || {};
+        aVal = aDa.respondent_id || aDa.complainant_id || '';
+        bVal = bDa.respondent_id || bDa.complainant_id || '';
+      } else if (indiaSortConfig.key === 'person_name') {
+        const aDa = (a.disciplinary_actions || [])[0] || {};
+        const bDa = (b.disciplinary_actions || [])[0] || {};
+        aVal = aDa.respondent_name || aDa.complainant_name || '';
+        bVal = bDa.respondent_name || bDa.complainant_name || '';
+      } else if (indiaSortConfig.key === 'role') {
+        const aDa = (a.disciplinary_actions || [])[0] || {};
+        const bDa = (b.disciplinary_actions || [])[0] || {};
+        aVal = aDa.respondent_name ? 'Respondent' : 'Complainant';
+        bVal = bDa.respondent_name ? 'Respondent' : 'Complainant';
+      } else {
+        aVal = a[indiaSortConfig.key] || '';
+        bVal = b[indiaSortConfig.key] || '';
+      }
+      if (String(aVal) < String(bVal)) return indiaSortConfig.direction === 'ascending' ? -1 : 1;
+      if (String(aVal) > String(bVal)) return indiaSortConfig.direction === 'ascending' ? 1 : -1;
+      return 0;
+    });
+  }
+
+  const indiaPageSize = 25;
+  const indiaTotalPages = Math.ceil(indiaSorted.length / indiaPageSize);
+  const indiaCurrentPage = indiaSorted.slice((indiaPage - 1) * indiaPageSize, indiaPage * indiaPageSize);
+  const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: '📊' },
     { id: 'cases', label: 'Cases', icon: '📁' },
     { id: 'analytics', label: 'Analytics', icon: '📈' },
+    { id: 'india', label: 'India Tracker', icon: '🇮🇳' },
   ];
 
   const SortIndicator = ({ column }) => {
@@ -1444,6 +1760,114 @@ const navItems = [
                 <div className="card"><h3 className="card-header">Case Status Breakdown</h3><ChartRow label="In Progress" value={inProgress} total={totalCases} color="#3b82f6" /><ChartRow label="Completed" value={completed} total={totalCases} color="#10b981" /><ChartRow label="Cancelled" value={cases.filter(c => c.case_status === 'CANCELLED').length} total={totalCases} color="#ef4444" /></div>
                 <div className="card"><h3 className="card-header">SLA Compliance (Active Cases)</h3><ChartRow label="Within SLA" value={inProgress - outOfSlaCases.length} total={inProgress} color="#10b981" /><ChartRow label="Out of SLA" value={outOfSlaCases.length} total={inProgress} color="#ef4444" /></div>
                 <div className="card"><h3 className="card-header">Priority Distribution</h3><ChartRow label="High Priority" value={cases.filter(c => c.priority === 'High').length} total={totalCases} color="#ef4444" /><ChartRow label="Medium Priority" value={cases.filter(c => c.priority === 'Medium').length} total={totalCases} color="#f59e0b" /><ChartRow label="Low Priority" value={cases.filter(c => c.priority === 'Low').length} total={totalCases} color="#64748b" /></div>
+              </div>
+            </>
+          )}
+                              {activeTab === 'india' && (
+            <>
+              <div className="page-header">
+                <div className="page-header-text">
+                  <h2>India Tracker (Staging)</h2>
+                  <p>{indiaStaging.length} cases · {indiaDuplicateMap.size} possible duplicates · {indiaNoIdCount} without ID#</p>
+                </div>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  <button onClick={handleBatchPromote} className="btn-action btn-success" disabled={indiaSelectedCount === 0}>
+                    ✓ Add Selected ({indiaSelectedCount})
+                  </button>
+                  <button onClick={handleBatchDelete} className="btn-action btn-danger" disabled={indiaSelectedCount === 0}>
+                    🗑 Delete Selected ({indiaSelectedCount})
+                  </button>
+                  <button onClick={handleBulkDeleteNoId} className="btn-action btn-warning" disabled={indiaNoIdCount === 0}>
+                    🗑 Delete {indiaNoIdCount} No ID
+                  </button>
+                </div>
+              </div>
+
+              <div className="table-container">
+                <div style={{ padding: '16px', borderBottom: '1px solid #e2e8f0', display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
+                  <input type="text" placeholder="Search case #, person, ID..." value={indiaSearch} onChange={(e) => { setIndiaSearch(e.target.value); setIndiaPage(1); }} style={{ flex: 1, minWidth: '200px', padding: '10px 16px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '14px', outline: 'none', color: '#334155' }} />
+                  <select value={indiaMatchFilter} onChange={(e) => setIndiaMatchFilter(e.target.value)} style={{ padding: '10px 16px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '14px', color: '#334155' }}>
+                    <option value="">All Cases</option>
+                    <option value="matched">⚠ Possible Duplicates Only</option>
+                    <option value="unmatched">No Match Found</option>
+                  </select>
+                </div>
+
+                <table className="table">
+                  <thead>
+                  <tr>
+                      <th style={{ width: '30px' }}>
+                        <input type="checkbox" checked={indiaFiltered.length > 0 && indiaFiltered.every(c => indiaSelectedCases[c.case_number])} onChange={handleSelectAllIndia} />
+                      </th>
+                      <th onClick={() => requestIndiaSort('case_number')} style={{ cursor: 'pointer' }}>Case Number {indiaSortConfig.key === 'case_number' ? (indiaSortConfig.direction === 'ascending' ? '▲' : '▼') : '↕'}</th>
+                      <th onClick={() => requestIndiaSort('role')} style={{ cursor: 'pointer' }}>Role {indiaSortConfig.key === 'role' ? (indiaSortConfig.direction === 'ascending' ? '▲' : '▼') : '↕'}</th>
+                      <th onClick={() => requestIndiaSort('person_name')} style={{ cursor: 'pointer' }}>Person {indiaSortConfig.key === 'person_name' ? (indiaSortConfig.direction === 'ascending' ? '▲' : '▼') : '↕'}</th>
+                      <th onClick={() => requestIndiaSort('person_id')} style={{ cursor: 'pointer' }}>ID# {indiaSortConfig.key === 'person_id' ? (indiaSortConfig.direction === 'ascending' ? '▲' : '▼') : '↕'}</th>
+                      <th onClick={() => requestIndiaSort('case_status')} style={{ cursor: 'pointer' }}>Status {indiaSortConfig.key === 'case_status' ? (indiaSortConfig.direction === 'ascending' ? '▲' : '▼') : '↕'}</th>
+                      <th>Notice Type</th>
+                      <th onClick={() => requestIndiaSort('pic')} style={{ cursor: 'pointer' }}>PIC {indiaSortConfig.key === 'pic' ? (indiaSortConfig.direction === 'ascending' ? '▲' : '▼') : '↕'}</th>
+                      <th onClick={() => requestIndiaSort('created_on')} style={{ cursor: 'pointer' }}>Created {indiaSortConfig.key === 'created_on' ? (indiaSortConfig.direction === 'ascending' ? '▲' : '▼') : '↕'}</th>
+                      <th>Possible Match</th>
+                      <th style={{ width: '100px' }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                  {indiaCurrentPage.length === 0 ? (
+                      <tr><td colSpan="11" style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>
+                        {indiaStaging.length === 0 ? '🎉 India tab is empty — all cases reviewed!' : 'No cases match your filter.'}
+                      </td></tr>
+                    ) : (
+                      indiaCurrentPage.map(c => {
+                        const da = (c.disciplinary_actions || [])[0] || {};
+                        const isRespondent = da.respondent_name || da.respondent_id;
+                        const personName = isRespondent ? da.respondent_name : da.complainant_name;
+                        const personId = isRespondent ? da.respondent_id : da.complainant_id;
+                        const fullCustomer = personId ? `IR:${personId} ${personName || ''}` : (personName || '—');
+                        const noticeType = (c.remarks || '').replace(/^\[|\]$/g, '');
+                        const matchCaseNum = indiaDuplicateMap.get(c.case_number);
+                        const matchCaseData = matchCaseNum ? cases.find(x => x.case_number === matchCaseNum) : null;
+                        return (
+                          <tr key={c.case_number} style={indiaSelectedCases[c.case_number] ? { backgroundColor: '#f0fdf4' } : {}}>
+                            <td><input type="checkbox" checked={!!indiaSelectedCases[c.case_number]} onChange={() => handleToggleIndiaCase(c.case_number)} /></td>
+                            <td style={{ fontWeight: 600, color: '#0f172a' }}>{c.case_number}</td>
+                            <td>{isRespondent ? <span className="badge badge-red">Respondent</span> : <span className="badge badge-blue">Complainant</span>}</td>
+                            <td style={{ fontWeight: 500, fontSize: '12px' }}>{fullCustomer}</td>
+                            <td style={{ fontSize: '11px', color: '#64748b' }}>{personId || 'no ID'}</td>
+                            <td><span className={`badge ${c.case_status === 'IN PROGRESS' ? 'badge-blue' : c.case_status === 'CANCELLED' ? 'badge-grey' : c.case_status === 'COMPLETED' ? 'badge-green' : 'badge-yellow'}`}>{c.case_status}</span></td>
+                            <td style={{ fontSize: '11px' }}>{noticeType || '—'}</td>
+                            <td style={{ fontSize: '11px' }}>{c.pic || '—'}</td>
+                            <td style={{ fontSize: '11px' }}>{c.created_on || '—'}</td>
+                            <td>
+                              {matchCaseNum ? (
+                                <div>
+                                  <span className="badge badge-red">⚠ {matchCaseNum}</span>
+                                  {matchCaseData && (
+                                    <div style={{ fontSize: '10px', color: '#64748b', marginTop: '2px' }}>
+                                      {matchCaseData.case_status} | {matchCaseData.pic || '—'}
+                                    </div>
+                                  )}
+                                </div>
+                              ) : (<span style={{ color: '#94a3b8' }}>—</span>)}
+                            </td>
+                            <td>
+                              <button onClick={() => handlePromoteCase(c.case_number)} className="btn-action btn-success">✓</button>
+                              <button onClick={() => handleDeleteStagingCase(c.case_number)} className="btn-action btn-danger">🗑</button>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+
+                <div className="pagination">
+                  <button onClick={() => setIndiaPage(prev => Math.max(1, prev - 1))} disabled={indiaPage === 1} className="btn-page">← Previous</button>
+                  <span style={{ color: '#64748b', fontSize: '13px' }}>
+                    Page {indiaPage} of {indiaTotalPages || 1} · {indiaSorted.length} cases
+                    {indiaSelectedCount > 0 && <span style={{ color: '#059669', fontWeight: 600 }}> · {indiaSelectedCount} selected (all pages)</span>}
+                  </span>
+                  <button onClick={() => setIndiaPage(prev => Math.min(indiaTotalPages, prev + 1))} disabled={indiaPage === indiaTotalPages || indiaTotalPages === 0} className="btn-page">Next →</button>
+                </div>
               </div>
             </>
           )}
