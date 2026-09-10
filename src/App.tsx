@@ -235,6 +235,7 @@ const [editingRespondentId, setEditingRespondentId] = useState(null);
 const [respondentEdits, setRespondentEdits] = useState({});
 // ==== Close-case chooser state ====
 const [showCloseOptions, setShowCloseOptions] = useState(false);
+const [showMyCases, setShowMyCases] = useState(false);
 
   const fetchCases = async (silent = false) => {
     if (!silent) setLoading(true);
@@ -936,6 +937,11 @@ const handleUpdateRespondent = async (e, daId) => {
 
   const filteredCases = cases.filter(c => {
     if ((c.case_number || '').toUpperCase().startsWith('CVN') && !c.promoted) return false;
+    if (showMyCases) {
+      const myName = (userEmail || '').split('@')[0].split('.').join(' ').toLowerCase();
+      const picLower = (c.pic || '').toLowerCase();
+      if (!picLower.includes(myName)) return false;
+    }
     if (searchTerm) {
       const search = searchTerm.toLowerCase();
       const matchCase = c.case_number?.toLowerCase().includes(search);
@@ -1493,7 +1499,10 @@ const renderClosureInfo = (c) => {
   <option value="yes">DA In Force</option>
   <option value="no">No DA In Force</option>
 </select>
-<button onClick={() => { setSearchTerm(''); setFilters({ pic: '', status: '', da_in_force: '' }); setSortConfig({ key: 'sla_due_date', direction: 'ascending' }); setCurrentPage(1); }} style={{ padding: '10px 16px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '14px', cursor: 'pointer', backgroundColor: '#f8fafc', color: '#334155', whiteSpace: 'nowrap' }}>✕ Clear</button>
+<button onClick={() => { setShowMyCases(!showMyCases); setCurrentPage(1); }} style={{ padding: '10px 16px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '14px', cursor: 'pointer', backgroundColor: showMyCases ? '#3b82f6' : 'white', color: showMyCases ? 'white' : '#334155', whiteSpace: 'nowrap' }}>
+                    👤 My Cases
+                  </button>
+<button onClick={() => { setSearchTerm(''); setFilters({ pic: '', status: '', da_in_force: '' }); setSortConfig({ key: 'sla_due_date', direction: 'ascending' }); setCurrentPage(1); setShowMyCases(false); }}>✕ Clear</button>
                 </div>
 
                 {loading ? (
