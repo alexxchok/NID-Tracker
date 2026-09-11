@@ -167,145 +167,6 @@ function AuthScreen() {
   );
 }
 
-const APP_STYLES = `
-        * { box-sizing: border-box; }
-        body { margin: 0; font-family: 'Inter', system-ui, -apple-system, sans-serif; }
-        .auth-wrapper { display: flex; justify-content: center; align-items: center; height: 100vh; background-color: #0f172a; }
-        .auth-card { background: white; padding: 40px; border-radius: 16px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); width: 100%; max-width: 420px; margin: 16px; }
-        .auth-header { text-align: center; margin-bottom: 30px; }
-        .auth-icon { display: inline-block; padding: 12px; background-color: #3b82f6; border-radius: 12px; margin-bottom: 15px; color: white; font-size: 24px; }
-        .auth-header h2 { margin: 0; color: #0f172a; font-size: 24px; font-weight: 600; }
-        .auth-header p { color: #64748b; margin-top: 5px; font-size: 14px; }
-        .form-group { margin-bottom: 16px; }
-        .form-group label { display: block; margin-bottom: 6px; font-size: 14px; font-weight: 500; color: #334155; }
-        .form-group input { width: 100%; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 14px; outline: none; }
-        .error-box { color: #ef4444; font-size: 14px; margin-bottom: 16px; padding: 10px; background-color: #fee2e2; border-radius: 6px; }
-        .btn-primary { width: 100%; background-color: #0f172a; color: white; padding: 14px; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 15px; }
-        .app-container { display: flex; min-height: 100vh; background-color: #f8fafc; color: #0f172a; }
-        .sidebar { width: 260px; background-color: #0f172a; color: white; padding: 24px 16px; display: flex; flex-direction: column; transition: width 0.3s ease; flex-shrink: 0; }
-        .sidebar.collapsed { width: 80px; }
-        .sidebar.hovered { width: 260px; }
-        .sidebar-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 40px; }
-        .sidebar-header.collapsed { justify-content: center; }
-        .sidebar-header h1 { font-size: 20px; font-weight: 600; margin: 0; white-space: nowrap; }
-        .sidebar-toggle { background: transparent; border: none; color: white; cursor: pointer; font-size: 20px; }
-        .nav-item { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 8px; margin-bottom: 5px; cursor: pointer; }
-        .nav-item:hover { background-color: #1e293b; }
-        .nav-item.active { background-color: #1e293b; color: white; }
-        .nav-item.inactive { color: #94a3b8; }
-        .nav-item.collapsed { justify-content: center; }
-        .nav-item span.icon { font-size: 18px; }
-        .nav-item span.label { font-size: 14px; font-weight: 500; }
-        .sidebar-footer { margin-top: auto; border-top: 1px solid #334155; padding-top: 16px; }
-        .user-info { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
-        .user-info.collapsed { justify-content: center; }
-        .user-avatar { width: 36px; height: 36px; border-radius: 50%; background-color: #3b82f6; display: flex; align-items: center; justify-content: center; font-weight: 600; flex-shrink: 0; }
-        .user-details .email { font-size: 14px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .user-details .role { font-size: 12px; color: #94a3b8; }
-        .btn-signout { width: 100%; padding: 8px; background-color: transparent; border: 1px solid #334155; color: #94a3b8; border-radius: 6px; cursor: pointer; font-size: 13px; }
-        .main-content { flex: 1; min-width: 0; padding: 24px; overflow-y: auto; }
-        .page-header { margin-bottom: 24px; display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px; }
-        .page-header-text h2 { font-size: 22px; font-weight: 600; margin: 0 0 5px 0; color: #0f172a; }
-        .page-header-text p { color: #64748b; margin: 0; font-size: 13px; }
-        .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; margin-bottom: 24px; }
-        .card-header { margin-top: 0; margin-bottom: 8px; font-size: 16px; font-weight: 600; }
-        .card-subtitle { color: #64748b; font-size: 13px; margin-bottom: 16px; }
-        .stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 24px; }
-        @media (min-width: 768px) { .stats-grid { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px; } }
-        .stat-card { background: white; padding: 16px; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; }
-        .stat-title { font-size: 12px; color: #64748b; margin-bottom: 4px; font-weight: 500; }
-        .stat-value { display: flex; align-items: baseline; gap: 6px; }
-        .stat-number { font-size: 24px; font-weight: 700; color: #0f172a; }
-        .stat-badge { font-size: 11px; padding: 2px 6px; border-radius: 10px; font-weight: 600; }
-        .upload-area { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
-        .btn-upload { padding: 10px 16px; background-color: #0f172a; color: white; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500; display: inline-block; }
-        .upload-msg { font-size: 13px; font-weight: 500; color: #059669; }
-        .btn-add-case { padding: 10px 16px; background-color: #3b82f6; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500; }
-        .add-case-form { background: #f8fafc; padding: 16px; border-radius: 8px; margin-bottom: 16px; border: 1px solid #e2e8f0; }
-        .form-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
-        @media (min-width: 768px) { .form-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: end; } }
-        .table-container { overflow-x: auto; border-radius: 12px; border: 1px solid #e2e8f0; background: white; }
-        .table { width: 100%; border-collapse: collapse; text-align: left; }
-        .table thead tr { border-bottom: 1px solid #e2e8f0; background-color: #f8fafc; }
-        .table th { padding: 10px 12px; font-size: 11px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap; cursor: pointer; }
-        .table th:hover { background-color: #f1f5f9; }
-        .table td { padding: 10px 12px; font-size: 12.5px; color: #475569; white-space: normal; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
-        .table tbody tr { cursor: pointer; transition: background-color 0.2s; }
-        .table tbody tr:hover { background-color: #f9fafb; }
-        .table tbody tr.selected { background-color: #f8fafc; }
-        .badge { padding: 4px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; white-space: nowrap; }
-        .badge-blue { background-color: #dbeafe; color: #2563eb; }
-        .badge-green { background-color: #d1fae5; color: #059669; }
-        .badge-red { background-color: #fee2e2; color: #dc2626; }
-        .badge-yellow { background-color: #fef3c7; color: #d97706; }
-        .badge-grey { background-color: #e2e8f0; color: #64748b; }
-        .badge-purple { background-color: #f3e8ff; color: #9333ea; }
-        .btn-action { padding: 6px 10px; background-color: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 500; white-space: nowrap; margin-right: 4px; }
-        .btn-success { background-color: #10b981; color: white; border: none; }
-        .btn-warning { background-color: #f59e0b; color: white; border: none; }
-        .btn-danger { background-color: #ef4444; color: white; border: none; }
-        .btn-purple { background-color: #8b5cf6; color: white; border: none; }
-        .expanded-content { padding: 16px; background-color: #f8fafc; border-bottom: 1px solid #e2e8f0; }
-        .expanded-card { background: white; border-radius: 8px; border: 1px solid #e2e8f0; padding: 16px; }
-        .expanded-header { display: flex; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 12px; }
-        .expanded-label { font-size: 11px; color: #94a3b8; font-weight: 600; text-transform: uppercase; display: block; margin-bottom: 4px; }
-        .expanded-value { font-weight: 600; font-size: 15px; }
-        .expanded-sub { font-size: 12px; color: #64748b; margin-top: 4px; }
-        .section-divider { border-top: 1px solid #e2e8f0; padding-top: 16px; margin-top: 16px; }
-        .section-title { margin: 0 0 12px 0; font-size: 14px; font-weight: 600; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
-        .wip-form { background: #f8fafc; padding: 12px; border-radius: 8px; margin-bottom: 12px; display: grid; grid-template-columns: 1fr; gap: 8px; }
-        @media (min-width: 768px) { .wip-form { grid-template-columns: minmax(0,2fr) minmax(0,2fr) minmax(0,1fr) minmax(0,1fr) auto; align-items: end; } .wip-notes-row { grid-column: 1 / -1; } }
-        .wip-input-group label { font-size: 10px; color: #64748b; font-weight: 600; display: block; margin-bottom: 2px; }
-        .wip-input-group { min-width: 0; }
-        .wip-input-group select, .wip-input-group input, .wip-input-group textarea { width: 100%; padding: 6px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 13px; }
-        .wip-input-group textarea { resize: vertical; min-height: 38px; }
-        .btn-log { padding: 8px 12px; background-color: #0f172a; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; }
-        .list-item { display: flex; align-items: flex-start; gap: 10px; padding: 10px; background-color: #f8fafc; border-radius: 8px; margin-bottom: 8px; flex-wrap: wrap; }
-        .list-item.done { opacity: 0.5; background-color: #f1f5f9; }
-        .step-circle { width: 22px; height: 22px; border-radius: 50%; background-color: #e2e8f0; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 600; color: #64748b; flex-shrink: 0; margin-top: 2px; }
-        .item-content { flex: 1; min-width: 150px; }
-        .item-title { font-weight: 600; font-size: 13px; color: #0f172a; }
-        .item-sub { font-size: 11px; color: #64748b; margin-top: 4px; white-space: pre-wrap; }
-        .item-meta { text-align: right; }
-        .item-actions { display: flex; gap: 4px; margin-top: 8px; flex-wrap: wrap; }
-        .pagination { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-top: 1px solid #e2e8f0; }
-        .btn-page { padding: 6px 12px; background-color: white; border: 1px solid #e2e8f0; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 500; }
-        .btn-page:disabled { opacity: 0.5; cursor: not-allowed; }
-        .chart-row { margin-bottom: 16px; }
-        .chart-label { display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 13px; }
-        .chart-track { width: 100%; background-color: #f1f5f9; border-radius: 6px; height: 8px; overflow: hidden; }
-        .chart-fill { height: 100%; border-radius: 6px; transition: width 0.5s ease; }
-        .person-form { background: #f8fafc; padding: 12px; border-radius: 8px; margin-bottom: 12px; display: grid; grid-template-columns: 1fr; gap: 8px; }
-        @media (min-width: 768px) { .person-form { grid-template-columns: minmax(0,2fr) minmax(0,2fr) minmax(0,2fr) auto; align-items: end; } }
-        .sub-action-form { display: flex; gap: 4px; margin-top: 8px; flex-wrap: wrap; }
-        @media (max-width: 768px) { .sidebar { position: fixed; left: 0; top: 0; bottom: 0; z-index: 100; box-shadow: 2px 0 10px rgba(0,0,0,0.1); } .sidebar.collapsed { transform: translateX(-100%); width: 260px; } .main-content { padding: 16px; } }
-        /* ==== ADMIN edit styles ==== */
-        .btn-admin { padding: 6px 10px; background-color: #8b5cf6; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 500; white-space: nowrap; margin-right: 4px; }
-        .btn-admin:hover { background-color: #7c3aed; }
-        .admin-edit-form { background: #f5f3ff; padding: 16px; border-radius: 8px; margin-bottom: 16px; border: 1px solid #c4b5fd; flex-basis: 100%; }
-        .admin-edit-form .form-title { margin: 0 0 4px 0; font-size: 14px; font-weight: 600; color: #6d28d9; }
-        .admin-edit-form .form-sub { font-size: 11px; color: #94a3b8; margin: 0 0 12px 0; }
-        .admin-form-grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
-        @media (min-width: 768px) { .admin-form-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-        .admin-form-grid .full-width { grid-column: 1 / -1; }
-        .admin-form-actions { display: flex; gap: 8px; margin-top: 12px; }
-        .btn-save-admin { padding: 8px 16px; background-color: #7c3aed; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; }
-        .btn-cancel-admin { padding: 8px 16px; background-color: white; color: #64748b; border: 1px solid #e2e8f0; border-radius: 6px; cursor: pointer; font-size: 13px; }
-        /* ==== ADMIN respondent editor ==== */
-.respondent-admin-strip { background: #f5f3ff; border: 1px solid #c4b5fd; border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; }
-.respondent-admin-label { margin: 0 0 6px 0; font-size: 11px; font-weight: 600; color: #6d28d9; text-transform: uppercase; letter-spacing: 0.04em; }
-.respondent-admin-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px dashed #ddd6fe; flex-wrap: wrap; }
-.respondent-admin-row:last-child { border-bottom: none; }
-.respondent-admin-name { font-size: 13px; color: #0f172a; }
-.respondent-admin-form { padding: 4px 0 8px 0; }
-.btn-admin-danger { padding: 6px 10px; background-color: #ef4444; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 500; white-space: nowrap; }
-.btn-admin-danger:hover { background-color: #dc2626; }
-.complainant-line { display: inline-flex; align-items: center; flex-wrap: wrap; }
-.complainant-name { font-weight: 600; color: #0f172a; }
-.close-case-panel { flex-basis: 100%; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 10px 12px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
-.close-case-label { font-size: 13px; font-weight: 600; color: #0f172a; }
-.btn-cancel-status { background-color: #64748b; color: white; border: none; }
-      `;
 function Dashboard({ userEmail, onSignOut }) {
   const [cases, setCases] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -319,7 +180,16 @@ function Dashboard({ userEmail, onSignOut }) {
   const [wipList, setWipList] = useState([]);
   const [showWipForm, setShowWipForm] = useState(false);
   const [mappingRules, setMappingRules] = useState([]);
+  // PERF FIX: searchInput updates instantly (what the user types/sees),
+  // searchTerm updates 250ms after they stop typing (what filtering/sorting actually uses).
+  // This means filteredCases/sortedCases — which scan ~2500 cases — only recompute
+  // once typing pauses, instead of on every single keystroke.
+  const [searchInput, setSearchInput] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  useEffect(() => {
+    const t = setTimeout(() => setSearchTerm(searchInput), 250);
+    return () => clearTimeout(t);
+  }, [searchInput]);
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 25;
 
@@ -581,18 +451,44 @@ const [showMyCases, setShowMyCases] = useState(false);
             const latestAction = history.length > 0 ? history[history.length - 1].action : cleanVal(getVal(['Current Action', 'Action Taken', 'Action']));
             const latestDate = history.length > 0 ? history[history.length - 1].date : formatDateString(cleanVal(getVal(['Execution Date'])));
             const violationType = cleanVal(getVal(['Violation Type', 'Type of Violation', 'Violation']));
+            const vCategory = cleanVal(getVal(['Violation Category']));
+            const refId = cleanVal(getVal(["Respondent's Referrer ID", 'Referrer ID']));
+            const refName = cleanVal(getVal(["Respondent's Referrer Name", 'Referrer Name']));
+            const upId = cleanVal(getVal(['nearest VA Upline ID', 'VA Upline ID']));
+            const upName = cleanVal(getVal(['nearest VA Upline Name', 'VA Upline Name']));
+            const teamName = cleanVal(getVal(['Team Name']));
+            const sentBy = cleanVal(getVal(['Sent by']));
+            const nidNo = cleanVal(getVal(['NID case no', 'NID Case No']));
+            const dateRecv = formatDateString(cleanVal(getVal(['Date of instruction received'])));
+            const respCountry = normalizeCountry(cleanVal(getVal(['Country'])));
             const uniqueBase = respId || respName;
-            return {
-              case_number: caseNum, complainant_name: cleanVal(getVal(["Complainant Name", "Complainant's Name and IR ID No"])),
-              complainant_id: cleanVal(getVal(['Complainant ID#'])),
+            const rawComp = cleanVal(getVal(["Complainant Name", "Complainant's Name and IR ID No"]));
+            const explicitCompId = cleanVal(getVal(['Complainant ID#']));
+            const compList = parseComplainants(rawComp);
+            if (!caseNum || !uniqueBase) return null;
+            return compList.map((c, ci) => ({
+              case_number: caseNum,
+              complainant_name: c.name,
+              complainant_id: explicitCompId || c.id,
+              complainant_cust_id: c.cust,
               respondent_name: respName, respondent_id: respId,
               current_action: latestAction, execution_date: latestDate,
               action_history: history.length > 0 ? history : null,
               violations: violationType ? [violationType] : undefined,
               remarks: cleanVal(getVal(['Remarks'])),
-              unique_key: caseNum && uniqueBase ? `${caseNum}|${uniqueBase}` : null
-            };
-          }).filter(item => item && item.case_number && item.unique_key));
+              violation_category: vCategory,
+              referrer_id: refId,
+              referrer_name: refName,
+              upline_id: upId,
+              upline_name: upName,
+              team_name: teamName,
+              sent_by: sentBy,
+              nid_case_no: nidNo,
+              date_received: dateRecv,
+              respondent_country: respCountry,
+              unique_key: `${caseNum}|${uniqueBase}|${c.id || c.name || ci}`
+            }));
+          }).flat().filter(item => item && item.case_number && item.unique_key));
         }
 
         if (casesToUpsert.length === 0 && daDataToInsert.length === 0) { setUploadMessage('❌ Error: No recognized sheets found.'); setUploading(false); return; }
@@ -934,9 +830,7 @@ const handleUpdateRespondent = async (e, daId) => {
     const history = da.action_history || [];
     history.push({ step: history.length + 1, action: newDaAction, date: newDaDate, added_by: userEmail, added_at: new Date().toISOString(), sub_actions: [] });
     const { error } = await supabase.from('disciplinary_actions').update({
-      action_history: history, current_action: newDaAction, execution_date: newDaDate,
-      da_confirmed: false,
-      modified_by_email: userEmail, last_modified: new Date().toISOString()
+      action_history: history, current_action: newDaAction, execution_date: newDaDate, modified_by_email: userEmail, last_modified: new Date().toISOString()
     }).eq('id', daId);
     if (error) alert('Error adding action: ' + error.message);
     else {
@@ -1076,7 +970,7 @@ const handleUpdateRespondent = async (e, daId) => {
     setSortConfig({ key, direction });
   };
 
-  const filteredCases = React.useMemo(() => cases.filter(c => {
+  const filteredCases = cases.filter(c => {
     if ((c.case_number || '').toUpperCase().startsWith('CVN') && !c.promoted) return false;
     if (showMyCases) {
       const myName = (userEmail || '').split('@')[0].split('.').join(' ').toLowerCase();
@@ -1102,7 +996,7 @@ const handleUpdateRespondent = async (e, daId) => {
     }
 
     return true;
-  }), [cases, searchTerm, filters, showMyCases]);
+  });
 
   const sortedCases = React.useMemo(() => {
     let sortableCases = [...filteredCases];
@@ -1165,40 +1059,20 @@ const handleUpdateRespondent = async (e, daId) => {
   const inProgress = cases.filter(c => c.case_status === 'IN PROGRESS').length;
   const completed = cases.filter(c => c.case_status === 'COMPLETED').length;
   const cancelled = cases.filter(c => c.case_status === 'CANCELLED').length;
-  const outOfSlaCases = cases.filter(c => calculateBusinessDays(c.sla_due_date) < 0 && c.case_status === 'IN PROGRESS');
+  // PERF FIX: was recalculated on every render (including every keystroke anywhere
+  // in the Dashboard). Now only recalculates when `cases` actually changes.
+  const outOfSlaCases = React.useMemo(
+    () => cases.filter(c => calculateBusinessDays(c.sla_due_date) < 0 && c.case_status === 'IN PROGRESS'),
+    [cases]
+  );
 
   // ==== DA In Force: latest action determines if the DA is still active ====
 // Release or Termination = resolved, no longer in force
-// ==== DA In Force: follows the latest CONFIRMED action ====
-// Logic:
-// - Latest confirmed = suspension → IN FORCE
-// - Latest confirmed = release/termination → NOT in force (resolved)
-// - Latest NOT confirmed → previous action still active (e.g., suspension still counts
-//   until the release/termination is confirmed; a new suspension doesn't add to the count)
 const isDAInForce = (da) => {
   if (!da) return false;
   const action = (da.current_action || '').toLowerCase();
-
-  // Case 1: Latest action IS confirmed — it determines the state
-  if (da.da_confirmed === true) {
-    if (action.includes('release') || action.includes('terminat')) return false;
-    if (action.includes('suspend')) return true;
-    return false;
-  }
-
-  // Case 2: Latest action NOT confirmed — previous action is still the effective DA
-  const history = da.action_history || [];
-  if (history.length >= 2) {
-    const prevAction = (history[history.length - 2].action || '').toLowerCase();
-    if (prevAction.includes('suspend')) return true;
-    if (prevAction.includes('release') || prevAction.includes('terminat')) return false;
-    return prevAction.includes('suspend');
-  }
-
-  // Case 3: Only one action, never confirmed — legacy keyword logic
-  if (da.da_confirmed == null && action.includes('suspend')) return true;
-
-  return false;
+  if (action.includes('release') || action.includes('terminat')) return false;
+  return da.da_confirmed === true || (da.da_confirmed == null && action.includes('suspend'));
 };
   const getActionColor = (action) => {
     if (!action) return { text: '#64748b', bg: '#f1f5f9' };
@@ -1246,25 +1120,21 @@ const renderClosureInfo = (c) => {
   const [indiaMatchFilter, setIndiaMatchFilter] = useState('');
   const [indiaPage, setIndiaPage] = useState(1);
 
-  const indiaStaging = React.useMemo(() => cases.filter(c => (c.case_number || '').toUpperCase().startsWith('CVN') && !c.promoted), [cases]);
-  const indiaPromotedIdMap = React.useMemo(() => {
-    const map = new Map();
-    promotedCases.forEach(pc => {
-      (pc.disciplinary_actions || []).forEach(pda => {
-        if (pda.respondent_id) map.set(pda.respondent_id, pc.case_number);
-      });
-    });
-    return map;
-  }, [promotedCases]);
+  const indiaStaging = cases.filter(c => (c.case_number || '').toUpperCase().startsWith('CVN') && !c.promoted);
+  const promotedCases = cases.filter(c => !(c.case_number || '').toUpperCase().startsWith('CVN') || c.promoted);
 
-  const indiaDuplicateMap = React.useMemo(() => {
-    const map = new Map();
-    indiaStaging.forEach(sc => {
-      const match = (sc.disciplinary_actions || []).find(da => da.respondent_id && indiaPromotedIdMap.has(da.respondent_id));
-      if (match) map.set(sc.case_number, indiaPromotedIdMap.get(match.respondent_id));
+  const indiaPromotedIdMap = new Map();
+  promotedCases.forEach(pc => {
+    (pc.disciplinary_actions || []).forEach(pda => {
+      if (pda.respondent_id) indiaPromotedIdMap.set(pda.respondent_id, pc.case_number);
     });
-    return map;
-  }, [indiaStaging, indiaPromotedIdMap]);
+  });
+
+  const indiaDuplicateMap = new Map();
+  indiaStaging.forEach(sc => {
+    const match = (sc.disciplinary_actions || []).find(da => da.respondent_id && indiaPromotedIdMap.has(da.respondent_id));
+    if (match) indiaDuplicateMap.set(sc.case_number, indiaPromotedIdMap.get(match.respondent_id));
+  });
 
   const indiaNoIdCount = indiaStaging.filter(c => !(c.disciplinary_actions || []).some(da => da.respondent_id)).length;
 
@@ -1397,11 +1267,154 @@ const renderClosureInfo = (c) => {
   const indiaPageSize = 25;
   const indiaTotalPages = Math.ceil(indiaSorted.length / indiaPageSize);
   const indiaCurrentPage = indiaSorted.slice((indiaPage - 1) * indiaPageSize, indiaPage * indiaPageSize);
+  const parseComplainants = (raw) => {
+    if (!raw || typeof raw !== 'string') return [{ name: raw || null, id: null, cust: null }];
+    const looksLikeId = (s) => /^[A-Za-z]{1,3}[0-9]{3,12}$/.test(String(s).trim());
+    const chunks = raw.split(/\s*[\/&,]\s*(?=[^)]*(?:\(|$))/).map(c => c.trim()).filter(Boolean);
+    const useChunks = chunks.length > 1 ? chunks : [raw.trim()];
+    const out = [];
+    useChunks.forEach(chunk => {
+      let name = chunk;
+      let mains = [];
+      let custs = [];
+      const br = chunk.match(/^(.*?)[\(\[]([^\)\]]*)[\)\]]\s*$/);
+      if (br) {
+        const inside = br[2].trim();
+        const parts = inside.split(/[\/,]/).map(p => p.trim()).filter(Boolean);
+        if (parts.length > 0 && parts.every(looksLikeId)) {
+          name = br[1].trim() || chunk;
+          parts.forEach(p => {
+            const up = p.toUpperCase();
+            if (up.startsWith('CU') || up.startsWith('CE')) custs.push(up);
+            else mains.push(up);
+          });
+        }
+      } else {
+        const words = chunk.split(/\s+/);
+        const last = words[words.length - 1];
+        if (words.length > 1 && looksLikeId(last)) {
+          mains.push(last.toUpperCase());
+          name = words.slice(0, -1).join(' ').trim();
+        }
+      }
+      if (mains.length === 0 && custs.length > 0) mains.push(custs.shift());
+      out.push({
+        name: name || null,
+        id: mains.length ? mains.join('/') : null,
+        cust: custs.length ? custs.join('/') : null
+      });
+    });
+    return out.length ? out : [{ name: raw, id: null, cust: null }];
+  };
+  const [respRows, setRespRows] = React.useState([]);
+  const [respLoading, setRespLoading] = React.useState(false);
+  const [respSearchInput, setRespSearchInput] = React.useState('');
+  const [respSearch, setRespSearch] = React.useState('');
+  const [respCountry, setRespCountry] = React.useState('');
+  const [respViolation, setRespViolation] = React.useState('');
+  const [respAction, setRespAction] = React.useState('');
+  const [respStatus, setRespStatus] = React.useState('');
+  const [respRepeatOnly, setRespRepeatOnly] = React.useState(false);
+  const [respPage, setRespPage] = React.useState(1);
+  const [respDetail, setRespDetail] = React.useState(null);
+
+  React.useEffect(() => {
+    const t = setTimeout(() => { setRespSearch(respSearchInput); setRespPage(1); }, 250);
+    return () => clearTimeout(t);
+  }, [respSearchInput]);
+
+  const fetchRespondents = React.useCallback(async () => {
+    setRespLoading(true);
+    let all = [];
+    let from = 0;
+    const size = 1000;
+    while (true) {
+      const { data, error } = await supabase
+        .from('disciplinary_actions')
+        .select('*, cases(pic, case_status, country)')
+        .order('case_number', { ascending: false })
+        .range(from, from + size - 1);
+      if (error || !data || data.length === 0) break;
+      all = all.concat(data);
+      if (data.length < size) break;
+      from += size;
+    }
+    setRespRows(all);
+    setRespLoading(false);
+  }, []);
+
+  React.useEffect(() => {
+    if (activeTab === 'respondents' && respRows.length === 0 && !respLoading) fetchRespondents();
+  }, [activeTab]);
+
+  const respCaseCountById = React.useMemo(() => {
+    const m = new Map();
+    respRows.forEach(r => {
+      const key = (r.respondent_id || '').trim().toUpperCase();
+      if (!key) return;
+      if (!m.has(key)) m.set(key, new Set());
+      m.get(key).add(r.case_number);
+    });
+    return m;
+  }, [respRows]);
+
+  const respRepeatCount = (r) => {
+    const key = (r.respondent_id || '').trim().toUpperCase();
+    if (!key) return 1;
+    const s = respCaseCountById.get(key);
+    return s ? s.size : 1;
+  };
+
+  const respUniqueVals = React.useMemo(() => {
+    const c = new Set(), v = new Set(), a = new Set(), s = new Set();
+    respRows.forEach(r => {
+      if (r.respondent_country) c.add(r.respondent_country);
+      if (r.violation_category) v.add(r.violation_category);
+      if (r.current_action) a.add(r.current_action);
+      if (r.cases && r.cases.case_status) s.add(r.cases.case_status);
+    });
+    const srt = (x) => Array.from(x).sort();
+    return { countries: srt(c), violations: srt(v), actions: srt(a), statuses: srt(s) };
+  }, [respRows]);
+
+  const respFiltered = React.useMemo(() => {
+    const q = respSearch.trim().toLowerCase();
+    return respRows.filter(r => {
+      if (respCountry && r.respondent_country !== respCountry) return false;
+      if (respViolation && r.violation_category !== respViolation) return false;
+      if (respAction && r.current_action !== respAction) return false;
+      if (respStatus && (!r.cases || r.cases.case_status !== respStatus)) return false;
+      if (respRepeatOnly && respRepeatCount(r) < 2) return false;
+      if (!q) return true;
+      const hay = [r.case_number, r.complainant_name, r.complainant_id, r.complainant_cust_id,
+                   r.respondent_name, r.respondent_id].map(x => String(x || '').toLowerCase()).join(' | ');
+      return hay.includes(q);
+    });
+  }, [respRows, respSearch, respCountry, respViolation, respAction, respStatus, respRepeatOnly, respCaseCountById]);
+
+  const respPageSize = 25;
+  const respTotalPages = Math.max(1, Math.ceil(respFiltered.length / respPageSize));
+  const respCurrentPage = respFiltered.slice((respPage - 1) * respPageSize, respPage * respPageSize);
+
+  const respOtherCases = (r) => {
+    const key = (r.respondent_id || '').trim().toUpperCase();
+    if (!key) return [];
+    const seen = new Map();
+    respRows.forEach(x => {
+      if ((x.respondent_id || '').trim().toUpperCase() !== key) return;
+      if (x.case_number === r.case_number) return;
+      if (!seen.has(x.case_number)) seen.set(x.case_number, x);
+    });
+    return Array.from(seen.values());
+  };
+
+  const respMissingInfo = (r) => !r.respondent_name || !r.respondent_id || !r.complainant_name;
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: '📊' },
     { id: 'cases', label: 'Cases', icon: '📁' },
     { id: 'analytics', label: 'Analytics', icon: '📈' },
     { id: 'india', label: 'India Tracker', icon: '🇮🇳' },
+    { id: 'respondents', label: 'Respondents', icon: '👥' },
   ];
 
   const SortIndicator = ({ column }) => {
@@ -1411,34 +1424,350 @@ const renderClosureInfo = (c) => {
 
   return (
     <>
-            <style>{APP_STYLES}</style>
+      <style>{`
+        * { box-sizing: border-box; }
+        body { margin: 0; font-family: 'Inter', system-ui, -apple-system, sans-serif; }
+        .auth-wrapper { display: flex; justify-content: center; align-items: center; height: 100vh; background-color: #0f172a; }
+        .auth-card { background: white; padding: 40px; border-radius: 16px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); width: 100%; max-width: 420px; margin: 16px; }
+        .auth-header { text-align: center; margin-bottom: 30px; }
+        .auth-icon { display: inline-block; padding: 12px; background-color: #3b82f6; border-radius: 12px; margin-bottom: 15px; color: white; font-size: 24px; }
+        .auth-header h2 { margin: 0; color: #0f172a; font-size: 24px; font-weight: 600; }
+        .auth-header p { color: #64748b; margin-top: 5px; font-size: 14px; }
+        .form-group { margin-bottom: 16px; }
+        .form-group label { display: block; margin-bottom: 6px; font-size: 14px; font-weight: 500; color: #334155; }
+        .form-group input { width: 100%; padding: 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 14px; outline: none; }
+        .error-box { color: #ef4444; font-size: 14px; margin-bottom: 16px; padding: 10px; background-color: #fee2e2; border-radius: 6px; }
+        .btn-primary { width: 100%; background-color: #0f172a; color: white; padding: 14px; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 15px; }
+        .app-container { display: flex; min-height: 100vh; background-color: #f8fafc; color: #0f172a; }
+        .sidebar { width: 260px; background-color: #0f172a; color: white; padding: 24px 16px; display: flex; flex-direction: column; transition: width 0.3s ease; flex-shrink: 0; }
+        .sidebar.collapsed { width: 80px; }
+        .sidebar.hovered { width: 260px; }
+        .sidebar-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 40px; }
+        .sidebar-header.collapsed { justify-content: center; }
+        .sidebar-header h1 { font-size: 20px; font-weight: 600; margin: 0; white-space: nowrap; }
+        .sidebar-toggle { background: transparent; border: none; color: white; cursor: pointer; font-size: 20px; }
+        .nav-item { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 8px; margin-bottom: 5px; cursor: pointer; }
+        .nav-item:hover { background-color: #1e293b; }
+        .nav-item.active { background-color: #1e293b; color: white; }
+        .nav-item.inactive { color: #94a3b8; }
+        .nav-item.collapsed { justify-content: center; }
+        .nav-item span.icon { font-size: 18px; }
+        .nav-item span.label { font-size: 14px; font-weight: 500; }
+        .sidebar-footer { margin-top: auto; border-top: 1px solid #334155; padding-top: 16px; }
+        .user-info { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+        .user-info.collapsed { justify-content: center; }
+        .user-avatar { width: 36px; height: 36px; border-radius: 50%; background-color: #3b82f6; display: flex; align-items: center; justify-content: center; font-weight: 600; flex-shrink: 0; }
+        .user-details .email { font-size: 14px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .user-details .role { font-size: 12px; color: #94a3b8; }
+        .btn-signout { width: 100%; padding: 8px; background-color: transparent; border: 1px solid #334155; color: #94a3b8; border-radius: 6px; cursor: pointer; font-size: 13px; }
+        .main-content { flex: 1; min-width: 0; padding: 24px; overflow-y: auto; }
+        .page-header { margin-bottom: 24px; display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px; }
+        .page-header-text h2 { font-size: 22px; font-weight: 600; margin: 0 0 5px 0; color: #0f172a; }
+        .page-header-text p { color: #64748b; margin: 0; font-size: 13px; }
+        .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; margin-bottom: 24px; }
+        .card-header { margin-top: 0; margin-bottom: 8px; font-size: 16px; font-weight: 600; }
+        .card-subtitle { color: #64748b; font-size: 13px; margin-bottom: 16px; }
+        .stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 24px; }
+        @media (min-width: 768px) { .stats-grid { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 16px; } }
+        .stat-card { background: white; padding: 16px; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; }
+        .stat-title { font-size: 12px; color: #64748b; margin-bottom: 4px; font-weight: 500; }
+        .stat-value { display: flex; align-items: baseline; gap: 6px; }
+        .stat-number { font-size: 24px; font-weight: 700; color: #0f172a; }
+        .stat-badge { font-size: 11px; padding: 2px 6px; border-radius: 10px; font-weight: 600; }
+        .upload-area { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+        .btn-upload { padding: 10px 16px; background-color: #0f172a; color: white; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500; display: inline-block; }
+        .upload-msg { font-size: 13px; font-weight: 500; color: #059669; }
+        .btn-add-case { padding: 10px 16px; background-color: #3b82f6; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500; }
+        .add-case-form { background: #f8fafc; padding: 16px; border-radius: 8px; margin-bottom: 16px; border: 1px solid #e2e8f0; }
+        .form-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+        @media (min-width: 768px) { .form-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: end; } }
+        .table-container { overflow-x: auto; border-radius: 12px; border: 1px solid #e2e8f0; background: white; }
+        .table { width: 100%; border-collapse: collapse; text-align: left; }
+        .table thead tr { border-bottom: 1px solid #e2e8f0; background-color: #f8fafc; }
+        .table th { padding: 10px 12px; font-size: 11px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap; cursor: pointer; }
+        .table th:hover { background-color: #f1f5f9; }
+        .table td { padding: 10px 12px; font-size: 12.5px; color: #475569; white-space: normal; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
+        .table tbody tr { cursor: pointer; transition: background-color 0.2s; }
+        .table tbody tr:hover { background-color: #f9fafb; }
+        .table tbody tr.selected { background-color: #f8fafc; }
+        .badge { padding: 4px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+        .badge-blue { background-color: #dbeafe; color: #2563eb; }
+        .badge-green { background-color: #d1fae5; color: #059669; }
+        .badge-red { background-color: #fee2e2; color: #dc2626; }
+        .badge-yellow { background-color: #fef3c7; color: #d97706; }
+        .badge-grey { background-color: #e2e8f0; color: #64748b; }
+        .badge-purple { background-color: #f3e8ff; color: #9333ea; }
+        .btn-action { padding: 6px 10px; background-color: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 500; white-space: nowrap; margin-right: 4px; }
+        .btn-success { background-color: #10b981; color: white; border: none; }
+        .btn-warning { background-color: #f59e0b; color: white; border: none; }
+        .btn-danger { background-color: #ef4444; color: white; border: none; }
+        .btn-purple { background-color: #8b5cf6; color: white; border: none; }
+        .expanded-content { padding: 16px; background-color: #f8fafc; border-bottom: 1px solid #e2e8f0; }
+        .expanded-card { background: white; border-radius: 8px; border: 1px solid #e2e8f0; padding: 16px; }
+        .expanded-header { display: flex; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 12px; }
+        .expanded-label { font-size: 11px; color: #94a3b8; font-weight: 600; text-transform: uppercase; display: block; margin-bottom: 4px; }
+        .expanded-value { font-weight: 600; font-size: 15px; }
+        .expanded-sub { font-size: 12px; color: #64748b; margin-top: 4px; }
+        .section-divider { border-top: 1px solid #e2e8f0; padding-top: 16px; margin-top: 16px; }
+        .section-title { margin: 0 0 12px 0; font-size: 14px; font-weight: 600; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+        .wip-form { background: #f8fafc; padding: 12px; border-radius: 8px; margin-bottom: 12px; display: grid; grid-template-columns: 1fr; gap: 8px; }
+        @media (min-width: 768px) { .wip-form { grid-template-columns: minmax(0,2fr) minmax(0,2fr) minmax(0,1fr) minmax(0,1fr) auto; align-items: end; } .wip-notes-row { grid-column: 1 / -1; } }
+        .wip-input-group label { font-size: 10px; color: #64748b; font-weight: 600; display: block; margin-bottom: 2px; }
+        .wip-input-group { min-width: 0; }
+        .wip-input-group select, .wip-input-group input, .wip-input-group textarea { width: 100%; padding: 6px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 13px; }
+        .wip-input-group textarea { resize: vertical; min-height: 38px; }
+        .btn-log { padding: 8px 12px; background-color: #0f172a; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; }
+        .list-item { display: flex; align-items: flex-start; gap: 10px; padding: 10px; background-color: #f8fafc; border-radius: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+        .list-item.done { opacity: 0.5; background-color: #f1f5f9; }
+        .step-circle { width: 22px; height: 22px; border-radius: 50%; background-color: #e2e8f0; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 600; color: #64748b; flex-shrink: 0; margin-top: 2px; }
+        .item-content { flex: 1; min-width: 150px; }
+        .item-title { font-weight: 600; font-size: 13px; color: #0f172a; }
+        .item-sub { font-size: 11px; color: #64748b; margin-top: 4px; white-space: pre-wrap; }
+        .item-meta { text-align: right; }
+        .item-actions { display: flex; gap: 4px; margin-top: 8px; flex-wrap: wrap; }
+        .pagination { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border-top: 1px solid #e2e8f0; }
+        .btn-page { padding: 6px 12px; background-color: white; border: 1px solid #e2e8f0; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 500; }
+        .btn-page:disabled { opacity: 0.5; cursor: not-allowed; }
+        .chart-row { margin-bottom: 16px; }
+        .chart-label { display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 13px; }
+        .chart-track { width: 100%; background-color: #f1f5f9; border-radius: 6px; height: 8px; overflow: hidden; }
+        .chart-fill { height: 100%; border-radius: 6px; transition: width 0.5s ease; }
+        .person-form { background: #f8fafc; padding: 12px; border-radius: 8px; margin-bottom: 12px; display: grid; grid-template-columns: 1fr; gap: 8px; }
+        @media (min-width: 768px) { .person-form { grid-template-columns: minmax(0,2fr) minmax(0,2fr) minmax(0,2fr) auto; align-items: end; } }
+        .sub-action-form { display: flex; gap: 4px; margin-top: 8px; flex-wrap: wrap; }
+        @media (max-width: 768px) { .sidebar { position: fixed; left: 0; top: 0; bottom: 0; z-index: 100; box-shadow: 2px 0 10px rgba(0,0,0,0.1); } .sidebar.collapsed { transform: translateX(-100%); width: 260px; } .main-content { padding: 16px; } }
+        /* ==== ADMIN edit styles ==== */
+        .btn-admin { padding: 6px 10px; background-color: #8b5cf6; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 500; white-space: nowrap; margin-right: 4px; }
+        .btn-admin:hover { background-color: #7c3aed; }
+        .admin-edit-form { background: #f5f3ff; padding: 16px; border-radius: 8px; margin-bottom: 16px; border: 1px solid #c4b5fd; flex-basis: 100%; }
+        .admin-edit-form .form-title { margin: 0 0 4px 0; font-size: 14px; font-weight: 600; color: #6d28d9; }
+        .admin-edit-form .form-sub { font-size: 11px; color: #94a3b8; margin: 0 0 12px 0; }
+        .admin-form-grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
+        @media (min-width: 768px) { .admin-form-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+        .admin-form-grid .full-width { grid-column: 1 / -1; }
+        .admin-form-actions { display: flex; gap: 8px; margin-top: 12px; }
+        .btn-save-admin { padding: 8px 16px; background-color: #7c3aed; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; }
+        .btn-cancel-admin { padding: 8px 16px; background-color: white; color: #64748b; border: 1px solid #e2e8f0; border-radius: 6px; cursor: pointer; font-size: 13px; }
+        /* ==== ADMIN respondent editor ==== */
+.respondent-admin-strip { background: #f5f3ff; border: 1px solid #c4b5fd; border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; }
+.respondent-admin-label { margin: 0 0 6px 0; font-size: 11px; font-weight: 600; color: #6d28d9; text-transform: uppercase; letter-spacing: 0.04em; }
+.respondent-admin-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px dashed #ddd6fe; flex-wrap: wrap; }
+.respondent-admin-row:last-child { border-bottom: none; }
+.respondent-admin-name { font-size: 13px; color: #0f172a; }
+.respondent-admin-form { padding: 4px 0 8px 0; }
+.btn-admin-danger { padding: 6px 10px; background-color: #ef4444; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 500; white-space: nowrap; }
+.btn-admin-danger:hover { background-color: #dc2626; }
+.complainant-line { display: inline-flex; align-items: center; flex-wrap: wrap; }
+.complainant-name { font-weight: 600; color: #0f172a; }
+.close-case-panel { flex-basis: 100%; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 10px 12px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.close-case-label { font-size: 13px; font-weight: 600; color: #0f172a; }
+.btn-cancel-status { background-color: #64748b; color: white; border: none; }
+/* ===== HORIZONTAL TOP NAV ===== */
+.app-container { display: block; }
 
-      <div className="app-container">
-        <aside
-          className={`sidebar ${sidebarOpen ? '' : 'collapsed'} ${sidebarHovered && !sidebarOpen ? 'hovered' : ''}`}
-          onMouseEnter={() => setSidebarHovered(true)}
-          onMouseLeave={() => setSidebarHovered(false)}
-        >
-          <div className={`sidebar-header ${sidebarOpen ? '' : 'collapsed'}`}>
-            {sidebarOpen && <h1>SLA Tracker</h1>}
-            <button onClick={() => setSidebarOpen(!sidebarOpen)} className="sidebar-toggle">☰</button>
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 0 20px;
+  height: 60px;
+  background: #0f172a;
+  position: sticky;
+  top: 0;
+  z-index: 200;
+}
+.topbar-brand { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.topbar-logo { font-size: 20px; }
+.topbar-brand h1 {
+  font-size: 16px; font-weight: 600; color: #fff;
+  margin: 0; white-space: nowrap;
+}
+
+.topnav { display: flex; gap: 4px; flex: 1; overflow-x: auto; }
+.topnav-item {
+  display: flex; align-items: center; gap: 6px;
+  padding: 8px 14px; border: none; border-radius: 8px;
+  background: transparent; color: #94a3b8;
+  font-size: 14px; font-weight: 500; cursor: pointer;
+  white-space: nowrap; transition: background .15s, color .15s;
+}
+.topnav-item:hover { background: #1e293b; color: #e2e8f0; }
+.topnav-item.active { background: #3b82f6; color: #fff; }
+.topnav-item .icon { font-size: 16px; }
+
+.topbar-user {
+  display: flex; align-items: center; gap: 10px;
+  flex-shrink: 0; margin-left: auto;
+}
+.topbar-user .user-avatar {
+  width: 32px; height: 32px; border-radius: 50%;
+  background: #3b82f6; color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 600; font-size: 14px; flex-shrink: 0;
+}
+.topbar-user .user-details { line-height: 1.2; }
+.topbar-user .user-details .email {
+  font-size: 12px; color: #e2e8f0; font-weight: 500;
+  max-width: 170px; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap;
+}
+.topbar-user .user-details .role { font-size: 10px; color: #64748b; }
+.topbar-user .btn-signout {
+  padding: 6px 12px; border: 1px solid #334155; border-radius: 6px;
+  background: transparent; color: #94a3b8;
+  font-size: 12px; cursor: pointer; white-space: nowrap;
+}
+.topbar-user .btn-signout:hover { background: #1e293b; color: #fff; }
+
+.main-content {
+  margin-left: 0 !important;
+  width: 100%;
+  padding: 24px;
+}
+
+/* On narrow screens: hide tab words and the email, keep icons */
+@media (max-width: 900px) {
+  .topbar { gap: 12px; padding: 0 12px; }
+  .topbar-brand h1 { display: none; }
+  .topnav-item .label { display: none; }
+  .topnav-item { padding: 8px 12px; }
+  .topbar-user .user-details { display: none; }
+}
+/* ===== RESPONDENTS TAB ===== */
+        .resp-filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
+        .resp-filters select,
+        .resp-search { padding: 7px 10px; border: 1px solid #dde3ea; border-radius: 6px; font-size: 13px; background: #fff; }
+        .resp-search { flex: 1; min-width: 260px; }
+        .resp-toggle { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #334155; white-space: nowrap; }
+        .resp-count { font-size: 13px; color: #64748b; margin-bottom: 8px; }
+        .resp-hint { margin-left: 12px; color: #94a3b8; font-style: italic; }
+        .resp-table-wrap { overflow-x: auto; border: 1px solid #dde3ea; border-radius: 8px; background: #fff; }
+        .resp-table { width: 100%; border-collapse: collapse; font-size: 12.5px; white-space: nowrap; }
+        .resp-table th { position: sticky; top: 0; background: #f1f5f9; text-align: left; padding: 9px 10px; border-bottom: 1px solid #dde3ea; font-weight: 600; color: #334155; }
+        .resp-table td { padding: 8px 10px; border-bottom: 1px solid #eef2f6; color: #1f2937; }
+        .resp-table tbody tr:hover { background: #f8fafc; cursor: pointer; }
+        .resp-badge { display: inline-block; margin-left: 4px; background: #dc2626; color: #fff; border-radius: 10px; padding: 1px 7px; font-size: 11px; font-weight: 700; }
+        .resp-empty { padding: 26px; text-align: center; color: #94a3b8; font-size: 13px; }
+        .resp-pager { display: flex; align-items: center; gap: 12px; justify-content: center; margin: 12px 0; font-size: 13px; color: #475569; }
+        .resp-host { position: fixed; inset: 0; z-index: 900; }
+        .resp-overlay { position: absolute; inset: 0; background: rgba(15,23,42,0.45); }
+        .resp-panel { position: absolute; top: 0; right: 0; height: 100%; width: 90vw; max-width: 1100px; background: #fff; box-shadow: -6px 0 26px rgba(15,23,42,0.22); display: flex; flex-direction: column; }
+        .resp-topbar { display: flex; align-items: center; justify-content: space-between; padding: 13px 18px; border-bottom: 1px solid #dde3ea; background: #f8fafc; font-size: 15px; }
+        .resp-close { border: none; background: transparent; font-size: 19px; cursor: pointer; color: #475569; line-height: 1; }
+        .resp-panel-body { padding: 18px; overflow-y: auto; flex: 1; }
+        .resp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(215px, 1fr)); gap: 11px; }
+        .resp-grid div { border: 1px solid #eef2f6; border-radius: 6px; padding: 8px 10px; background: #fbfdff; }
+        .resp-grid span { display: block; font-size: 11px; color: #94a3b8; text-transform: uppercase; letter-spacing: .4px; }
+        .resp-grid b { font-size: 13px; color: #1f2937; font-weight: 600; word-break: break-word; }
+        .resp-h4 { margin: 20px 0 8px; font-size: 14px; color: #334155; display: flex; align-items: center; gap: 10px; }
+        .resp-note { font-size: 13px; color: #475569; background: #f8fafc; border: 1px solid #eef2f6; border-radius: 6px; padding: 10px 12px; white-space: pre-wrap; }
+        .resp-mini { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+        .resp-mini th { background: #f1f5f9; text-align: left; padding: 7px 9px; border-bottom: 1px solid #dde3ea; color: #334155; }
+        .resp-mini td { padding: 7px 9px; border-bottom: 1px solid #eef2f6; }
+        .resp-badge-big { background: #dc2626; color: #fff; border-radius: 11px; padding: 2px 10px; font-size: 11px; font-weight: 700; }
+        .resp-ok { background: #dcfce7; color: #166534; border-radius: 11px; padding: 2px 10px; font-size: 11px; font-weight: 600; }
+        .resp-warn { background: #fddddd; border: 1px solid #fbb; color: #991b1b; border-radius: 6px; padding: 9px 12px; font-size: 12.5px; margin-bottom: 9px; }
+/* ===== CASE DRAWER ===== */
+.drawer-host td { padding: 0 !important; }
+
+.drawer-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  z-index: 900;
+}
+
+.drawer-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 90vw;
+  background: #f8fafc;
+  z-index: 901;
+  display: flex;
+  flex-direction: column;
+  box-shadow: -8px 0 24px rgba(15, 23, 42, 0.18);
+  text-align: left;
+}
+
+.drawer-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  background: #ffffff;
+  border-bottom: 1px solid #dde3ea;
+  flex-shrink: 0;
+}
+
+.drawer-topbar-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.drawer-close {
+  width: 32px;
+  height: 32px;
+  border: 1px solid #dde3ea;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #64748b;
+  font-size: 16px;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.drawer-close:hover {
+  background: #fddddd;
+  color: #dc2626;
+  border-color: #fecaca;
+}
+
+.drawer-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+}
+
+@media (max-width: 900px) {
+  .drawer-panel { width: 100vw; }
+}
+      `}</style>
+
+<div className="app-container">
+        <header className="topbar">
+          <div className="topbar-brand">
+            <span className="topbar-logo">📋</span>
+            <h1>SLA Tracker</h1>
           </div>
-          <nav style={{ flex: 1 }}>
+
+          <nav className="topnav">
             {navItems.map(item => (
-              <div key={item.id} onClick={() => setActiveTab(item.id)} className={`nav-item ${activeTab === item.id ? 'active' : 'inactive'} ${sidebarOpen ? '' : 'collapsed'}`}>
+              <button
+                key={item.id}
+                onClick={() => setActiveTab(item.id)}
+                className={`topnav-item ${activeTab === item.id ? 'active' : ''}`}
+                title={item.label}
+              >
                 <span className="icon">{item.icon}</span>
-                {sidebarOpen && <span className="label">{item.label}</span>}
-              </div>
+                <span className="label">{item.label}</span>
+              </button>
             ))}
           </nav>
-          <div className="sidebar-footer">
-          <div className={`user-info ${sidebarOpen ? '' : 'collapsed'}`}>
-  <div className="user-avatar">{userEmail?.charAt(0).toUpperCase()}</div>
-  {sidebarOpen && (<div className="user-details"><div className="email">{userEmail}</div><div className="role">{isAdmin ? 'Administrator' : 'Standard User'}</div></div>)}
-</div>
-{sidebarOpen && <button onClick={onSignOut} className="btn-signout">Sign Out</button>}
+
+          <div className="topbar-user">
+            <div className="user-avatar" title={userEmail}>
+              {userEmail?.charAt(0).toUpperCase()}
+            </div>
+            <div className="user-details">
+              <div className="email">{userEmail}</div>
+              <div className="role">{isAdmin ? 'Administrator' : 'Standard User'}</div>
+            </div>
+            <button onClick={onSignOut} className="btn-signout">Sign Out</button>
           </div>
-        </aside>
+        </header>
 
         <main className="main-content">
 
@@ -1515,7 +1844,7 @@ const renderClosureInfo = (c) => {
 
               <div className="table-container">
                 <div style={{ padding: '16px', borderBottom: '1px solid #e2e8f0', display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
-                  <input type="text" placeholder="Search cases, PICs, respondents, complainants..." value={searchTerm} onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }} style={{ flex: 1, minWidth: '200px', padding: '10px 16px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '14px', outline: 'none' }} />
+                  <input type="text" placeholder="Search cases, PICs, respondents, complainants..." value={searchInput} onChange={(e) => { setSearchInput(e.target.value); setCurrentPage(1); }} style={{ flex: 1, minWidth: '200px', padding: '10px 16px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '14px', outline: 'none' }} />
                   <select value={filters.pic} onChange={(e) => setFilters(f => ({ ...f, pic: e.target.value }))} style={{ padding: '10px 16px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '14px' }}>
                     <option value="">All PICs</option>
                     {[...new Set(cases.map(c => c.pic).filter(Boolean))].map(pic => <option key={pic} value={pic}>{pic}</option>)}
@@ -1534,7 +1863,7 @@ const renderClosureInfo = (c) => {
 <button onClick={() => { setShowMyCases(!showMyCases); setCurrentPage(1); }} style={{ padding: '10px 16px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '14px', cursor: 'pointer', backgroundColor: showMyCases ? '#3b82f6' : 'white', color: showMyCases ? 'white' : '#334155', whiteSpace: 'nowrap' }}>
                     👤 My Cases
                   </button>
-<button onClick={() => { setSearchTerm(''); setFilters({ pic: '', status: '', da_in_force: '' }); setSortConfig({ key: 'sla_due_date', direction: 'ascending' }); setCurrentPage(1); setShowMyCases(false); }}>✕ Clear</button>
+<button onClick={() => { setSearchInput(''); setSearchTerm(''); setFilters({ pic: '', status: '', da_in_force: '' }); setSortConfig({ key: 'sla_due_date', direction: 'ascending' }); setCurrentPage(1); setShowMyCases(false); }}>✕ Clear</button>
                 </div>
 
                 {loading ? (
@@ -1567,7 +1896,7 @@ const renderClosureInfo = (c) => {
                           return (
                             <React.Fragment key={index}>
                               <tr className={selectedCase === c.case_number ? 'selected' : ''}>
-  <td style={{ fontWeight: 600, color: '#0f172a' }} onDoubleClick={() => handleCaseClick(c.case_number)} title="Double-click to open case details">{c.case_number}</td>
+                              <td style={{ fontWeight: 600, color: '#0f172a', cursor: 'pointer' }} onClick={() => handleCaseClick(c.case_number)} title="Click to open case details">{c.case_number}</td>
   <td>{c.pic || '—'}</td>
   <td><span className={`badge ${c.case_status === 'IN PROGRESS' ? 'badge-blue' : c.case_status === 'CANCELLED' ? 'badge-grey' : 'badge-green'}`}>{c.case_status}</span></td>
   <td style={{ color: isBreached ? '#dc2626' : '#059669', fontWeight: 600 }}>{c.sla_due_date || '—'}</td>
@@ -1588,9 +1917,22 @@ const renderClosureInfo = (c) => {
   <td><button onClick={() => handleCaseClick(c.case_number)} className="btn-action">{selectedCase === c.case_number ? 'Back' : 'View'}</button></td>
 </tr>
 
-                              {selectedCase === c.case_number && (
-                                <tr>
-                                  <td colSpan="9" className="expanded-content">
+{selectedCase === c.case_number && (
+                                <tr className="drawer-host">
+                                  <td colSpan="9" style={{ padding: 0, border: 'none' }}>
+                                    <div className="drawer-overlay" onClick={() => handleCaseClick(c.case_number)} />
+                                    <div className="drawer-panel" onClick={(e) => e.stopPropagation()}>
+                                      <div className="drawer-topbar">
+                                        <div className="drawer-topbar-title">
+                                          📁 {c.case_number}
+                                        </div>
+                                        <button
+                                          className="drawer-close"
+                                          onClick={() => handleCaseClick(c.case_number)}
+                                          title="Close (Esc)"
+                                        >✕</button>
+                                      </div>
+                                      <div className="drawer-body">
                                     <div className="expanded-card">
                                       <div className="expanded-header">
                                         <div>
@@ -1907,6 +2249,8 @@ const renderClosureInfo = (c) => {
                                           </div>
                                         )}
                                       </div>
+                                      </div>
+                                      </div>
                                     </div>
                                   </td>
                                 </tr>
@@ -1927,7 +2271,199 @@ const renderClosureInfo = (c) => {
               </div>
             </>
           )}
+{activeTab === 'respondents' && (
+            <>
+              <div className="page-header">
+                <div className="page-header-text">
+                  <h2>Respondents</h2>
+                  <p>View-only register of every complainant-respondent pair. Edit records from the case drawer.</p>
+                </div>
+                <button className="btn-secondary" onClick={fetchRespondents} disabled={respLoading}>
+                  {respLoading ? 'Loading...' : 'Refresh'}
+                </button>
+              </div>
 
+              <div className="resp-filters">
+                <input
+                  className="resp-search"
+                  placeholder="Search case no, complainant or respondent name / ID..."
+                  value={respSearchInput}
+                  onChange={(ev) => setRespSearchInput(ev.target.value)}
+                />
+                <select value={respCountry} onChange={(ev) => { setRespCountry(ev.target.value); setRespPage(1); }}>
+                  <option value="">All countries</option>
+                  {respUniqueVals.countries.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+                <select value={respViolation} onChange={(ev) => { setRespViolation(ev.target.value); setRespPage(1); }}>
+                  <option value="">All violations</option>
+                  {respUniqueVals.violations.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+                <select value={respAction} onChange={(ev) => { setRespAction(ev.target.value); setRespPage(1); }}>
+                  <option value="">All actions</option>
+                  {respUniqueVals.actions.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+                <select value={respStatus} onChange={(ev) => { setRespStatus(ev.target.value); setRespPage(1); }}>
+                  <option value="">All case status</option>
+                  {respUniqueVals.statuses.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+                <label className="resp-toggle">
+                  <input type="checkbox" checked={respRepeatOnly}
+                    onChange={(ev) => { setRespRepeatOnly(ev.target.checked); setRespPage(1); }} />
+                  Repeat offenders only
+                </label>
+                <button className="btn-secondary" onClick={() => {
+                  setRespSearchInput(''); setRespCountry(''); setRespViolation('');
+                  setRespAction(''); setRespStatus(''); setRespRepeatOnly(false); setRespPage(1);
+                }}>Clear</button>
+              </div>
+
+              <div className="resp-count">
+                {respLoading ? 'Loading records...' :
+                  `Showing ${respFiltered.length === 0 ? 0 : (respPage - 1) * respPageSize + 1}-${Math.min(respPage * respPageSize, respFiltered.length)} of ${respFiltered.length} records`}
+                {respRows.length > 0 && respFiltered.length !== respRows.length ? ` (filtered from ${respRows.length})` : ''}
+                <span className="resp-hint">Double-click a row for full details</span>
+              </div>
+
+              <div className="resp-table-wrap">
+                <table className="resp-table">
+                  <thead>
+                    <tr>
+                      <th></th>
+                      <th>Case No</th>
+                      <th>Complainant Name</th>
+                      <th>Complainant ID</th>
+                      <th>Cust Purchase ID</th>
+                      <th>Respondent Name</th>
+                      <th>Respondent ID</th>
+                      <th>Country</th>
+                      <th>Violation Category</th>
+                      <th>Current Action</th>
+                      <th>Execution Date</th>
+                      <th>PIC</th>
+                      <th>Team</th>
+                      <th>VA Upline</th>
+                      <th>Case Status</th>
+                      <th>Modified By</th>
+                      <th>Last Modified</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {respCurrentPage.map((r) => {
+                      const rc = respRepeatCount(r);
+                      return (
+                        <tr key={r.id} onDoubleClick={() => setRespDetail(r)}>
+                          <td>
+                            {respMissingInfo(r) ? <span title="Missing complainant or respondent details">⚠️</span> : ''}
+                            {rc > 1 ? <span className="resp-badge" title={`Appears in ${rc} cases`}>{rc}</span> : ''}
+                          </td>
+                          <td>{r.case_number}</td>
+                          <td>{r.complainant_name}</td>
+                          <td>{r.complainant_id}</td>
+                          <td>{r.complainant_cust_id}</td>
+                          <td>{r.respondent_name}</td>
+                          <td>{r.respondent_id}</td>
+                          <td>{r.respondent_country}</td>
+                          <td>{r.violation_category}</td>
+                          <td>{r.current_action}</td>
+                          <td>{r.execution_date}</td>
+                          <td>{r.cases ? r.cases.pic : ''}</td>
+                          <td>{r.team_name}</td>
+                          <td>{r.upline_name}</td>
+                          <td>{r.cases ? r.cases.case_status : ''}</td>
+                          <td>{r.modified_by_email}</td>
+                          <td>{r.last_modified ? formatDateTime(r.last_modified) : ''}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+                {!respLoading && respFiltered.length === 0 ? <div className="resp-empty">No records match your filters.</div> : null}
+              </div>
+
+              <div className="resp-pager">
+                <button className="btn-secondary" disabled={respPage <= 1} onClick={() => setRespPage(respPage - 1)}>Previous</button>
+                <span>Page {respPage} of {respTotalPages}</span>
+                <button className="btn-secondary" disabled={respPage >= respTotalPages} onClick={() => setRespPage(respPage + 1)}>Next</button>
+              </div>
+
+              {respDetail ? (
+                <div className="resp-host">
+                  <div className="resp-overlay" onClick={() => setRespDetail(null)}></div>
+                  <div className="resp-panel">
+                    <div className="resp-topbar">
+                      <strong>{respDetail.respondent_name || 'Respondent'} — {respDetail.case_number}</strong>
+                      <button className="resp-close" onClick={() => setRespDetail(null)}>✕</button>
+                    </div>
+                    <div className="resp-panel-body">
+                      <div className="resp-grid">
+                        <div><span>Case No</span><b>{respDetail.case_number}</b></div>
+                        <div><span>NID Case No</span><b>{respDetail.nid_case_no || '—'}</b></div>
+                        <div><span>Date Received</span><b>{respDetail.date_received || '—'}</b></div>
+                        <div><span>Sent By</span><b>{respDetail.sent_by || '—'}</b></div>
+                        <div><span>Complainant</span><b>{respDetail.complainant_name || '—'}</b></div>
+                        <div><span>Complainant ID</span><b>{respDetail.complainant_id || '—'}</b></div>
+                        <div><span>Cust Purchase ID</span><b>{respDetail.complainant_cust_id || '—'}</b></div>
+                        <div><span>Respondent</span><b>{respDetail.respondent_name || '—'}</b></div>
+                        <div><span>Respondent ID</span><b>{respDetail.respondent_id || '—'}</b></div>
+                        <div><span>Country</span><b>{respDetail.respondent_country || '—'}</b></div>
+                        <div><span>Team</span><b>{respDetail.team_name || '—'}</b></div>
+                        <div><span>Referrer</span><b>{respDetail.referrer_name || '—'}</b></div>
+                        <div><span>Referrer ID</span><b>{respDetail.referrer_id || '—'}</b></div>
+                        <div><span>VA Upline</span><b>{respDetail.upline_name || '—'}</b></div>
+                        <div><span>VA Upline ID</span><b>{respDetail.upline_id || '—'}</b></div>
+                        <div><span>Violation Category</span><b>{respDetail.violation_category || '—'}</b></div>
+                        <div><span>Current Action</span><b>{respDetail.current_action || '—'}</b></div>
+                        <div><span>Execution Date</span><b>{respDetail.execution_date || '—'}</b></div>
+                        <div><span>DA Confirmed</span><b>{respDetail.da_confirmed ? 'Yes' : 'No'}</b></div>
+                        <div><span>Modified By</span><b>{respDetail.modified_by_email || '—'}</b></div>
+                      </div>
+
+                      <h4 className="resp-h4">Remarks</h4>
+                      <div className="resp-note">{respDetail.remarks || 'No remarks recorded.'}</div>
+
+                      <h4 className="resp-h4">Action History</h4>
+                      {Array.isArray(respDetail.action_history) && respDetail.action_history.length > 0 ? (
+                        <table className="resp-mini">
+                          <thead><tr><th>Step</th><th>Action</th><th>Date</th></tr></thead>
+                          <tbody>
+                            {respDetail.action_history.map((h, i) => (
+                              <tr key={i}><td>{h.step}</td><td>{h.action}</td><td>{h.date || '—'}</td></tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      ) : <div className="resp-note">No action history recorded.</div>}
+
+                      <h4 className="resp-h4">
+                        Repeat Offender Check
+                        {respRepeatCount(respDetail) > 1
+                          ? <span className="resp-badge-big">Appears in {respRepeatCount(respDetail)} cases</span>
+                          : <span className="resp-ok">Only this case</span>}
+                      </h4>
+                      {respOtherCases(respDetail).length > 0 ? (
+                        <>
+                          <div className="resp-warn">Review these before treating as a repeat offender — a reactivated case may carry a new case number.</div>
+                          <table className="resp-mini">
+                            <thead><tr><th>Case No</th><th>Complainant</th><th>Violation</th><th>Action</th><th>Date</th></tr></thead>
+                            <tbody>
+                              {respOtherCases(respDetail).map((o) => (
+                                <tr key={o.id}>
+                                  <td>{o.case_number}</td>
+                                  <td>{o.complainant_name || '—'}</td>
+                                  <td>{o.violation_category || '—'}</td>
+                                  <td>{o.current_action || '—'}</td>
+                                  <td>{o.execution_date || '—'}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </>
+                      ) : <div className="resp-note">No other cases found for this respondent ID.</div>}
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+            </>
+          )}
           {activeTab === 'analytics' && (
             <>
               <div className="page-header">
