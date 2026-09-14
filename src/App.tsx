@@ -923,6 +923,32 @@ const handleUpdateRespondent = async (e, daId) => {
     if (error) alert('Error adding violation: ' + error.message);
     else { refreshDaList(); setNewViolation(prev => ({ ...prev, [daId]: '' })); }
   };
+  const [bulkMode, setBulkMode] = React.useState(false);
+  const [bulkText, setBulkText] = React.useState('');
+  const [bulkPreview, setBulkPreview] = React.useState(null);
+
+  const parseBulkPeople = (raw) => {
+    const lines = (raw || '').split(/\n+/).map(s => s.replace(/\u2060|\u200b/g, '').trim()).filter(Boolean);
+    return lines.map((line, i) => {
+      let work = line.replace(/^\s*\d+\s*[\.\)\-]\s*/, '').trim();
+      let id = '', cust = '';
+      work = work.replace(/[\(\[]([^\)\]]+)[\)\]]/g, (m, inner) => {
+        inner.split('/').map(s => s.trim()).filter(Boolean).forEach(p => {
+          if (/^CU/i.test(p)) cust = cust ? `${cust}; ${p}` : p;
+          else if (!id && /^[A-Za-z]{2}\d{4,}$/.test(p)) id = p;
+          else cust = cust ? `${cust}; ${p}` : p;
+        });
+        return ' ';
+      });
+      work = work.replace(/\b([A-Za-z]{2}\d{4,})\b/g, (m, found) => {
+        if (/^CU/i.test(found)) { cust = cust ? `${cust}; ${found}` : found; return ' '; }
+        if (!id) { id = found; return ' '; }
+        return ' ';
+      });
+      const name = work.replace(/[\(\)\[\]]/g, ' ').replace(/\s+/g, ' ').replace(/^[\.,;\-\s]+|[\.,;\-\s]+$/g, '').trim();
+      return { row: i + 1, name, id, cust, include: true };
+    });
+  };
   const handleDeleteDaStep = async (daId, stepIndex) => {
     const da = daList.find(d => d.id === daId);
     if (!da) return;
@@ -1040,6 +1066,65 @@ const handleUpdateRespondent = async (e, daId) => {
 
   const handleAddPerson = async (e) => {
     e.preventDefault();
+
+    if (bulkMode && bulkPreview) {
+      const chosen = bulkPreview.filter(p => p.include && p.name);
+      if (chosen.length === 0) { alert('Nothing selected to add.'); return; }
+
+      const anchor = (caseComplainants || []).find(c => c.is_anchor) || (caseComplainants || [])[0] || null;
+      if (showAddPersonForm === 'respondent' && !anchor) {
+        alert('This case has no complainant yet.\n\nAdd a complainant first, then add respondents.');
+        return;
+      }
+      if (!window.confirm(`Add ${chosen.length} ${showAddPersonForm}${chosen.length > 1 ? 's' : ''} to ${selectedCase}?`)) return;
+
+      const rows = chosen.map((p, i) => {
+        const row = {
+          case_number: selectedCase,
+          unique_key: `${selectedCase}|${showAddPersonForm}_${Date.now()}_${i}`,
+          modified_by_email: userEmail,
+          last_modified: new Date().toISOString()
+        };
+        if (showAddPersonForm === 'complainant') {
+          row.complainant_name = p.name; row.complainant_id = p.id || null;
+          row.complainant_cust_id = p.cust || null; row.complainant_country = newPersonCountry || null;
+        } else {
+          row.respondent_name = p.name; row.respondent_id = p.id || null;
+          row.respondent_cust_id = p.cust || null; row.respondent_country = newPersonCountry || null;
+          row.complainant_name = anchor.complainant_name;
+          row.complainant_id = anchor.complainant_id;
+          row.complainant_cust_id = anchor.complainant_cust_id;
+          row.complainant_country = anchor.complainant_country;
+        }
+        return row;
+      });
+
+      for (let i = 0; i < rows.length; i += 10) {
+        const { error: bErr } = await supabase.from('disciplinary_actions').insert(rows.slice(i, i + 10));
+        if (bErr) { alert('Error adding batch: ' + bErr.message); return; }
+      }
+
+      if (showAddPersonForm === 'complainant') {
+        const { data: existing } = await supabase.from('case_complainants').select('id').eq('case_number', selectedCase).limit(1);
+        const hasAny = existing && existing.length > 0;
+        const cRows = chosen.map((p, i) => ({
+          case_number: selectedCase, complainant_name: p.name, complainant_id: p.id || null,
+          complainant_cust_id: p.cust || null, complainant_country: newPersonCountry || null,
+          is_anchor: !hasAny && i === 0, modified_by_email: userEmail
+        }));
+        for (let i = 0; i < cRows.length; i += 10) {
+          await supabase.from('case_complainants').insert(cRows.slice(i, i + 10));
+        }
+        await loadCaseComplainants(selectedCase);
+      }
+
+      alert(`Added ${chosen.length} ${showAddPersonForm}${chosen.length > 1 ? 's' : ''}.`);
+      setShowAddPersonForm(null); setBulkMode(false); setBulkText(''); setBulkPreview('');
+      setNewPersonName(''); setNewPersonId(''); setNewPersonCountry('');
+      await refreshDaList();
+      return;
+    }
+
     const timestamp = Date.now();
     const uniqueKey = `${selectedCase}|${showAddPersonForm}_${timestamp}`;
     const insertData = { case_number: selectedCase, unique_key: uniqueKey, modified_by_email: userEmail, last_modified: new Date().toISOString() };
@@ -2204,11 +2289,45 @@ const renderClosureInfo = (c) => {
 
                                       {showAddPersonForm && (
                                         <form onSubmit={handleAddPerson} className="person-form">
-                                          <div className="wip-input-group"><label>{showAddPersonForm === 'complainant' ? 'Complainant Name' : 'Respondent Name'}</label><input type="text" value={newPersonName} onChange={(e) => setNewPersonName(e.target.value)} required /></div>
-                                          <div className="wip-input-group"><label>Qnet ID#</label><input type="text" value={newPersonId} onChange={(e) => setNewPersonId(e.target.value)} /></div>
+                                          <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', width: '100%', marginBottom: '6px' }}>
+                                            <input type="checkbox" checked={bulkMode} onChange={(e) => { setBulkMode(e.target.checked); setBulkPreview(null); }} />
+                                            Add multiple — paste a list
+                                          </label>
+                                          {!bulkMode && <div className="wip-input-group"><label>{showAddPersonForm === 'complainant' ? 'Complainant Name' : 'Respondent Name'}</label><input type="text" value={newPersonName} onChange={(e) => setNewPersonName(e.target.value)} required /></div>}
+                                          {!bulkMode && <div className="wip-input-group"><label>Qnet ID#</label><input type="text" value={newPersonId} onChange={(e) => setNewPersonId(e.target.value)} /></div>}
+                                          {bulkMode && (
+                                            <div className="wip-input-group" style={{ width: '100%' }}>
+                                              <label>Paste list — one per line: Name (ID) or Name (ID/CU...) or ID Name</label>
+                                              <textarea value={bulkText} maxLength={8000} rows={6} onChange={(e) => { setBulkText(e.target.value); setBulkPreview(null); }} style={{ width: '100%', padding: '6px', border: '1px solid #e2e8f0', borderRadius: '6px', fontFamily: 'monospace', fontSize: '12px' }} />
+                                              <div style={{ fontSize: '10px', color: '#94a3b8' }}>{bulkText.length} / 8000 characters</div>
+                                            </div>
+                                          )}
                                           <div className="wip-input-group"><label>Country</label><input type="text" value={newPersonCountry} onChange={(e) => setNewPersonCountry(e.target.value)} /></div>
+                                          {bulkMode && bulkPreview && (
+                                            <div style={{ width: '100%', marginTop: '6px', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '6px' }}>
+                                              <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '4px' }}>Preview — untick any row you don't want to add:</div>
+                                              {bulkPreview.map((p, pi) => {
+                                                const dupName = daList.some(d => (showAddPersonForm === 'complainant' ? d.complainant_name : d.respondent_name)?.toUpperCase().trim() === p.name.toUpperCase().trim());
+                                                const dupId = p.id && daList.some(d => (showAddPersonForm === 'complainant' ? d.complainant_id : d.respondent_id)?.toUpperCase().trim() === p.id.toUpperCase().trim());
+                                                const dupInList = bulkPreview.some((q, qi) => qi !== pi && (q.name.toUpperCase().trim() === p.name.toUpperCase().trim() || (p.id && q.id.toUpperCase().trim() === p.id.toUpperCase().trim())));
+                                                const warn = dupName || dupId ? 'already on this case' : (dupInList ? 'appears twice in your list' : (!p.id ? 'no ID found' : ''));
+                                                return (
+                                                  <div key={pi} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', padding: '2px 0' }}>
+                                                    <input type="checkbox" checked={p.include} onChange={(e) => setBulkPreview(prev => prev.map((q, qi) => qi === pi ? { ...q, include: e.target.checked } : q))} />
+                                                    <span style={{ color: '#94a3b8', minWidth: '16px' }}>{p.row}</span>
+                                                    <span style={{ flex: 1 }}>{p.name || <em style={{ color: '#dc2626' }}>no name</em>}</span>
+                                                    <span style={{ minWidth: '90px', color: p.id ? '#0f172a' : '#dc2626' }}>{p.id || '—'}</span>
+                                                    <span style={{ minWidth: '110px', color: '#64748b' }}>{p.cust || ''}</span>
+                                                    {warn && <span className="badge badge-yellow" style={{ fontSize: '10px' }}>⚠ {warn}</span>}
+                                                  </div>
+                                                );
+                                              })}
+                                              <div style={{ fontSize: '11px', color: '#64748b', marginTop: '4px' }}>{bulkPreview.filter(p => p.include).length} will be added{!newPersonCountry ? ' — country is blank, remember to fill it in later' : ''}</div>
+                                            </div>
+                                          )}
                                           <div style={{ display: 'flex', gap: '4px', alignItems: 'end' }}>
-                                            <button type="submit" className="btn-log" style={{ backgroundColor: '#10b981' }}>Add</button>
+                                            {bulkMode && !bulkPreview && <button type="button" onClick={() => setBulkPreview(parseBulkPeople(bulkText))} className="btn-log" style={{ backgroundColor: '#6366f1' }}>Preview</button>}
+                                            {(!bulkMode || bulkPreview) && <button type="submit" className="btn-log" style={{ backgroundColor: '#10b981' }}>Add</button>}
                                             <button type="button" onClick={() => { setShowAddPersonForm(null); setNewPersonName(''); setNewPersonId(''); setNewPersonCountry(''); }} className="btn-action">Cancel</button>
                                           </div>
                                         </form>
