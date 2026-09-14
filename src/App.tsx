@@ -830,7 +830,15 @@ const handleUpdateRespondent = async (e, daId) => {
     const history = da.action_history || [];
     history.push({ step: history.length + 1, action: newDaAction, date: newDaDate, added_by: userEmail, added_at: new Date().toISOString(), sub_actions: [] });
     const { error } = await supabase.from('disciplinary_actions').update({
-      action_history: history, current_action: newDaAction, execution_date: newDaDate, modified_by_email: userEmail, last_modified: new Date().toISOString()
+      action_history: history,
+      previous_action: da.current_action || null,
+           current_action: newDaAction,
+      execution_date: newDaDate,
+      da_confirmed: null,
+      da_confirmed_by: null,
+      da_confirmed_at: null,
+      modified_by_email: userEmail,
+      last_modified: new Date().toISOString()
     }).eq('id', daId);
     if (error) alert('Error adding action: ' + error.message);
     else {
@@ -915,11 +923,54 @@ const handleUpdateRespondent = async (e, daId) => {
     if (error) alert('Error adding violation: ' + error.message);
     else { refreshDaList(); setNewViolation(prev => ({ ...prev, [daId]: '' })); }
   };
+  const handleDeleteDaStep = async (daId, stepIndex) => {
+    const da = daList.find(d => d.id === daId);
+    if (!da) return;
+    const history = [...(da.action_history || [])];
+    const removed = history[stepIndex];
+    if (!removed) return;
 
-  const handleConfirmDA = async (daId) => {
-    if (!window.confirm('Confirm this Disciplinary Action is in force?')) return;
+    const remaining = history.filter((_, i) => i !== stepIndex).map((h, i) => ({ ...h, step: i + 1 }));
+    const last = remaining[remaining.length - 1] || null;
+    const prev = remaining[remaining.length - 2] || null;
+
+    const msg = `Delete this action from the timeline?\n\n"${removed.action || '—'}" (${removed.date || 'no date'}) will be removed.\n\n`
+      + (last ? `Current action reverts to "${last.action}".` : 'This respondent will have no action recorded.')
+      + `\n\nThis cannot be undone.`;
+    if (!window.confirm(msg)) return;
+
+    const { error } = await supabase.from('disciplinary_actions').update({
+      action_history: remaining,
+      current_action: last ? last.action : null,
+      execution_date: last ? last.date : null,
+      previous_action: prev ? prev.action : null,
+      da_confirmed: last && last.confirmed_by ? true : null,
+      da_confirmed_by: last && last.confirmed_by ? last.confirmed_by : null,
+      da_confirmed_at: last && last.confirmed_at ? last.confirmed_at : null,
+      modified_by_email: userEmail,
+      last_modified: new Date().toISOString()
+    }).eq('id', daId);
+    if (error) alert('Error deleting action: ' + error.message);
+    else refreshDaList();
+  };
+  const handleConfirmDA = async (daId, stepAction) => {
+    const act = (stepAction || '').toLowerCase();
+    const isResolving = act.includes('release') || act.includes('terminat');
+    const msg = isResolving
+      ? 'Confirm this action has been approved and is now in effect?\n\nThis will remove the respondent from the DA In Force count.'
+      : 'Confirm this Disciplinary Action is in force?';
+    if (!window.confirm(msg)) return;
+
+    const da = daList.find(d => d.id === daId);
+    const history = (da?.action_history || []).map((h, i, arr) =>
+      i === arr.length - 1
+        ? { ...h, confirmed_by: userEmail, confirmed_at: new Date().toISOString() }
+        : h
+    );
+
     const { error } = await supabase.from('disciplinary_actions').update({
       da_confirmed: true, da_confirmed_by: userEmail, da_confirmed_at: new Date().toISOString(),
+      action_history: history,
       modified_by_email: userEmail, last_modified: new Date().toISOString()
     }).eq('id', daId);
     if (error) alert('Error confirming DA: ' + error.message);
@@ -1152,11 +1203,29 @@ const handleUpdateRespondent = async (e, daId) => {
 
   // ==== DA In Force: latest action determines if the DA is still active ====
 // Release or Termination = resolved, no longer in force
+const isDAResolving = (da) => {
+  const action = (da?.current_action || '').toLowerCase();
+  return action.includes('release') || action.includes('terminat');
+};
+
 const isDAInForce = (da) => {
   if (!da) return false;
   const action = (da.current_action || '').toLowerCase();
-  if (action.includes('release') || action.includes('terminat')) return false;
-  return da.da_confirmed === true || (da.da_confirmed == null && action.includes('suspend'));
+  const prev = (da.previous_action || '').toLowerCase();
+
+  if (isDAResolving(da)) {
+    // A release or termination only takes effect once confirmed.
+    if (da.da_confirmed === true) return false;
+    // Not yet approved — the earlier action still governs.
+    return prev.includes('suspend');
+  }
+
+  // Only suspensions count. Other actions (SCO/SCN, warning letters, reinstatements)
+  // are tracked via WIP, not the DA count.
+  // Only suspensions count, and only once confirmed as approved and in force.
+  // Unapproved suspensions are tracked via WIP until the notice is issued.
+  if (!action.includes('suspend')) return false;
+  return da.da_confirmed === true;
 };
   const getActionColor = (action) => {
     if (!action) return { text: '#64748b', bg: '#f1f5f9' };
@@ -2213,6 +2282,18 @@ const renderClosureInfo = (c) => {
           <button type="button" className="btn-admin" onClick={() => startRespondentEdit(da)}>✏️ Edit</button>
           <button type="button" className="btn-admin-danger" onClick={() => handleDeleteRespondent(da.id)}>🗑 Delete</button>
         </div>
+        {(da.action_history || []).length > 0 && (
+          <div style={{ width: '100%', marginTop: '6px', paddingTop: '6px', borderTop: '1px dashed #e2e8f0' }}>
+            <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '4px' }}>Timeline steps — delete a wrongly recorded action:</div>
+            {(da.action_history || []).map((h, hIdx) => (
+              <div key={hIdx} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', padding: '2px 0' }}>
+                <span style={{ color: '#94a3b8', minWidth: '16px' }}>{hIdx + 1}</span>
+                <span style={{ flex: 1 }}>{h.action || '—'}<span style={{ color: '#94a3b8', marginLeft: '6px' }}>{h.date || 'no date'}</span>{h.confirmed_by ? <span style={{ color: '#059669', marginLeft: '6px' }}>✓</span> : null}</span>
+                <button type="button" className="btn-admin-danger" onClick={() => handleDeleteDaStep(da.id, hIdx)}>🗑</button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
       )
     ))}
@@ -2274,16 +2355,22 @@ const renderClosureInfo = (c) => {
                                                               <div className="step-circle">{h.step}</div>
                                                               <div className="item-content">
                                                                 <span className="badge" style={{ backgroundColor: hColors.bg, color: hColors.text }}>{h.action || '—'}</span>
-                                                                <div className="item-sub" style={{ marginTop: '4px' }}>Date: {h.date || 'No date'}</div>
+                                                                <div className="item-sub" style={{ marginTop: '4px' }}>Date DA in force: {h.date || 'No date'}</div>
                                                                 {h.added_by && <div className="item-sub" style={{ fontSize: '10px' }}>Added by: {h.added_by?.split('@')[0]} on {formatDateTime(h.added_at)}</div>}                                                            {h.modified_by && <div className="item-sub" style={{ fontSize: '10px', color: '#94a3b8' }}>Modified by: {h.modified_by?.split('@')[0]} on {formatDateTime(h.modified_at)}</div>}
                                                               </div>
                                                               <button onClick={() => { setEditingDaAction({ daId: da.id, step: idx }); setEditDaActionName(h.action); setEditDaActionDate(h.date); }} className="btn-action">Edit</button>
-                                                                                                                            {da.da_confirmed !== true && <button onClick={() => handleConfirmDA(da.id)} className="btn-action btn-success" style={{ marginTop: '4px' }}>✓ Confirm DA</button>}
-                                                              {da.da_confirmed === true && <div style={{ marginTop: '4px' }}><span className="badge badge-green">✓ DA Confirmed</span>{da.da_confirmed_by && <span style={{ fontSize: '10px', color: '#059669', marginLeft: '4px' }}>by {da.da_confirmed_by.split('@')[0]} on {formatDateTime(da.da_confirmed_at)}</span>}</div>}
-                                                              {da.da_confirmed == null && (da.current_action?.toLowerCase().includes('suspend') || da.current_action?.toLowerCase().includes('terminat')) && <div style={{ marginTop: '4px' }}><span className="badge badge-yellow">⚠ Counted (legacy) — review & confirm</span></div>}
-                                                              {isAdmin && (da.da_confirmed === true || (da.da_confirmed == null && (da.current_action?.toLowerCase().includes('suspend') || da.current_action?.toLowerCase().includes('terminat')))) && <button onClick={() => handleClearDA(da.id)} className="btn-action btn-danger" style={{ marginTop: '4px', marginLeft: '4px' }}>✗ Clear DA Count</button>}
-                                                              {da.da_confirmed === false && <div style={{ marginTop: '4px' }}><span className="badge badge-grey">✗ Not In Force — cleared by admin</span></div>}
-                                                              {da.da_confirmed !== false && (da.current_action?.toLowerCase().includes('release') || da.current_action?.toLowerCase().includes('terminat')) && <div style={{ marginTop: '4px' }}><span className="badge badge-grey">↳ DA Resolved — not counted (latest action is release/termination)</span></div>}
+                                                              {idx === da.action_history.length - 1 ? (
+                                                                <>
+                                                                  {da.da_confirmed !== true && <button onClick={() => handleConfirmDA(da.id, h.action)} className="btn-action btn-success" style={{ marginTop: '4px' }}>✓ Confirm DA</button>}
+                                                                  {da.da_confirmed === true && <div style={{ marginTop: '4px' }}><span className="badge badge-green">✓ DA Confirmed</span>{da.da_confirmed_by && <span style={{ fontSize: '10px', color: '#059669', marginLeft: '4px' }}>by {da.da_confirmed_by.split('@')[0]} on {formatDateTime(da.da_confirmed_at)}</span>}</div>}
+                                                                  {da.da_confirmed == null && (da.current_action?.toLowerCase().includes('suspend') || da.current_action?.toLowerCase().includes('terminat')) && <div style={{ marginTop: '4px' }}><span className="badge badge-yellow">⏳ Not yet counted — awaiting approval</span></div>}
+                                                                  {isAdmin && (da.da_confirmed === true || (da.da_confirmed == null && (da.current_action?.toLowerCase().includes('suspend') || da.current_action?.toLowerCase().includes('terminat')))) && <button onClick={() => handleClearDA(da.id)} className="btn-action btn-danger" style={{ marginTop: '4px', marginLeft: '4px' }}>✗ Clear DA Count</button>}
+                                                                  {da.da_confirmed === false && <div style={{ marginTop: '4px' }}><span className="badge badge-grey">✗ Not In Force — cleared by admin</span></div>}
+                                                                  {da.da_confirmed !== true && da.da_confirmed !== false && (h.action?.toLowerCase().includes('release') || h.action?.toLowerCase().includes('terminat')) && <div style={{ marginTop: '4px' }}><span className="badge badge-yellow">⏳ Awaiting approval — previous action still in force</span></div>}
+                                                                </>
+                                                              ) : (
+                                                                h.confirmed_by ? <div style={{ marginTop: '4px' }}><span className="badge badge-green">✓ Confirmed</span><span style={{ fontSize: '10px', color: '#059669', marginLeft: '4px' }}>by {h.confirmed_by.split('@')[0]} on {formatDateTime(h.confirmed_at)}</span></div> : null
+                                                              )}
                                                                                                                     </div>
 
                                                             {editingDaAction && editingDaAction.daId === da.id && editingDaAction.step === idx && (
