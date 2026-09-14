@@ -946,6 +946,36 @@ const handleUpdateRespondent = async (e, daId) => {
 
   const toggleExpandDA = (daId) => setExpandedDAs(prev => ({ ...prev, [daId]: !prev[daId] }));
 
+  const [caseComplainants, setCaseComplainants] = React.useState([]);
+
+  const loadCaseComplainants = React.useCallback(async (caseNum) => {
+    if (!caseNum) { setCaseComplainants([]); return; }
+    const { data } = await supabase
+      .from('case_complainants')
+      .select('*')
+      .eq('case_number', caseNum)
+      .order('is_anchor', { ascending: false })
+      .order('last_modified', { ascending: true });
+    setCaseComplainants(data || []);
+  }, []);
+
+  React.useEffect(() => { loadCaseComplainants(selectedCase); }, [selectedCase]);
+
+  const handleRelinkComplainant = async (daId, complainantRowId) => {
+    const c = caseComplainants.find(x => x.id === complainantRowId);
+    if (!c) return;
+    const { error } = await supabase.from('disciplinary_actions').update({
+      complainant_name: c.complainant_name,
+      complainant_id: c.complainant_id,
+      complainant_cust_id: c.complainant_cust_id,
+      complainant_country: c.complainant_country,
+      modified_by_email: userEmail,
+      last_modified: new Date().toISOString()
+    }).eq('id', daId);
+    if (error) alert('Error changing complainant: ' + error.message);
+    else await refreshDaList();
+  };
+
   const handleAddPerson = async (e) => {
     e.preventDefault();
     const timestamp = Date.now();
@@ -956,11 +986,65 @@ const handleUpdateRespondent = async (e, daId) => {
     } else {
       insertData.respondent_name = newPersonName; insertData.respondent_id = newPersonId; insertData.respondent_country = newPersonCountry;
     }
-    const { error } = await supabase.from('disciplinary_actions').insert([insertData]);
+    let error = null;
+    if (showAddPersonForm === 'respondent') {
+      const { data: openRows } = await supabase
+        .from('disciplinary_actions')
+        .select('id, complainant_name, respondent_name')
+        .eq('case_number', selectedCase)
+        .is('respondent_name', null)
+        .not('complainant_name', 'is', null)
+        .order('last_modified', { ascending: true })
+        .limit(1);
+      if (openRows && openRows.length > 0) {
+        const res = await supabase.from('disciplinary_actions').update({
+          respondent_name: newPersonName,
+          respondent_id: newPersonId,
+          respondent_country: newPersonCountry,
+          modified_by_email: userEmail,
+          last_modified: new Date().toISOString()
+        }).eq('id', openRows[0].id);
+        error = res.error;
+      } else {
+        const { data: anchorRows } = await supabase
+          .from('disciplinary_actions')
+          .select('complainant_name, complainant_id, complainant_country')
+          .eq('case_number', selectedCase)
+          .not('complainant_name', 'is', null)
+          .order('last_modified', { ascending: true })
+          .limit(1);
+        if (anchorRows && anchorRows.length > 0) {
+          insertData.complainant_name = anchorRows[0].complainant_name;
+          insertData.complainant_id = anchorRows[0].complainant_id;
+          insertData.complainant_country = anchorRows[0].complainant_country;
+        }
+        const res = await supabase.from('disciplinary_actions').insert([insertData]);
+        error = res.error;
+      }
+    } else {
+      const res = await supabase.from('disciplinary_actions').insert([insertData]);
+      error = res.error;
+      if (!error) {
+        const { data: existing } = await supabase
+          .from('case_complainants')
+          .select('id')
+          .eq('case_number', selectedCase)
+          .limit(1);
+        await supabase.from('case_complainants').insert([{
+          case_number: selectedCase,
+          complainant_name: newPersonName,
+          complainant_id: newPersonId,
+          complainant_country: newPersonCountry,
+          is_anchor: !existing || existing.length === 0,
+          modified_by_email: userEmail
+        }]);
+        await loadCaseComplainants(selectedCase);
+      }
+    }
     if (error) alert('Error adding ' + showAddPersonForm + ': ' + error.message);
     else {
       setShowAddPersonForm(null); setNewPersonName(''); setNewPersonId(''); setNewPersonCountry('');
-      refreshDaList();
+      await refreshDaList();
     }
   };
 
@@ -1351,7 +1435,10 @@ const renderClosureInfo = (c) => {
     const m = new Map();
     respRows.forEach(r => {
       const key = (r.respondent_id || '').trim().toUpperCase();
-      if (!key) return;
+      if (!key || key === 'UNIDENTIFIED ID') return;
+      const hasViolation = (Array.isArray(r.violations) && r.violations.length > 0) || !!r.violation_category;
+      const hasAction = !!r.current_action;
+      if (!hasViolation || !hasAction) return;
       if (!m.has(key)) m.set(key, new Set());
       m.get(key).add(r.case_number);
     });
@@ -1939,14 +2026,21 @@ const renderClosureInfo = (c) => {
                                           <span className="expanded-label">CASE DETAILS</span>
                                           <div className="expanded-value">{c.case_number}</div>
                                           {(() => {
-  const complainants = [...new Map(c.disciplinary_actions?.filter(da => da.complainant_name).map(da => [da.complainant_name, da])).values()];
+  const fromTable = (caseComplainants || []).map(x => ({
+    complainant_name: x.complainant_name,
+    complainant_id: x.complainant_id,
+    complainant_country: x.complainant_country,
+    is_anchor: x.is_anchor
+  }));
+  const fromRows = [...new Map(c.disciplinary_actions?.filter(da => da.complainant_name).map(da => [da.complainant_name, da])).values()];
+  const complainants = fromTable.length > 0 ? fromTable : fromRows;
   if (complainants.length > 0) {
     return (
       <div className="expanded-sub" style={{ marginTop: '4px', fontWeight: '600', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '4px' }}>
         Complainant(s):
         {complainants.map((comp, i) => (
           <span key={i} className="complainant-line">
-            <span className="complainant-name">{comp.complainant_name}</span>
+            <span className="complainant-name">{comp.complainant_name}{comp.is_anchor ? ' ⚓' : ''}</span>
             <span className="badge badge-purple" style={{ marginLeft: '4px' }}>QNET ID#: {comp.complainant_id || '—'}</span>
             {comp.complainant_country && <span className="badge badge-grey" style={{ marginLeft: '4px' }}>{comp.complainant_country}</span>}
           </span>
@@ -2131,7 +2225,23 @@ const renderClosureInfo = (c) => {
                                                 <div key={da.id} style={{ border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px', marginBottom: '12px' }}>
                                                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
                                                     <div><span className="expanded-label">Respondent: </span><span className="item-title">{da.respondent_name || '—'}</span><span className="item-sub" style={{ marginLeft: '8px' }}>({da.respondent_id || '—'})</span>{da.respondent_country && <span className="badge badge-grey" style={{ marginLeft: '6px' }}>{da.respondent_country}</span>}</div>
-                                                  </div>
+                                                  </div> <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '6px' }}>
+                                                      <span className="expanded-label" style={{ margin: 0 }}>Linked complainant:</span>
+                                                      <select
+                                                        value=""
+                                                        onChange={(ev) => handleRelinkComplainant(da.id, ev.target.value)}
+                                                        style={{ padding: '4px 8px', border: '1px solid #dde3ea', borderRadius: '6px', fontSize: '12px' }}
+                                                      >
+                                                        <option value="">
+                                                          {da.complainant_name ? `${da.complainant_name}${da.complainant_id ? ' · ' + da.complainant_id : ''}` : '(none linked)'}
+                                                        </option>
+                                                        {caseComplainants.map(c => (
+                                                          <option key={c.id} value={c.id}>
+                                                            {c.complainant_name}{c.complainant_id ? ' · ' + c.complainant_id : ''}{c.is_anchor ? ' (anchor)' : ''}
+                                                          </option>
+                                                        ))}
+                                                      </select>
+                                                    </div>
 
                                                   <div style={{ marginBottom: '12px', padding: '8px', backgroundColor: '#f8fafc', borderRadius: '6px' }}>
                                                     <div className="expanded-label">Violations</div>
