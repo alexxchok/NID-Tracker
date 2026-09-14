@@ -827,6 +827,37 @@ const handleUpdateRespondent = async (e, daId) => {
     e.preventDefault();
     const da = daList.find(d => d.id === daId);
     if (!da) return;
+    const extraIds = Object.keys(bulkActionTargets).filter(k => bulkActionTargets[k]);
+    const targets = bulkActionMode ? [daId, ...extraIds] : [daId];
+    if (bulkActionMode && extraIds.length > 0) {
+      if (!window.confirm(`Add "${newDaAction}" to ${targets.length} respondents?`)) return;
+    }
+
+    const stamp = new Date().toISOString();
+    for (const tid of targets) {
+      const t = daList.find(d => d.id === tid);
+      if (!t) continue;
+      const th = [...(t.action_history || [])];
+      const entry = { step: th.length + 1, action: newDaAction, date: null, added_by: userEmail, added_at: stamp, sub_actions: [] };
+      if (bulkJournalText.trim()) {
+        entry.sub_actions.push({ desc: bulkJournalText.trim(), date: new Date().toISOString().split('T')[0], status: 'Pending', added_by: userEmail, added_at: stamp });
+      }
+      th.push(entry);
+      const { error: tErr } = await supabase.from('disciplinary_actions').update({
+        action_history: th,
+        previous_action: t.current_action || null,
+        current_action: newDaAction,
+        execution_date: null,
+        da_confirmed: null, da_confirmed_by: null, da_confirmed_at: null,
+        modified_by_email: userEmail, last_modified: stamp
+      }).eq('id', tid);
+      if (tErr) { alert('Error adding action: ' + tErr.message); return; }
+    }
+
+    setAddingDaFor(null); setNewDaAction(''); setNewDaDate(new Date().toISOString().split('T')[0]);
+    setBulkActionMode(false); setBulkActionTargets({}); setBulkJournalText('');
+    await refreshDaList();
+    return;
     const history = da.action_history || [];
     history.push({ step: history.length + 1, action: newDaAction, date: null, added_by: userEmail, added_at: new Date().toISOString(), sub_actions: [] });
     const { error } = await supabase.from('disciplinary_actions').update({
@@ -927,6 +958,9 @@ const handleUpdateRespondent = async (e, daId) => {
   const [bulkText, setBulkText] = React.useState('');
   const [bulkPreview, setBulkPreview] = React.useState(null);
 
+  const [bulkActionMode, setBulkActionMode] = React.useState(false);
+  const [bulkActionTargets, setBulkActionTargets] = React.useState({});
+  const [bulkJournalText, setBulkJournalText] = React.useState('');
   const parseBulkPeople = (raw) => {
     const lines = (raw || '').split(/\n+/).map(s => s.replace(/\u2060|\u200b/g, '').trim()).filter(Boolean);
     return lines.map((line, i) => {
@@ -2556,6 +2590,36 @@ const renderClosureInfo = (c) => {
                                                       {addingDaFor === da.id ? (
                                                         <form onSubmit={(e) => handleAddDaAction(e, da.id)} style={{ marginTop: '8px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                                                           <input type="text" placeholder="Action Name" value={newDaAction} onChange={(e) => setNewDaAction(e.target.value)} required style={{ flex: 1, minWidth: '150px', padding: '6px', border: '1px solid #e2e8f0', borderRadius: '6px' }} />
+                                                          {daList.length > 1 && (
+                                                            <div style={{ width: '100%', marginTop: '6px' }}>
+                                                              <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px' }}>
+                                                                <input type="checkbox" checked={bulkActionMode} onChange={(e) => { setBulkActionMode(e.target.checked); setBulkActionTargets({}); setBulkJournalText(''); }} />
+                                                                Apply to other respondents
+                                                              </label>
+                                                              {bulkActionMode && (
+                                                                <div style={{ marginTop: '6px', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '6px' }}>
+                                                                  <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '4px' }}>Tick the respondents who should also get "{newDaAction || '(action name)'}":</div>
+                                                                  {daList.filter(d => d.id !== da.id).map(d => {
+                                                                    const hist = d.action_history || [];
+                                                                    const lastAct = hist.length ? (hist[hist.length - 1].action || '') : '';
+                                                                    const same = newDaAction && lastAct.toLowerCase().trim() === newDaAction.toLowerCase().trim();
+                                                                    return (
+                                                                      <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', padding: '2px 0' }}>
+                                                                        <input type="checkbox" checked={!!bulkActionTargets[d.id]} onChange={(e) => setBulkActionTargets(prev => ({ ...prev, [d.id]: e.target.checked }))} />
+                                                                        <span style={{ flex: 1 }}>{d.respondent_name || '(unnamed)'}</span>
+                                                                        <span style={{ minWidth: '90px', color: '#64748b' }}>{d.respondent_id || '—'}</span>
+                                                                        {same && <span className="badge badge-yellow" style={{ fontSize: '10px' }}>⚠ already at "{lastAct}"</span>}
+                                                                      </div>
+                                                                    );
+                                                                  })}
+                                                                  <div className="wip-input-group" style={{ width: '100%', marginTop: '6px' }}>
+                                                                    <label style={{ fontSize: '11px' }}>Journal entry (optional) — copied to everyone selected, and to this respondent</label>
+                                                                    <textarea value={bulkJournalText} rows={3} onChange={(e) => setBulkJournalText(e.target.value)} style={{ width: '100%', padding: '6px', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '12px' }} />
+                                                                  </div>
+                                                                </div>
+                                                              )}
+                                                            </div>
+                                                          )}
                                                                                                         <button type="submit" className="btn-log" style={{ backgroundColor: '#10b981' }}>Add</button>
                                                           <button type="button" onClick={() => setAddingDaFor(null)} className="btn-action">Cancel</button>
                                                         </form>
