@@ -47,17 +47,19 @@ const calculateBusinessDays = (dueDate) => {
 
 const addBusinessDays = (startDate, daysToAdd) => {
   if (!startDate) return null;
-  let date = new Date(startDate);
-  date.setHours(0,0,0,0);
+  const parts = String(startDate).split('-').map(Number);
+  if (parts.length !== 3 || parts.some(isNaN)) return null;
+  let date = new Date(parts[0], parts[1] - 1, parts[2]);
   let added = 0;
   while (added < daysToAdd) {
     date.setDate(date.getDate() + 1);
     const day = date.getDay();
-    if (day !== 0 && day !== 6 && !isHoliday(date)) {
-      added++;
-    }
+    if (day !== 0 && day !== 6 && !isHoliday(date)) added++;
   }
-  return date.toISOString().split('T')[0];
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
 };
 
 // ==== ADMIN: count business days between a start date and a due date ====
@@ -226,9 +228,11 @@ function Dashboard({ userEmail, onSignOut }) {
   const [addingSubAction, setAddingSubAction] = useState(null);
   const [newSubActionDesc, setNewSubActionDesc] = useState('');
   const [newSubActionDate, setNewSubActionDate] = useState(new Date().toISOString().split('T')[0]);
+  const [newSubActionSla, setNewSubActionSla] = useState(2);
   const [editingSubActionEntry, setEditingSubActionEntry] = useState(null);
   const [editSubActionDesc, setEditSubActionDesc] = useState('');
   const [editSubActionDate, setEditSubActionDate] = useState('');
+  const [editSubActionSla, setEditSubActionSla] = useState(2);
 
   const [hideRespondents, setHideRespondents] = useState(true);
   // ==== ADMIN: case edit state ====
@@ -858,24 +862,6 @@ const handleUpdateRespondent = async (e, daId) => {
     setBulkActionMode(false); setBulkActionTargets({}); setBulkJournalText('');
     await refreshDaList();
     return;
-    const history = da.action_history || [];
-    history.push({ step: history.length + 1, action: newDaAction, date: null, added_by: userEmail, added_at: new Date().toISOString(), sub_actions: [] });
-    const { error } = await supabase.from('disciplinary_actions').update({
-      action_history: history,
-      previous_action: da.current_action || null,
-           current_action: newDaAction,
-           execution_date: null,
-      da_confirmed: null,
-      da_confirmed_by: null,
-      da_confirmed_at: null,
-      modified_by_email: userEmail,
-      last_modified: new Date().toISOString()
-    }).eq('id', daId);
-    if (error) alert('Error adding action: ' + error.message);
-    else {
-      setAddingDaFor(null); setNewDaAction(''); setNewDaDate(new Date().toISOString().split('T')[0]);
-      refreshDaList();
-    }
   };
 
   const handleEditDaAction = async (e, daId, stepIndex) => {
@@ -907,6 +893,8 @@ const handleUpdateRespondent = async (e, daId) => {
     if (!history[stepIndex] || !history[stepIndex].sub_actions || !history[stepIndex].sub_actions[saIndex]) return;
     history[stepIndex].sub_actions[saIndex].desc = editSubActionDesc;
     history[stepIndex].sub_actions[saIndex].date = editSubActionDate;
+    history[stepIndex].sub_actions[saIndex].sla_days = Math.max(1, Math.min(100, editSubActionSla || 2));
+    history[stepIndex].sub_actions[saIndex].expiry_date = addBusinessDays(editSubActionDate, Math.max(1, Math.min(100, editSubActionSla || 2)));
     history[stepIndex].sub_actions[saIndex].modified_by = userEmail;
     history[stepIndex].sub_actions[saIndex].modified_at = new Date().toISOString();
     const { error } = await supabase.from('disciplinary_actions').update({
@@ -934,7 +922,8 @@ const handleUpdateRespondent = async (e, daId) => {
     const da = daList.find(d => d.id === daId);
     const history = [...da.action_history];
     history[stepIndex].sub_actions = history[stepIndex].sub_actions || [];
-    history[stepIndex].sub_actions.push({ desc: newSubActionDesc, date: newSubActionDate, added_by: userEmail, added_at: new Date().toISOString(), status: 'Pending' });
+    const slaDays = Math.max(1, Math.min(100, newSubActionSla || 2));
+    history[stepIndex].sub_actions.push({ desc: newSubActionDesc, date: newSubActionDate, sla_days: slaDays, expiry_date: addBusinessDays(newSubActionDate, slaDays), added_by: userEmail, added_at: new Date().toISOString(), status: 'Pending' });
 
     const { error } = await supabase.from('disciplinary_actions').update({ action_history: history, modified_by_email: userEmail, last_modified: new Date().toISOString() }).eq('id', daId);
     if (error) alert('Error adding journal entry: ' + error.message);
@@ -1695,12 +1684,287 @@ const renderClosureInfo = (c) => {
   };
 
   const respMissingInfo = (r) => !r.respondent_name || !r.respondent_id || !r.complainant_name;
+  const [wipRows, setWipRows] = React.useState([]);
+  const [wipImportRows, setWipImportRows] = useState([]);
+const [wipImportBusy, setWipImportBusy] = useState(false);
+const [wipImportMsg, setWipImportMsg] = useState('');
+const [wipShowImport, setWipShowImport] = useState(false);
+const [wipImportChecked, setWipImportChecked] = useState({});
+const [wipImportValidating, setWipImportValidating] = useState(false);
+const [wipImportSaving, setWipImportSaving] = useState(false);
+const [wipImportProgress, setWipImportProgress] = useState('');
+  const [wipTabLoading, setWipTabLoading] = React.useState(false);
+  const [wipSearch, setWipSearch] = React.useState('');
+  const [wipPicFilter, setWipPicFilter] = React.useState('');
+  const [wipMineOnly, setWipMineOnly] = React.useState(false);
+  const [wipBreachedOnly, setWipBreachedOnly] = React.useState(false);
+  const [wipHideClosed, setWipHideClosed] = React.useState(false);
+  const [wipExpanded, setWipExpanded] = React.useState({});
+  const handleWipFileUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setWipImportBusy(true);
+    setWipImportMsg('Reading file...');
+    setWipImportRows([]);
+  
+    try {
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type: 'array', cellDates: false });
+  
+      const sheetName = wb.SheetNames.find(n => n.trim().toLowerCase() === 'wip_tracker');
+      if (!sheetName) {
+        setWipImportMsg('❌ No sheet named "WIP_Tracker" found in this file.');
+        setWipImportBusy(false);
+        return;
+      }
+  
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], {
+        header: 1, raw: true, defval: ''
+      });
+  
+      // Headers are on row 6 (index 5), data starts row 7 (index 6)
+      const dataRows = rows.slice(6);
+  
+      const parsed = [];
+      dataRows.forEach((r, i) => {
+        const caseNo = String(r[1] || '').trim();   // B
+        const desc   = String(r[3] || '').trim();   // D
+        if (!caseNo || !desc) return;               // skip blank/filler rows
+  
+        parsed.push({
+          excelRow: i + 7,
+          case_number: caseNo,
+          action_type: String(r[2] || '').trim(),   // C
+          description: desc,                        // D
+          date_sent_raw: r[5],                      // F
+          sla_days: Number(r[6]) || 2,              // G
+          status: String(r[13] || '').trim() || 'Pending', // N
+          pic: String(r[14] || '').trim(),          // O
+          notes: String(r[16] || '').trim()         // Q
+        });
+      });
+  
+      setWipImportRows(parsed);
+      setWipImportMsg(`Found ${parsed.length} row(s). Checking against the app...`);
+    await validateWipImport(parsed);
+    } catch (err) {
+      
+    }
+  
+    setWipImportBusy(false);
+    e.target.value = '';
+  };
+  const validateWipImport = async (rows) => {
+    setWipImportValidating(true);
+  
+    // 1. Get every case number the app knows about
+    const caseNos = [...new Set(rows.map(r => r.case_number))];
+    const { data: foundCases } = await supabase
+      .from('cases')
+      .select('case_number, case_status, pic')
+      .in('case_number', caseNos);
+  
+    const caseMap = {};
+    (foundCases || []).forEach(c => { caseMap[c.case_number] = c; });
+  
+    // 2. Get existing WIP rows for those cases
+    const { data: existingWip } = await supabase
+      .from('wip_actions')
+      .select('case_number, description')
+      .in('case_number', caseNos);
+  
+    const norm = (s) => String(s || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, '')
+      .slice(0, 60);
+  
+    const existingKeys = new Set(
+      (existingWip || []).map(w => w.case_number + '||' + norm(w.description))
+    );
+  
+    // 3. Give every row a verdict
+    const checked = {};
+    const verdicts = rows.map((r, i) => {
+      const c = caseMap[r.case_number];
+      let verdict, canImport = true;
+  
+      if (!c) {
+        verdict = '❌ Case not in app';
+        canImport = false;
+      } else if (existingKeys.has(r.case_number + '||' + norm(r.description))) {
+        verdict = '⚠️ Already in app';
+        canImport = false;
+      } else if (['COMPLETED', 'CANCELLED'].includes(String(c.case_status || '').toUpperCase())) {
+        verdict = '⚠️ Case ' + c.case_status;
+      } else {
+        verdict = '✅ Ready';
+      }
+  
+      checked[i] = canImport;
+      return { ...r, verdict, canImport, appPic: c ? c.pic : '' };
+    });
+  
+    setWipImportRows(verdicts);
+    setWipImportChecked(checked);
+    setWipImportValidating(false);
+  
+    const ready = verdicts.filter(v => v.verdict === '✅ Ready').length;
+    const dup = verdicts.filter(v => v.verdict === '⚠️ Already in app').length;
+    const missing = verdicts.filter(v => v.verdict === '❌ Case not in app').length;
+    const closed = verdicts.filter(v => v.verdict.startsWith('⚠️ Case ')).length;
+    setWipImportMsg(
+      `Found ${verdicts.length} rows — ✅ ${ready} ready · ⚠️ ${dup} already in app · ⚠️ ${closed} closed case · ❌ ${missing} case not found`
+    );
+  };
+
+  const excelSerialToDate = (serial) => {
+    if (serial === '' || serial === null || serial === undefined) return null;
+    const n = Number(serial);
+    if (!isNaN(n) && n > 20000 && n < 90000) {
+      const d = new Date(Math.round((n - 25569) * 86400 * 1000));
+      const y = d.getUTCFullYear();
+      const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+      const dd = String(d.getUTCDate()).padStart(2, '0');
+      return `${y}-${m}-${dd}`;
+    }
+    const s = String(serial).trim();
+    const parts = s.split(/[\/\-]/);
+    if (parts.length === 3) {
+      let [a, b, c] = parts.map(x => x.trim());
+      if (c.length === 2) c = '20' + c;
+      if (a.length === 4) return `${a}-${b.padStart(2, '0')}-${c.padStart(2, '0')}`;
+      return `${c}-${b.padStart(2, '0')}-${a.padStart(2, '0')}`;
+    }
+    return null;
+  };
+  
+  const runWipImport = async () => {
+    const chosen = wipImportRows.filter((r, i) => wipImportChecked[i] && r.canImport);
+    if (chosen.length === 0) { alert('Nothing selected.'); return; }
+    if (!window.confirm(`Import ${chosen.length} WIP row(s) into the app?`)) return;
+  
+    setWipImportSaving(true);
+    setWipImportProgress('Starting...');
+  
+    const stamp = new Date().toISOString();
+    let done = 0, failed = 0;
+    const errors = [];
+  
+    for (let i = 0; i < chosen.length; i += 10) {
+      const batch = chosen.slice(i, i + 10);
+  
+      const payload = batch.map(r => {
+        const dateSent = excelSerialToDate(r.date_sent_raw);
+        const sla = Number(r.sla_days) || 2;
+        const expiry = dateSent ? addBusinessDays(dateSent, sla) : null;
+        return {
+          case_number: r.case_number,
+          action_type: r.action_type || '',
+          description: r.description,
+          stage_auto: '⚠️ Unmapped',
+          date_sent: dateSent,
+          sla_days: sla,
+          expiry_date: expiry,
+          status: 'Pending',
+          pic: r.appPic || r.pic || '',
+          notes: r.notes || '',
+          modified_by_email: userEmail,
+          last_modified: stamp
+        };
+      });
+  
+      const { error } = await supabase.from('wip_actions').insert(payload);
+      if (error) {
+        failed += batch.length;
+        errors.push(error.message);
+      } else {
+        done += batch.length;
+      }
+      setWipImportProgress(`Imported ${done} of ${chosen.length}...`);
+    }
+  
+    setWipImportSaving(false);
+  
+    if (failed > 0) {
+      setWipImportProgress(`⚠️ Imported ${done}, failed ${failed}. First error: ${errors[0]}`);
+    } else {
+      setWipImportProgress(`✅ Imported ${done} row(s) successfully.`);
+      setWipImportRows([]);
+      setWipImportChecked({});
+      setWipImportMsg('');
+      await fetchAllWip();
+    }
+  };
+  const fetchAllWip = React.useCallback(async () => {
+    setWipTabLoading(true);
+    const items = [];
+
+    // 1) Pending WIP actions
+    const { data: wa } = await supabase
+      .from('wip_actions')
+      .select('*, cases(pic, case_status)')
+      .eq('status', 'Pending');
+    (wa || []).forEach(w => {
+      items.push({
+        kind: 'WIP',
+        case_number: w.case_number,
+        description: w.description || w.action_type || '—',
+        action_type: w.action_type,
+        stage: w.stage_auto,
+        date_sent: w.date_sent,
+        expiry_date: w.expiry_date,
+        pic: (w.cases && w.cases.pic) || w.pic || '',
+        case_status: w.cases ? w.cases.case_status : '',
+        who: ''
+      });
+    });
+
+    // 2) Pending journal entries inside respondent timelines
+    let from = 0; const size = 1000;
+    while (true) {
+      const { data, error } = await supabase
+        .from('disciplinary_actions')
+        .select('case_number, respondent_name, respondent_id, action_history, cases(pic, case_status)')
+        .not('action_history', 'is', null)
+        .range(from, from + size - 1);
+      if (error || !data || data.length === 0) break;
+      data.forEach(r => {
+        (r.action_history || []).forEach(h => {
+          (h.sub_actions || []).forEach(sa => {
+            if (sa.status === 'Done') return;
+            items.push({
+              kind: 'Journal',
+              case_number: r.case_number,
+              description: sa.desc || '—',
+              action_type: h.action || '',
+              stage: '',
+              date_sent: sa.date,
+              expiry_date: sa.expiry_date || null,
+              pic: (r.cases && r.cases.pic) || '',
+              case_status: r.cases ? r.cases.case_status : '',
+              who: r.respondent_name || ''
+            });
+          });
+        });
+      });
+      if (data.length < size) break;
+      from += size;
+    }
+
+    setWipRows(items);
+    setWipTabLoading(false);
+  }, []);
+
+  React.useEffect(() => {
+    if (activeTab === 'wip' && wipRows.length === 0 && !wipTabLoading) fetchAllWip();
+  }, [activeTab]);
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: '📊' },
-    { id: 'cases', label: 'Cases', icon: '📁' },
     { id: 'analytics', label: 'Analytics', icon: '📈' },
-    { id: 'india', label: 'India Tracker', icon: '🇮🇳' },
+    { id: 'cases', label: 'Cases', icon: '📁' },
+    { id: 'wip', label: 'WIP', icon: '⏳' },
     { id: 'respondents', label: 'Respondents', icon: '👥' },
+    { id: 'india', label: 'India Tracker', icon: '🇮🇳' },
   ];
 
   const SortIndicator = ({ column }) => {
@@ -2555,16 +2819,26 @@ const renderClosureInfo = (c) => {
                                                                   {sa.status === 'Done' ? (
                                                                     <span className="badge badge-green" style={{ fontSize: '10px' }}>✓ Done</span>
                                                                   ) : (
-                                                                    <span className="badge badge-yellow" style={{ fontSize: '10px' }}>⏳ Pending</span>
+                                                                    <>
+                                                                      <span className="badge badge-yellow" style={{ fontSize: '10px' }}>⏳ Pending</span>
+                                                                      {sa.expiry_date && (() => {
+                                                                        const d = calculateBusinessDays(sa.expiry_date);
+                                                                        return d < 0
+                                                                          ? <span className="badge badge-red" style={{ fontSize: '10px' }}>🔴 Breached by {Math.abs(d)}d</span>
+                                                                          : <span className="badge badge-yellow" style={{ fontSize: '10px' }}>🟡 Due in {d}d</span>;
+                                                                      })()}
+                                                                      {sa.expiry_date && <span style={{ fontSize: '10px', color: '#94a3b8' }}>due {sa.expiry_date}</span>}
+                                                                    </>
                                                                   )}
                                                                   {sa.status !== 'Done' && <button onClick={() => handleCompleteSubAction(da.id, idx, saIdx)} className="btn-action btn-success" style={{ fontSize: '10px', padding: '2px 6px' }}>✓ Complete</button>}
                                                                   {sa.completed_by && <span style={{ fontSize: '10px', color: '#94a3b8' }}>✓ by {sa.completed_by?.split('@')[0]}</span>}
-                                                                  <button onClick={() => { setEditingSubActionEntry({ daId: da.id, step: idx, saIdx }); setEditSubActionDesc(sa.desc); setEditSubActionDate(sa.date); }} className="btn-action" style={{ fontSize: '10px', padding: '2px 6px' }}>✏️</button>
+                                                                  <button onClick={() => { setEditingSubActionEntry({ daId: da.id, step: idx, saIdx }); setEditSubActionDesc(sa.desc); setEditSubActionDate(sa.date); setEditSubActionSla(sa.sla_days || 2); }} className="btn-action" style={{ fontSize: '10px', padding: '2px 6px' }}>✏️</button>
                                                                   {sa.modified_by && <span style={{ fontSize: '10px', color: '#94a3b8' }}>modified by {sa.modified_by?.split('@')[0]} on {formatDateTime(sa.modified_at)}</span>}
                                                                   {editingSubActionEntry && editingSubActionEntry.daId === da.id && editingSubActionEntry.step === idx && editingSubActionEntry.saIdx === saIdx && (
                                                                     <form onSubmit={(e) => handleEditSubAction(e, da.id, idx, saIdx)} style={{ width: '100%', display: 'flex', gap: '8px', marginTop: '4px', flexWrap: 'wrap' }}>
                                                                       <input type="text" value={editSubActionDesc} onChange={(e) => setEditSubActionDesc(e.target.value)} required style={{ flex: 1, minWidth: '200px', padding: '4px', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '12px' }} />
                                                                       <input type="date" value={editSubActionDate} onChange={(e) => setEditSubActionDate(e.target.value)} style={{ padding: '4px', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '12px' }} />
+                                                                      <input type="number" min="1" max="100" value={editSubActionSla} onChange={(e) => setEditSubActionSla(parseInt(e.target.value, 10) || 1)} title="SLA in working days" style={{ width: '56px', padding: '4px', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '12px' }} />
                                                                       <button type="submit" className="btn-log" style={{ backgroundColor: '#10b981', fontSize: '11px', padding: '4px 8px' }}>Update</button>
                                                                       <button type="button" onClick={() => setEditingSubActionEntry(null)} className="btn-action" style={{ fontSize: '11px', padding: '4px 8px' }}>Cancel</button>
                                                                     </form>
@@ -2576,6 +2850,10 @@ const renderClosureInfo = (c) => {
                                                                 <form onSubmit={(e) => handleAddSubAction(e, da.id, idx)} className="sub-action-form">
                                                                   <input type="text" placeholder="Journal entry (e.g., Sent for approval)" value={newSubActionDesc} onChange={(e) => setNewSubActionDesc(e.target.value)} required style={{ flex: 1, minWidth: '150px', padding: '6px', border: '1px solid #e2e8f0', borderRadius: '6px' }} />
                                                                   <input type="date" value={newSubActionDate} onChange={(e) => setNewSubActionDate(e.target.value)} style={{ padding: '6px', border: '1px solid #e2e8f0', borderRadius: '6px' }} />
+                                                                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }} title="SLA in working days">
+                                                                    <span style={{ fontSize: '11px', color: '#64748b' }}>SLA</span>
+                                                                    <input type="number" min="1" max="100" value={newSubActionSla} onChange={(e) => setNewSubActionSla(parseInt(e.target.value, 10) || 1)} style={{ width: '56px', padding: '6px', border: '1px solid #e2e8f0', borderRadius: '6px' }} />
+                                                                  </div>
                                                                   <button type="submit" className="btn-log" style={{ backgroundColor: '#10b981' }}>Add</button>
                                                                   <button type="button" onClick={() => setAddingSubAction(null)} className="btn-action">Cancel</button>
                                                                 </form>
@@ -2661,6 +2939,208 @@ const renderClosureInfo = (c) => {
               </div>
             </>
           )}
+{activeTab === 'wip' && (
+  <>
+    <div className="page-header">
+      <div className="page-header-text">
+        <h2>⏳ WIP — Pending Items</h2>
+        <p>Everything awaiting action, across all cases. Grouped by case, most overdue first.</p>
+      </div>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button className="btn-secondary" onClick={fetchAllWip} disabled={wipTabLoading}>
+          {wipTabLoading ? 'Loading...' : 'Refresh'}
+        </button>
+        <button
+          className="btn-secondary"
+          onClick={() => setWipShowImport(v => !v)}>
+          📥 Import from Excel
+        </button>
+      </div>
+    </div>
+
+    {wipShowImport && (
+      <div style={{ marginTop: 10, marginBottom: 16, padding: 12, border: '1px solid #ddd', borderRadius: 8, background: '#fafafa' }}>
+        <div style={{ fontWeight: 600, marginBottom: 6 }}>Import WIP rows from your Excel workbook</div>
+        <div style={{ fontSize: 12, color: '#666', marginBottom: 8 }}>
+          Pick your workbook file. It reads the <b>WIP_Tracker</b> sheet only. Nothing is saved yet — you'll review first.
+        </div>
+        <input type="file" accept=".xlsx,.xlsm,.xls" onChange={handleWipFileUpload} disabled={wipImportBusy} />
+        {wipImportMsg && <div style={{ marginTop: 8, fontSize: 13 }}>{wipImportMsg}</div>}
+        {wipImportProgress && <div style={{ marginTop: 6, fontSize: 13, fontWeight: 600 }}>{wipImportProgress}</div>}
+        {wipImportRows.length > 0 && (
+  <div style={{ marginTop: 10 }}>
+    <div style={{ marginBottom: 6, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+      <button className="btn-secondary" style={{ fontSize: 12, padding: '4px 10px' }}
+        onClick={() => {
+          const c = {}; wipImportRows.forEach((r, i) => { c[i] = r.canImport; });
+          setWipImportChecked(c);
+        }}>Select all importable</button>
+      <button className="btn-secondary" style={{ fontSize: 12, padding: '4px 10px' }}
+        onClick={() => {
+          const c = {}; wipImportRows.forEach((r, i) => { c[i] = r.verdict === '✅ Ready'; });
+          setWipImportChecked(c);
+        }}>Only ✅ Ready</button>
+      <button className="btn-secondary" style={{ fontSize: 12, padding: '4px 10px' }}
+        onClick={() => setWipImportChecked({})}>Select none</button>
+      <span style={{ fontSize: 13, fontWeight: 600, marginLeft: 'auto' }}>
+        {Object.values(wipImportChecked).filter(Boolean).length} of {wipImportRows.length} selected
+      </span>
+      <button
+        onClick={runWipImport}
+        disabled={wipImportSaving}
+        style={{ padding: '6px 14px', borderRadius: 6, border: 'none', background: '#2e7d32', color: '#fff', fontWeight: 600, cursor: 'pointer' }}>
+        {wipImportSaving ? 'Importing...' : `⬆ Import ${Object.values(wipImportChecked).filter(Boolean).length} row(s)`}
+      </button>
+    </div>
+
+    <div style={{ maxHeight: 380, overflow: 'auto', border: '1px solid #eee', background: '#fff' }}>
+      <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse' }}>
+        <thead>
+          <tr style={{ background: '#f0f0f0', position: 'sticky', top: 0 }}>
+            <th style={{ padding: 4, width: 30 }}></th>
+            <th style={{ padding: 4, textAlign: 'left' }}>Row</th>
+            <th style={{ padding: 4, textAlign: 'left' }}>Verdict</th>
+            <th style={{ padding: 4, textAlign: 'left' }}>Case</th>
+            <th style={{ padding: 4, textAlign: 'left' }}>Description</th>
+            <th style={{ padding: 4, textAlign: 'left' }}>Sent</th>
+            <th style={{ padding: 4, textAlign: 'left' }}>SLA</th>
+            <th style={{ padding: 4, textAlign: 'left' }}>PIC</th>
+          </tr>
+        </thead>
+        <tbody>
+          {wipImportRows.map((r, i) => (
+            <tr key={i} style={{
+              borderTop: '1px solid #eee',
+              background: !r.canImport ? '#fafafa' : (wipImportChecked[i] ? '#f4fbf4' : '#fff'),
+              color: !r.canImport ? '#999' : '#222'
+            }}>
+              <td style={{ padding: 4, textAlign: 'center' }}>
+                <input type="checkbox"
+                  checked={!!wipImportChecked[i]}
+                  disabled={!r.canImport}
+                  onChange={() => setWipImportChecked(p => ({ ...p, [i]: !p[i] }))} />
+              </td>
+              <td style={{ padding: 4 }}>{r.excelRow}</td>
+              <td style={{ padding: 4, whiteSpace: 'nowrap' }}>{r.verdict}</td>
+              <td style={{ padding: 4, whiteSpace: 'nowrap' }}>{r.case_number}</td>
+              <td style={{ padding: 4 }} title={r.description}>{r.description.slice(0, 60)}</td>
+              <td style={{ padding: 4, whiteSpace: 'nowrap' }}>{String(r.date_sent_raw || '')}</td>
+              <td style={{ padding: 4 }}>{r.sla_days}</td>
+              <td style={{ padding: 4 }}>{r.appPic || r.pic}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  </div>
+)}
+
+      </div>
+    )}
+
+              <div className="resp-filters">
+                <input className="resp-search" placeholder="Search case no, description or respondent..." value={wipSearch} onChange={(ev) => setWipSearch(ev.target.value)} />
+                <select value={wipPicFilter} onChange={(ev) => setWipPicFilter(ev.target.value)}>
+                  <option value="">All PICs</option>
+                  {Array.from(new Set(wipRows.map(r => r.pic).filter(Boolean))).sort().map(p => <option key={p} value={p}>{p}</option>)}
+                </select>
+                <label className="resp-toggle"><input type="checkbox" checked={wipMineOnly} onChange={(ev) => setWipMineOnly(ev.target.checked)} /> My cases only</label>
+                <label className="resp-toggle"><input type="checkbox" checked={wipBreachedOnly} onChange={(ev) => setWipBreachedOnly(ev.target.checked)} /> Breached only</label>
+                <label className="resp-toggle"><input type="checkbox" checked={wipHideClosed} onChange={(ev) => setWipHideClosed(ev.target.checked)} /> Hide closed cases</label>
+                <button className="btn-secondary" onClick={() => { setWipSearch(''); setWipPicFilter(''); setWipMineOnly(false); setWipBreachedOnly(false); setWipHideClosed(false); }}>Clear</button>
+              </div>
+
+              {wipTabLoading ? (
+                <div className="resp-empty">Loading pending items…</div>
+              ) : (() => {
+                const myName = (userEmail || '').split('@')[0].split('.').join(' ').toLowerCase();
+                const q = wipSearch.trim().toLowerCase();
+                const isClosed = (s) => s === 'COMPLETED' || s === 'CANCELLED';
+
+                const withDays = wipRows.map(r => ({ ...r, days: r.expiry_date ? calculateBusinessDays(r.expiry_date) : null }))
+                  .filter(r => {
+                    if (wipPicFilter && r.pic !== wipPicFilter) return false;
+                    if (wipMineOnly && !(r.pic || '').toLowerCase().includes(myName)) return false;
+                    if (wipBreachedOnly && !(r.days !== null && r.days < 0)) return false;
+                    if (wipHideClosed && isClosed(r.case_status)) return false;
+                    if (q) {
+                      const hay = `${r.case_number} ${r.description} ${r.who} ${r.action_type}`.toLowerCase();
+                      if (!hay.includes(q)) return false;
+                    }
+                    return true;
+                  });
+
+                const groups = new Map();
+                withDays.forEach(r => {
+                  if (!groups.has(r.case_number)) groups.set(r.case_number, []);
+                  groups.get(r.case_number).push(r);
+                });
+                const worst = (arr) => arr.reduce((m, r) => (r.days === null ? m : Math.min(m, r.days)), 9999);
+                const ordered = Array.from(groups.entries()).sort((a, b) => {
+                  const aC = isClosed(a[1][0].case_status), bC = isClosed(b[1][0].case_status);
+                  if (aC !== bC) return aC ? 1 : -1;
+                  return worst(a[1]) - worst(b[1]);
+                });
+
+                if (ordered.length === 0) return <div className="resp-empty">🎉 Nothing pending.</div>;
+
+                return (
+                  <>
+                    <div className="resp-count">{withDays.length} pending items across {ordered.length} cases</div>
+                    {ordered.map(([caseNum, list]) => {
+                      const dup = new Map();
+                      list.forEach(r => {
+                        const k = `${r.kind}|${r.description}|${r.days}`;
+                        if (!dup.has(k)) dup.set(k, []);
+                        dup.get(k).push(r);
+                      });
+                      const lines = Array.from(dup.entries()).sort((a, b) => {
+                        const ad = a[1][0].days === null ? 9999 : a[1][0].days;
+                        const bd = b[1][0].days === null ? 9999 : b[1][0].days;
+                        return ad - bd;
+                      });
+                      const closed = isClosed(list[0].case_status);
+                      return (
+                        <div key={caseNum} className="card" style={{ marginBottom: '12px', padding: '12px', opacity: closed ? 0.75 : 1 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', flexWrap: 'wrap', gap: '8px', cursor: 'pointer' }}
+                               onClick={() => { setActiveTab('cases'); handleCaseClick(caseNum); }}>
+                            <span style={{ fontWeight: 600 }}>📁 {caseNum}</span>
+                            <span style={{ fontSize: '12px', color: '#64748b' }}>{list[0].pic || '—'}{closed ? ` · ⚠️ ${list[0].case_status}` : ''}</span>
+                          </div>
+                          {lines.map(([key, items], li) => {
+                            const r = items[0];
+                            const many = items.length > 1;
+                            const open = !!wipExpanded[`${caseNum}|${li}`];
+                            return (
+                              <div key={li} style={{ padding: '3px 0' }}>
+                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', fontSize: '12px', flexWrap: 'wrap' }}>
+                                  {r.days === null
+                                    ? <span className="badge badge-grey" style={{ fontSize: '10px' }}>⏳ No due date</span>
+                                    : r.days < 0
+                                      ? <span className="badge badge-red" style={{ fontSize: '10px' }}>🔴 Breached {Math.abs(r.days)}d</span>
+                                      : <span className="badge badge-yellow" style={{ fontSize: '10px' }}>🟡 Due in {r.days}d</span>}
+                                  <span className="badge badge-grey" style={{ fontSize: '10px' }}>{r.kind}</span>
+                                  <span style={{ flex: 1, minWidth: '200px' }}>{r.description}</span>
+                                  {many
+                                    ? <button className="btn-action" style={{ fontSize: '10px', padding: '2px 6px' }} onClick={() => setWipExpanded(p => ({ ...p, [`${caseNum}|${li}`]: !open }))}>↳ {items.length} respondents {open ? '▾' : '▸'}</button>
+                                    : (r.who && <span style={{ fontSize: '11px', color: '#94a3b8' }}>↳ {r.who}{r.action_type ? ` · ${r.action_type}` : ''}</span>)}
+                                </div>
+                                {many && open && (
+                                  <div style={{ paddingLeft: '24px', marginTop: '2px' }}>
+                                    {items.map((it, ii) => <div key={ii} style={{ fontSize: '11px', color: '#64748b' }}>↳ {it.who}{it.action_type ? ` · ${it.action_type}` : ''}</div>)}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })}
+                  </>
+                );
+              })()}
+            </>
+          )}          
 {activeTab === 'respondents' && (
             <>
               <div className="page-header">
