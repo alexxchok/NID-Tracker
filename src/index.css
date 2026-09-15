@@ -35,3 +35,40 @@
    
    button { font-family: inherit; }
    input, select, textarea { font-family: inherit; font-size: inherit; }
+
+   /* ===== DARKER BORDERS — added 15/09/2026 ===== */
+
+/* Any element using a light grey border gets a darker one */
+*[style*="#e5e7eb"],
+*[style*="#e2e8f0"],
+*[style*="#eee"],
+*[style*="#ddd"],
+*[style*="#f0f0f0"] {
+  border-color: #94a3b8 !important;
+}
+
+/* Cards, panels and boxes */
+div[style*="border"] {
+  border-color: #94a3b8 !important;
+}
+
+/* Input boxes, dropdowns, text areas */
+input,
+select,
+textarea {
+  border: 1px solid #64748b !important;
+}
+
+/* Buttons get a clear edge */
+button {
+  border: 1px solid #475569 !important;
+}
+
+/* Table lines */
+table,
+th,
+td {
+  border-color: #94a3b8 !important;
+}
+
+/* ===== END DARKER BORDERS ===== */
