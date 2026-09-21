@@ -1624,13 +1624,21 @@ const renderClosureInfo = (c) => {
 
   const fetchRespondents = React.useCallback(async () => {
     setRespLoading(true);
+    // PERF FIX: was `select('*', ...)` — pulled all ~30 columns of all 4,154 rows,
+    // including the whole action_history timeline blob, none of which the list shows.
+    // Now fetches only the 17 fields the table + filters + repeat-offender check use.
+    // The heavy fields are loaded per-row on double-click (see openRespDetail).
+    const LIST_FIELDS = 'id, case_number, complainant_name, complainant_id, ' +
+      'complainant_cust_id, respondent_name, respondent_id, respondent_country, ' +
+      'violation_category, current_action, execution_date, team_name, upline_name, ' +
+      'modified_by_email, last_modified, cases(pic, case_status, country)';
     let all = [];
     let from = 0;
     const size = 1000;
     while (true) {
       const { data, error } = await supabase
         .from('disciplinary_actions')
-        .select('*, cases(pic, case_status, country)')
+        .select(LIST_FIELDS)
         .order('case_number', { ascending: false })
         .range(from, from + size - 1);
       if (error || !data || data.length === 0) break;
@@ -1641,6 +1649,19 @@ const renderClosureInfo = (c) => {
     setRespRows(all);
     setRespLoading(false);
   }, []);
+
+  // Double-click handler: the list rows are now lightweight, so fetch this
+  // one record's full details (remarks, action_history, referrer, upline, NID)
+  // on demand. One row — instant.
+  const openRespDetail = async (r) => {
+    setRespDetail(r);
+    const { data } = await supabase
+      .from('disciplinary_actions')
+      .select('*, cases(pic, case_status, country)')
+      .eq('id', r.id)
+      .single();
+    if (data) setRespDetail(data);
+  };
 
   React.useEffect(() => {
     if (activeTab === 'respondents' && respRows.length === 0 && !respLoading) fetchRespondents();
@@ -3257,7 +3278,7 @@ const [wipImportProgress, setWipImportProgress] = useState('');
                     {respCurrentPage.map((r) => {
                       const rc = respRepeatCount(r);
                       return (
-                        <tr key={r.id} onDoubleClick={() => setRespDetail(r)}>
+                        <tr key={r.id} onDoubleClick={() => openRespDetail(r)}>
                           <td>
                             {respMissingInfo(r) ? <span title="Missing complainant or respondent details">⚠️</span> : ''}
                             {rc > 1 ? <span className="resp-badge" title={`Appears in ${rc} cases`}>{rc}</span> : ''}
