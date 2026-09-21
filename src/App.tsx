@@ -250,14 +250,20 @@ const [respondentEdits, setRespondentEdits] = useState({});
 const [showCloseOptions, setShowCloseOptions] = useState(false);
 const [showMyCases, setShowMyCases] = useState(false);
 
-  const fetchCases = async (silent = false) => {
-    if (!silent) setLoading(true);
-    const { data, error } = await supabase.from('cases').select('*, disciplinary_actions(*), wip_actions(status)').order('sla_due_date', { ascending: true });
-    if (error) console.error('Error:', error);
-    else setCases(data);
-    setLoading(false);
-  };
-
+const fetchCases = async (silent = false) => {
+  if (!silent) setLoading(true);
+  // PERF FIX: was `disciplinary_actions(*)` — pulled every column of every
+  // respondent row (remarks, violations, referrer, upline, team, etc.) on
+  // every load. The Cases list only needs these few fields; the full record
+  // is fetched separately by handleCaseClick when a case drawer is opened.
+  const { data, error } = await supabase
+    .from('cases')
+    .select('*, disciplinary_actions(id, case_number, respondent_name, respondent_id, complainant_name, complainant_id, current_action, previous_action, da_confirmed, action_history), wip_actions(status)')
+    .order('sla_due_date', { ascending: true });
+  if (error) console.error('Error:', error);
+  else setCases(data);
+  setLoading(false);
+};
   useEffect(() => {
     fetchCases();
     supabase.from('mapping_rules').select('*').then(({ data }) => setMappingRules(data || []));
