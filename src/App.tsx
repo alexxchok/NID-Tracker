@@ -612,7 +612,10 @@ setEditingRespondentId(null);
 const openCaseEdit = () => {
   const c = cases.find(x => x.case_number === selectedCase);
   if (!c) return;
-  const daWithComplainant = daList.find(d => d.complainant_name || d.complainant_id);
+  const anchor = (caseComplainants || []).find(x => x.is_anchor)
+              || (caseComplainants || [])[0]
+              || daList.find(d => d.complainant_name || d.complainant_id)
+              || {};
   setCaseForm({
     case_number: c.case_number || '',
     pic: c.pic || '', country: c.country || '', sla_due_date: c.sla_due_date || '',
@@ -620,9 +623,9 @@ const openCaseEdit = () => {
     sla_days: businessDaysFromStart(c.created_on, c.sla_due_date) ?? '',
     priority: c.priority || 'Medium', stage: c.stage || '',
     case_status: c.case_status || 'IN PROGRESS', remarks: c.remarks || '', date_completed: c.date_completed || '',
-    complainant_name: daWithComplainant?.complainant_name || '',
-    complainant_id: daWithComplainant?.complainant_id || '',
-    complainant_country: daWithComplainant?.complainant_country || ''
+    complainant_name: anchor.complainant_name || '',
+    complainant_id: anchor.complainant_id || '',
+    complainant_country: anchor.complainant_country || ''
   });
   setEditingCase(true);
 };
@@ -633,13 +636,12 @@ const handleUpdateCase = async (e) => {
   const c = cases.find(x => x.case_number === selectedCase);
   if (!c) return;
 
-  // 1) Case-number rename — moves respondents & WIP actions along with it
+  // 1) Case-number rename — moves respondents, WIP actions & complainants along with it
   const newCaseNum = cleanVal(caseForm.case_number);
   let caseNumToUse = selectedCase;
   if (newCaseNum && newCaseNum !== selectedCase) {
     const { data: clash } = await supabase.from('cases').select('case_number').eq('case_number', newCaseNum);
     if (clash && clash.length > 0) { alert('Cannot rename: case number "' + newCaseNum + '" already exists.'); return; }
-    // Move respondent rows (and their unique_keys) first
     const { data: daRows } = await supabase.from('disciplinary_actions').select('id, unique_key').eq('case_number', selectedCase);
     let renameError = null;
     for (const row of (daRows || [])) {
@@ -651,28 +653,48 @@ const handleUpdateCase = async (e) => {
       if (error) renameError = error.message;
     }
     const { error: wipError } = await supabase.from('wip_actions').update({ case_number: newCaseNum }).eq('case_number', selectedCase);
+    await supabase.from('case_complainants').update({ case_number: newCaseNum }).eq('case_number', selectedCase);
     if (renameError || wipError) { alert('Rename failed: ' + (renameError || wipError)); return; }
     await supabase.from('cases').update({ case_number: newCaseNum }).eq('case_number', selectedCase);
     caseNumToUse = newCaseNum;
     setSelectedCase(newCaseNum);
   }
 
-  // 2) Complainant details — saved on every respondent row of this case
+  // 2) Complainant details — saved to case_complainants (the master list)
   const compName = cleanVal(caseForm.complainant_name);
   const compId = cleanVal(caseForm.complainant_id);
   const compCountry = cleanVal(caseForm.complainant_country);
-  if (daList.length > 0) {
-    await supabase.from('disciplinary_actions').update({
-      complainant_name: compName, complainant_id: compId, complainant_country: compCountry,
-      modified_by_email: userEmail, last_modified: new Date().toISOString()
-    }).eq('case_number', caseNumToUse);
-  } else if (compName || compId) {
-    // No respondent rows yet — create one so the complainant can be stored
-    await supabase.from('disciplinary_actions').insert([{
-      case_number: caseNumToUse, unique_key: `${caseNumToUse}|complainant_${Date.now()}`,
-      complainant_name: compName, complainant_id: compId, complainant_country: compCountry,
-      modified_by_email: userEmail, last_modified: new Date().toISOString()
-    }]);
+  const stamp = new Date().toISOString();
+
+  if (compName || compId || compCountry) {
+    const { data: rows } = await supabase
+      .from('case_complainants').select('id, is_anchor')
+      .eq('case_number', caseNumToUse)
+      .order('is_anchor', { ascending: false });
+    const target = (rows || []).find(r => r.is_anchor) || (rows || [])[0];
+
+    if (target) {
+      const { error: ccErr } = await supabase.from('case_complainants').update({
+        complainant_name: compName, complainant_id: compId, complainant_country: compCountry,
+        modified_by_email: userEmail, last_modified: stamp
+      }).eq('id', target.id);
+      if (ccErr) { alert('Error saving complainant: ' + ccErr.message); return; }
+    } else {
+      const { error: ccErr } = await supabase.from('case_complainants').insert([{
+        case_number: caseNumToUse,
+        complainant_name: compName, complainant_id: compId, complainant_country: compCountry,
+        is_anchor: true, modified_by_email: userEmail, last_modified: stamp
+      }]);
+      if (ccErr) { alert('Error saving complainant: ' + ccErr.message); return; }
+    }
+
+    // Keep respondent rows showing the same complainant
+    if (daList.length > 0) {
+      await supabase.from('disciplinary_actions').update({
+        complainant_name: compName, complainant_id: compId, complainant_country: compCountry,
+        modified_by_email: userEmail, last_modified: stamp
+      }).eq('case_number', caseNumToUse);
+    }
   }
 
   // 3) Case fields
@@ -686,15 +708,13 @@ const handleUpdateCase = async (e) => {
     case_status: caseForm.case_status,
     remarks: cleanVal(caseForm.remarks),
     modified_by_email: userEmail,
-    last_modified: new Date().toISOString()
+    last_modified: stamp
   };
   const isClosed = (s) => s === 'COMPLETED' || s === 'CANCELLED';
   if (isClosed(caseForm.case_status) && !isClosed(c.case_status)) {
     updates.date_completed = cleanVal(caseForm.date_completed) || new Date().toISOString().split('T')[0];
-    // Auto-set priority to Low when closing — unless the admin changed it in this same edit
     if (caseForm.priority === c.priority) updates.priority = 'Low';
   } else if (isClosed(caseForm.case_status) && isClosed(c.case_status)) {
-    // Already closed — admin may be changing the closure date
     if (caseForm.date_completed !== (c.date_completed || '')) {
       updates.date_completed = cleanVal(caseForm.date_completed) || c.date_completed;
     }
@@ -708,6 +728,7 @@ const handleUpdateCase = async (e) => {
   fetchCases(true);
   const { data: refreshedDa } = await supabase.from('disciplinary_actions').select('*').eq('case_number', caseNumToUse);
   setDaList(refreshedDa || []);
+  await loadCaseComplainants(caseNumToUse);
 };
 
 // ==== ADMIN: open the respondent editor ====
@@ -2545,7 +2566,7 @@ const [wipImportProgress, setWipImportProgress] = useState('');
     <div className="admin-form-grid">
       <div className="wip-input-group"><label>Case Number *</label><input type="text" value={caseForm.case_number} onChange={(e) => setCaseForm({ ...caseForm, case_number: e.target.value })} required /></div>
       <div className="wip-input-group"><label>PIC</label><input type="text" value={caseForm.pic} onChange={(e) => setCaseForm({ ...caseForm, pic: e.target.value })} /></div>
-      <div className="wip-input-group"><label>Country</label><input type="text" value={caseForm.country} onChange={(e) => setCaseForm({ ...caseForm, country: e.target.value })} /></div>
+      <div className="wip-input-group"><label>Case Country</label><input type="text" value={caseForm.country} onChange={(e) => setCaseForm({ ...caseForm, country: e.target.value })} /></div>
       <div className="wip-input-group"><label>SLA Days (working days)</label><input type="number" placeholder="auto from Created On" value={caseForm.sla_days} onChange={(e) => { const days = parseInt(e.target.value, 10); const base = caseForm.created_on || (cases.find(x => x.case_number === selectedCase) || {}).created_on; if (!isNaN(days) && days > 0 && base) { setCaseForm({ ...caseForm, sla_days: days, sla_due_date: addBusinessDays(base, days) }); } else { setCaseForm({ ...caseForm, sla_days: e.target.value }); } }} /></div>
       <div className="wip-input-group"><label>SLA Due Date</label><input type="date" value={caseForm.sla_due_date} onChange={(e) => setCaseForm({ ...caseForm, sla_due_date: e.target.value })} /></div>
       <div className="wip-input-group"><label>Created On</label><input type="date" value={caseForm.created_on} onChange={(e) => setCaseForm({ ...caseForm, created_on: e.target.value })} /></div>
