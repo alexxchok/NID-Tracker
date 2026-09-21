@@ -260,10 +260,24 @@ const fetchCases = async (silent = false) => {
     .from('cases')
     .select('*, disciplinary_actions(id, case_number, respondent_name, respondent_id, complainant_name, complainant_id, current_action, previous_action, da_confirmed, action_history), wip_actions(status)')
     .order('sla_due_date', { ascending: true });
-  if (error) console.error('Error:', error);
-  else setCases(data);
-  setLoading(false);
-};
+    if (error) console.error('Error:', error);
+    else setCases(data);
+    setLoading(false);
+  };
+
+  // PERF FIX: refresh ONE case in the on-screen list instead of re-downloading
+  // all 263 cases with their respondent records. Used after every save.
+  const refreshOneCase = async (caseNum) => {
+    if (!caseNum) return;
+    const { data } = await supabase
+      .from('cases')
+      .select('*, disciplinary_actions(id, case_number, respondent_name, respondent_id, complainant_name, complainant_id, current_action, previous_action, da_confirmed, action_history), wip_actions(status)')
+      .eq('case_number', caseNum)
+      .single();
+    if (!data) return;
+    setCases(prev => prev.map(c => c.case_number === caseNum ? data : c));
+  };
+
   useEffect(() => {
     fetchCases();
     supabase.from('mapping_rules').select('*').then(({ data }) => setMappingRules(data || []));
@@ -601,7 +615,7 @@ setEditingRespondentId(null);
       case_status: closeStatus, priority: 'Low', date_completed: new Date().toISOString().split('T')[0], modified_by_email: userEmail, last_modified: new Date().toISOString()
     }).eq('case_number', caseNum);
     if (error) alert('Error closing case: ' + error.message);
-    else { setShowCloseOptions(false); fetchCases(true); }
+    else { setShowCloseOptions(false); refreshOneCase(caseNum); }
   };
 
   const handleReactivateCase = async (caseNum) => {
@@ -611,7 +625,7 @@ setEditingRespondentId(null);
       case_status: 'IN PROGRESS', date_completed: null, sla_due_date: newSlaDate, priority: calculatePriority(newSlaDate), modified_by_email: userEmail, reactivated_at: new Date().toISOString(), last_modified: new Date().toISOString()
     }).eq('case_number', caseNum);
     if (error) alert('Error reactivating case: ' + error.message);
-    else fetchCases(true);
+    else refreshOneCase(caseNum);
   };
 
   // ==== ADMIN: open the edit form pre-filled with current case values ====
@@ -731,7 +745,7 @@ const handleUpdateCase = async (e) => {
   if (error) { alert('Error updating case: ' + error.message); return; }
 
   setEditingCase(false);
-  fetchCases(true);
+  refreshOneCase(caseNumToUse);
   const { data: refreshedDa } = await supabase.from('disciplinary_actions').select('*').eq('case_number', caseNumToUse);
   setDaList(refreshedDa || []);
   await loadCaseComplainants(caseNumToUse);
@@ -821,7 +835,7 @@ const handleUpdateRespondent = async (e, daId) => {
     const { data: newWipData } = await supabase.from('wip_actions').select('*').eq('case_number', selectedCase).order('date_sent', { ascending: false });
     setWipList(newWipData || []);
     resetWipForm();
-    fetchCases(true);
+    refreshOneCase(selectedCase);
   };
 
   const handleEditWip = (w) => {
@@ -843,7 +857,7 @@ const handleUpdateRespondent = async (e, daId) => {
       const { data: newWipData } = await supabase.from('wip_actions').select('*').eq('case_number', selectedCase).order('date_sent', { ascending: false });
       setWipList(newWipData || []);
       await supabase.from('cases').update({ modified_by_email: userEmail, last_modified: new Date().toISOString() }).eq('case_number', selectedCase);
-      fetchCases(true);
+      refreshOneCase(selectedCase);
     }
   };
 
@@ -851,7 +865,7 @@ const handleUpdateRespondent = async (e, daId) => {
     const { data: newDaData } = await supabase.from('disciplinary_actions').select('*').eq('case_number', selectedCase);
     setDaList(newDaData || []);
     await supabase.from('cases').update({ modified_by_email: userEmail, last_modified: new Date().toISOString() }).eq('case_number', selectedCase);
-    fetchCases(true);
+    refreshOneCase(selectedCase);
   };
 
   const handleAddDaAction = async (e, daId) => {
