@@ -1919,6 +1919,71 @@ const [wipImportProgress, setWipImportProgress] = useState('');
   const fetchAllWip = React.useCallback(async () => {
     setWipTabLoading(true);
     const items = [];
+  
+    // 1) Pending WIP actions — unchanged, this part was already fast
+    const { data: wa } = await supabase
+      .from('wip_actions')
+      .select('*, cases(pic, case_status)')
+      .eq('status', 'Pending');
+    (wa || []).forEach(w => {
+      items.push({
+        kind: 'WIP',
+        case_number: w.case_number,
+        description: w.description || w.action_type || '—',
+        action_type: w.action_type,
+        stage: w.stage_auto,
+        date_sent: w.date_sent,
+        expiry_date: w.expiry_date,
+        pic: (w.cases && w.cases.pic) || w.pic || '',
+        case_status: w.cases ? w.cases.case_status : '',
+        who: ''
+      });
+    });
+  
+    // 2) Pending journal entries — now filtered by the database, not the browser.
+    //    Previously this downloaded EVERY respondent row with its full history
+    //    and threw nearly all of it away. Now the database only sends back rows
+    //    that actually contain an unfinished journal entry.
+    let from = 0;
+    const size = 500;
+    while (true) {
+      const { data, error } = await supabase
+        .from('disciplinary_actions')
+        .select('case_number, respondent_name, action_history, cases(pic, case_status)')
+        .not('action_history', 'is', null)
+        .neq('action_history', '[]')
+        .filter('action_history', 'cs', '[{"sub_actions":[{"status":"Pending"}]}]')
+        .range(from, from + size - 1);
+  
+      if (error || !data || data.length === 0) break;
+  
+      data.forEach(r => {
+        (r.action_history || []).forEach(h => {
+          (h.sub_actions || []).forEach(sa => {
+            if (sa.status === 'Done') return;
+            items.push({
+              kind: 'Journal',
+              case_number: r.case_number,
+              description: sa.desc || '—',
+              action_type: h.action || '',
+              stage: '',
+              date_sent: sa.date,
+              expiry_date: sa.expiry_date || null,
+              pic: (r.cases && r.cases.pic) || '',
+              case_status: r.cases ? r.cases.case_status : '',
+              who: r.respondent_name || ''
+            });
+          });
+        });
+      });
+  
+      if (data.length < size) break;
+      from += size;
+    }
+  
+    setWipRows(items);
+    setWipTabLoading(false);
+  }, []);
 
     // 1) Pending WIP actions
     const { data: wa } = await supabase
