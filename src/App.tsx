@@ -171,8 +171,10 @@ function AuthScreen() {
 
 function Dashboard({ userEmail, onSignOut }) {
   const [cases, setCases] = useState([]);
+  const [casesDetailLoaded, setCasesDetailLoaded] = useState(false);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [indiaFileCaseNumbers, setIndiaFileCaseNumbers] = useState([]);
   const [uploadMessage, setUploadMessage] = useState('');
   const [activeTab, setActiveTab] = useState('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -249,21 +251,35 @@ const [respondentEdits, setRespondentEdits] = useState({});
 // ==== Close-case chooser state ====
 const [showCloseOptions, setShowCloseOptions] = useState(false);
 const [showMyCases, setShowMyCases] = useState(false);
+const [analyticsYear, setAnalyticsYear] = useState(String(new Date().getFullYear()));
 
 const fetchCases = async (silent = false) => {
   if (!silent) setLoading(true);
-  // PERF FIX: was `disciplinary_actions(*)` — pulled every column of every
-  // respondent row (remarks, violations, referrer, upline, team, etc.) on
-  // every load. The Cases list only needs these few fields; the full record
-  // is fetched separately by handleCaseClick when a case drawer is opened.
+  // PERF FIX (two-stage load):
+  // WAVE 1 — just the cases. Small and fast, so the list appears almost at once.
   const { data, error } = await supabase
     .from('cases')
-    .select('*, disciplinary_actions(id, case_number, respondent_name, respondent_id, complainant_name, complainant_id, current_action, previous_action, da_confirmed, action_history), wip_actions(status)')
+    .select('*')
     .order('sla_due_date', { ascending: true });
-    if (error) console.error('Error:', error);
-    else setCases(data);
-    setLoading(false);
-  };
+  if (error) { console.error('Error:', error); setLoading(false); return; }
+  setCases(data || []);
+  setLoading(false);
+  setCasesDetailLoaded(false);
+
+  // WAVE 2 — respondent + WIP data, fetched behind the scenes and merged in
+  // when it arrives. Powers the DA In Force / Active WIP columns and name search.
+  const { data: detail } = await supabase
+    .from('cases')
+    .select('case_number, disciplinary_actions(id, case_number, respondent_name, respondent_id, complainant_name, complainant_id, current_action, previous_action, da_confirmed, action_history), wip_actions(status)')
+    .order('sla_due_date', { ascending: true });
+  if (!detail) return;
+  const byCase = new Map(detail.map(d => [d.case_number, d]));
+  setCases(prev => prev.map(c => {
+    const d = byCase.get(c.case_number);
+    return d ? { ...c, disciplinary_actions: d.disciplinary_actions, wip_actions: d.wip_actions } : c;
+  }));
+  setCasesDetailLoaded(true);
+};
 
   // PERF FIX: refresh ONE case in the on-screen list instead of re-downloading
   // all 263 cases with their respondent records. Used after every save.
@@ -284,7 +300,21 @@ const fetchCases = async (silent = false) => {
   }, []);
 
   const cleanVal = (val) => val === undefined || val === null ? null : String(val).trim() === '' ? null : String(val).trim();
-
+// ==== PIC NAME CLEANUP ====
+  // Messy spellings map to one tidy name. Add new variants on the left.
+  const PIC_ALIASES = {
+    'alex chok chok': 'Alex Chok',
+    'alex chok': 'Alex Chok',
+    'dennis': 'Dennis Ho',
+    'dennis ho': 'Dennis Ho',
+    'izzati': 'Nur Izzati Shazana Mohamad Fadzil',
+    'nur izzati shazana mohamad fadzil': 'Nur Izzati Shazana Mohamad Fadzil'
+  };
+  const tidyPic = (val) => {
+    const raw = String(val || '').replace(/\s+/g, ' ').trim();
+    if (!raw) return '';
+    return PIC_ALIASES[raw.toLowerCase()] || raw;
+  };
   const formatDateString = (dateStr) => {
     if (!dateStr && dateStr !== 0) return null;
     if (typeof dateStr === 'string' && !isNaN(dateStr) && dateStr.trim() !== '') dateStr = parseFloat(dateStr);
@@ -407,12 +437,22 @@ const fetchCases = async (silent = false) => {
             const isRespondent = role.toLowerCase().includes('respondent');
             const customerStr = String(cleanVal(getVal(['Customer'])) || '').trim();
             let personName = null;
+            // FIX: the IR ID column wins. Only dig the ID out of the Customer
+            // text when the IR ID column is genuinely empty. Previously a messy
+            // Customer value could block a perfectly good IR ID from being read.
             let personId = cleanVal(getVal(['IR ID']));
             if (customerStr) {
-              const m = customerStr.match(/^IR:(\S+)\s+(.+)$/);
-              if (m) { if (!personId) personId = m[1]; personName = m[2].trim(); }
-              else { personName = customerStr; }
+              // Strip a leading IR:<id> (or ID:/IR-) prefix off the name, however it's spaced
+              const m = customerStr.match(/^\s*IR\s*[:\-]?\s*(\S+)\s+(.*)$/i);
+              if (m) {
+                if (!personId) personId = m[1];
+                personName = m[2].trim() || null;
+              } else {
+                // Company mailboxes look like: "Qnet India Grievance" grievancecell@qnetindia.in
+                personName = customerStr.replace(/^"(.*?)"\s*.*$/, '$1').trim() || customerStr;
+              }
             }
+            if (personId) personId = String(personId).trim().toUpperCase();
             const status = normalizeStatus(cleanVal(getVal(['Case Status']))) || 'IN PROGRESS';
             const country = normalizeCountry(cleanVal(getVal(['Country']))) || 'India';
             const stage = cleanVal(getVal(['Stage Status']));
@@ -421,6 +461,9 @@ const fetchCases = async (silent = false) => {
             const dueRaw = formatDateString(cleanVal(getVal(['Due Date'])));
             const priority = cleanVal(getVal(['Priority'])) || 'Medium';
             const noticeType = cleanVal(getVal(['Type of Notices Issued']));
+            // CLASSIFIER FIX: the two anomaly columns the app was blind to
+            const caseSummaryStatus = cleanVal(getVal(['Case Summary Status']));
+            const currentStatus = cleanVal(getVal(['Current Status']));
             let slaDue = dueRaw;
             if (!slaDue) { const base = created ? new Date(created) : new Date(); base.setDate(base.getDate() + 30); slaDue = base.toISOString().split('T')[0]; }
             if (personName || personId) {
@@ -436,11 +479,16 @@ const fetchCases = async (silent = false) => {
             return {
               case_number: caseNum, created_on: created, sla_due_date: slaDue, country: country, pic: pic,
               priority: priority, case_status: status, stage: stage,
+              case_summary_status: caseSummaryStatus,
+              current_status: currentStatus,
               remarks: noticeType ? `[${noticeType}]` : cleanVal(getVal(['Remarks']))
             };
           }).filter(Boolean);
           indiaCaseCount = indiaCases.length;
           casesToUpsert = casesToUpsert.concat(indiaCases);
+          // CLEANUP: remember which case numbers were in this file, so the
+          // stale-case scan can tell real cases from leftovers.
+          setIndiaFileCaseNumbers(indiaCases.map(c => c.case_number));
         }
 
         // C) RESPONDENT SHEET (shared folder or master DA sheet)
@@ -593,7 +641,7 @@ const fetchCases = async (silent = false) => {
 setShowCloseOptions(false);
 setEditingRespondentId(null);
     const { data: daData } = await supabase.from('disciplinary_actions').select('*').eq('case_number', caseNum);
-    const { data: wipData } = await supabase.from('wip_actions').select('*').eq('case_number', caseNum).order('date_sent', { ascending: false });
+    const { data: wipData } = await supabase.from('wip_actions').select('*').eq('case_number', caseNum).order('date_sent', { ascending: false }).order('last_modified', { ascending: false });
     setDaList(daData || []); setWipList(wipData || []);
   };
 
@@ -832,12 +880,11 @@ const handleUpdateRespondent = async (e, daId) => {
     await supabase.from('cases').update({ modified_by_email: userEmail, last_modified: new Date().toISOString() }).eq('case_number', selectedCase);
     if (stageToAssign) await supabase.from('cases').update({ stage: stageToAssign }).eq('case_number', selectedCase);
 
-    const { data: newWipData } = await supabase.from('wip_actions').select('*').eq('case_number', selectedCase).order('date_sent', { ascending: false });
+    const { data: newWipData } = await supabase.from('wip_actions').select('*').eq('case_number', selectedCase).order('date_sent', { ascending: false }).order('last_modified', { ascending: false });
     setWipList(newWipData || []);
     resetWipForm();
     refreshOneCase(selectedCase);
   };
-
   const handleEditWip = (w) => {
     setEditingWipId(w.id);
     setWipActionType(w.action_type);
@@ -854,7 +901,7 @@ const handleUpdateRespondent = async (e, daId) => {
     }).eq('id', wipId);
     if (error) alert('Error completing WIP: ' + error.message);
     else {
-      const { data: newWipData } = await supabase.from('wip_actions').select('*').eq('case_number', selectedCase).order('date_sent', { ascending: false });
+      const { data: newWipData } = await supabase.from('wip_actions').select('*').eq('case_number', selectedCase).order('date_sent', { ascending: false }).order('last_modified', { ascending: false });
       setWipList(newWipData || []);
       await supabase.from('cases').update({ modified_by_email: userEmail, last_modified: new Date().toISOString() }).eq('case_number', selectedCase);
       refreshOneCase(selectedCase);
@@ -867,7 +914,6 @@ const handleUpdateRespondent = async (e, daId) => {
     await supabase.from('cases').update({ modified_by_email: userEmail, last_modified: new Date().toISOString() }).eq('case_number', selectedCase);
     refreshOneCase(selectedCase);
   };
-
   const handleAddDaAction = async (e, daId) => {
     e.preventDefault();
     const da = daList.find(d => d.id === daId);
@@ -1282,7 +1328,7 @@ const handleUpdateRespondent = async (e, daId) => {
       if (!matchCase && !matchPic && !matchCountry && !matchRespondent && !matchComplainant) return false;
     }
 
-    if (filters.pic && c.pic !== filters.pic) return false;
+    if (filters.pic && tidyPic(c.pic) !== filters.pic) return false;
     if (filters.status && c.case_status !== filters.status) return false;
     if (filters.da_in_force) {
       const daInForce = c.disciplinary_actions?.filter(isDAInForce).length || 0;
@@ -1465,7 +1511,37 @@ const renderClosureInfo = (c) => {
     if (indiaMatchFilter === 'unmatched' && indiaDuplicateMap.has(c.case_number)) return false;
     return true;
   });
-
+// ==== ADMIN: permanently tidy PIC names in the database ====
+const [picFixBusy, setPicFixBusy] = useState(false);
+const handleFixPicNames = async () => {
+  setPicFixBusy(true);
+  const { data: rows } = await supabase.from('cases').select('case_number, pic').not('pic', 'is', null);
+  const toFix = (rows || [])
+    .map(r => ({ case_number: r.case_number, from: r.pic, to: tidyPic(r.pic) }))
+    .filter(r => r.to && r.to !== r.from);
+  if (toFix.length === 0) {
+    alert('Nothing to fix — all PIC names are already tidy.');
+    setPicFixBusy(false);
+    return;
+  }
+  const summary = {};
+  toFix.forEach(r => { summary[r.to] = (summary[r.to] || 0) + 1; });
+  const lines = Object.entries(summary).map(([name, n]) => `  ${name}: ${n} case(s)`).join('\n');
+  if (!window.confirm(`Permanently rename PIC on ${toFix.length} case(s)?\n\n${lines}\n\nThis cannot be undone.`)) {
+    setPicFixBusy(false);
+    return;
+  }
+  let done = 0;
+  for (let i = 0; i < toFix.length; i += 20) {
+    for (const r of toFix.slice(i, i + 20)) {
+      await supabase.from('cases').update({ pic: r.to, modified_by_email: userEmail, last_modified: new Date().toISOString() }).eq('case_number', r.case_number);
+      done++;
+    }
+  }
+  setPicFixBusy(false);
+  alert(`✅ Updated ${done} case(s).`);
+  fetchCases(true);
+};
   const handlePromoteCase = async (caseNum) => {
     const { error } = await supabase.from('cases').update({
       promoted: true, modified_by_email: userEmail, last_modified: new Date().toISOString()
@@ -1473,7 +1549,70 @@ const renderClosureInfo = (c) => {
     if (error) alert('Error promoting case: ' + error.message);
     else fetchCases(true);
   };
-
+// ==== INDIA: read-only duplicate scan. Reports only, changes nothing. ====
+const [indiaDupBusy, setIndiaDupBusy] = useState(false);
+const [indiaDupReport, setIndiaDupReport] = useState(null);
+// CLEANUP: compare India cases in the database against the case numbers in the
+  // freshly uploaded Excel file. Anything in the DB that is NOT in the file is
+  // stale (left over from an older upload). READ-ONLY - reports only.
+  const [staleReport, setStaleReport] = useState(null);
+  const handleScanIndiaStale = async () => {
+    if (!indiaFileCaseNumbers || indiaFileCaseNumbers.length === 0) {
+      alert('Please upload the India Excel file first, then run this scan.');
+      return;
+    }
+    setStaleReport({ loading: true });
+    const fileSet = new Set(indiaFileCaseNumbers);
+    const { data: dbCases } = await supabase
+      .from('cases')
+      .select('case_number, created_on, case_status, pic')
+      .like('case_number', 'CVN-%');
+    const all = dbCases || [];
+    const stale = all.filter(c => !fileSet.has(c.case_number));
+    const matched = all.filter(c => fileSet.has(c.case_number));
+    const missingFromDb = indiaFileCaseNumbers.filter(cn => !all.some(c => c.case_number === cn));
+    const byYear = {};
+    stale.forEach(c => {
+      const y = (c.created_on || '').slice(0, 4) || 'no date';
+      byYear[y] = (byYear[y] || 0) + 1;
+    });
+    setStaleReport({
+      loading: false,
+      fileCount: fileSet.size,
+      dbCount: all.length,
+      matched: matched.length,
+      stale: stale.length,
+      missingFromDb: missingFromDb.length,
+      byYear,
+      sample: stale.slice(0, 20)
+    });
+  };
+const handleScanIndiaDupes = async () => {
+  setIndiaDupBusy(true);
+  setIndiaDupReport(null);
+  let all = [];
+  let from = 0;
+  const size = 1000;
+  while (true) {
+    const { data, error } = await supabase
+      .from('disciplinary_actions')
+      .select('id, case_number, unique_key, respondent_name, respondent_id, complainant_name, complainant_id, last_modified')
+      .like('case_number', 'CVN-%')
+      .range(from, from + size - 1);
+    if (error || !data || data.length === 0) break;
+    all = all.concat(data);
+    if (data.length < size) break;
+    from += size;
+  }
+  const byCase = new Map();
+  all.forEach(r => {
+    if (!byCase.has(r.case_number)) byCase.set(r.case_number, []);
+    byCase.get(r.case_number).push(r);
+  });
+  const dupes = Array.from(byCase.entries()).filter(([, rows]) => rows.length > 1);
+  setIndiaDupReport({ totalRows: all.length, totalCases: byCase.size, dupeCases: dupes, sample: dupes.slice(0, 15) });
+  setIndiaDupBusy(false);
+};
   const handleDeleteStagingCase = async (caseNum) => {
     if (!window.confirm(`Delete staging case ${caseNum}?\n\nThis removes the case and its respondent records permanently.`)) return;
     await supabase.from('disciplinary_actions').delete().eq('case_number', caseNum);
@@ -2468,7 +2607,7 @@ const [wipImportProgress, setWipImportProgress] = useState('');
                   <input type="text" placeholder="Search cases, PICs, respondents, complainants..." value={searchInput} onChange={(e) => { setSearchInput(e.target.value); setCurrentPage(1); }} style={{ flex: 1, minWidth: '200px', padding: '10px 16px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '14px', outline: 'none' }} />
                   <select value={filters.pic} onChange={(e) => setFilters(f => ({ ...f, pic: e.target.value }))} style={{ padding: '10px 16px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '14px' }}>
                     <option value="">All PICs</option>
-                    {[...new Set(cases.map(c => c.pic).filter(Boolean))].map(pic => <option key={pic} value={pic}>{pic}</option>)}
+                    {[...new Set(cases.map(c => tidyPic(c.pic)).filter(Boolean))].sort().map(pic => <option key={pic} value={pic}>{pic}</option>)}
                   </select>
                   <select value={filters.status} onChange={(e) => setFilters(f => ({ ...f, status: e.target.value }))} style={{ padding: '10px 16px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '14px' }}>
                     <option value="">All Status</option>
@@ -2733,7 +2872,7 @@ const [wipImportProgress, setWipImportProgress] = useState('');
                                               const wipSlaDays = calculateBusinessDays(w.expiry_date);
                                               return (
                                                 <div key={w.id} className={`list-item ${w.status === 'Done' ? 'done' : ''}`}>
-                                                  <div className="step-circle">{i + 1}</div>
+                                                  <div className="step-circle">{wipList.length - i}</div>
                                                   <div className="item-content">
                                                     <div className="item-title">{w.action_type} {w.status === 'Done' && <span className="badge badge-green" style={{ marginLeft: '4px' }}>Done</span>}</div>
                                                     <div className="item-sub">{w.description}</div>
@@ -3405,21 +3544,146 @@ const [wipImportProgress, setWipImportProgress] = useState('');
               ) : null}
             </>
           )}
-          {activeTab === 'analytics' && (
+          {activeTab === 'analytics' && (() => {
+            // Year comes from the case number: CXN-20260521-0364 -> 2026
+            const yearOf = (cn) => {
+              const m = String(cn || '').toUpperCase().match(/^C[XV]N-?(\d{4})\d{4}/);
+              return m ? m[1] : 'No year';
+            };
+            // Same case set as the Cases tab: CXN always, CVN only once promoted
+            const analyticsBase = cases.filter(c =>
+              !(String(c.case_number || '').toUpperCase().startsWith('CVN') && !c.promoted)
+            );
+            const yearList = Array.from(new Set(analyticsBase.map(c => yearOf(c.case_number))))
+              .sort((a, b) => (a === 'No year' ? 1 : b === 'No year' ? -1 : b.localeCompare(a)));
+            const aCases = analyticsYear === 'ALL'
+              ? analyticsBase
+              : analyticsBase.filter(c => yearOf(c.case_number) === analyticsYear);
+
+            const aTotal = aCases.length;
+            const aInProgress = aCases.filter(c => c.case_status === 'IN PROGRESS').length;
+            const aCompleted = aCases.filter(c => c.case_status === 'COMPLETED').length;
+            const aCancelled = aCases.filter(c => c.case_status === 'CANCELLED').length;
+            const aBreached = aCases.filter(c => c.case_status === 'IN PROGRESS' && calculateBusinessDays(c.sla_due_date) < 0).length;
+
+            const prio = (c) => {
+              const p = String(c.priority || '').trim().toLowerCase();
+              if (p === 'high') return 'High';
+              if (p === 'medium') return 'Medium';
+              if (p === 'low') return 'Low';
+              return 'Unassigned';
+            };
+            const aHigh = aCases.filter(c => prio(c) === 'High').length;
+            const aMed = aCases.filter(c => prio(c) === 'Medium').length;
+            const aLow = aCases.filter(c => prio(c) === 'Low').length;
+            const aNone = aCases.filter(c => prio(c) === 'Unassigned').length;
+
+            // PIC table — count and SLA breaches side by side
+            const picMap = new Map();
+            aCases.forEach(c => {
+              const key = tidyPic(c.pic) || '(unassigned)';
+              if (!picMap.has(key)) picMap.set(key, { pic: key, total: 0, open: 0, done: 0, breach: 0 });
+              const row = picMap.get(key);
+              row.total++;
+              if (c.case_status === 'IN PROGRESS') {
+                row.open++;
+                if (calculateBusinessDays(c.sla_due_date) < 0) row.breach++;
+              } else if (c.case_status === 'COMPLETED') row.done++;
+            });
+            const picRows = Array.from(picMap.values()).sort((a, b) => b.breach - a.breach || b.total - a.total);
+
+            return (
             <>
               <div className="page-header">
                 <div className="page-header-text">
-                  <h2>Analytics & Insights</h2>
-                  <p>Visual breakdown of case metrics and performance.</p>
+                  <h2>Analytics &amp; Insights</h2>
+                  <p>{analyticsYear === 'ALL' ? 'All years' : `Cases created in ${analyticsYear}`} · {aTotal} cases</p>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                {isAdmin && (
+                    <button onClick={handleFixPicNames} disabled={picFixBusy} className="btn-admin"
+                      style={{ padding: '8px 14px', fontSize: '13px' }}
+                      title="Permanently merge messy PIC spellings in the database">
+                      {picFixBusy ? 'Fixing...' : '🧹 Tidy PIC Names'}
+                    </button>
+                  )}
+                  <span style={{ fontSize: '13px', color: '#64748b', fontWeight: 500 }}>Year:</span>
+                  <select value={analyticsYear} onChange={(e) => setAnalyticsYear(e.target.value)}
+                    style={{ padding: '8px 14px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '14px', fontWeight: 600, background: 'white' }}>
+                    {yearList.map(y => <option key={y} value={y}>{y}</option>)}
+                    <option value="ALL">All years</option>
+                  </select>
                 </div>
               </div>
+
+              {aTotal === 0 ? (
+                <div className="card" style={{ textAlign: 'center', color: '#94a3b8' }}>No cases found for {analyticsYear}.</div>
+              ) : (
+              <>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px' }}>
-                <div className="card"><h3 className="card-header">Case Status Breakdown</h3><ChartRow label="In Progress" value={inProgress} total={totalCases} color="#3b82f6" /><ChartRow label="Completed" value={completed} total={totalCases} color="#10b981" /><ChartRow label="Cancelled" value={cases.filter(c => c.case_status === 'CANCELLED').length} total={totalCases} color="#ef4444" /></div>
-                <div className="card"><h3 className="card-header">SLA Compliance (Active Cases)</h3><ChartRow label="Within SLA" value={inProgress - outOfSlaCases.length} total={inProgress} color="#10b981" /><ChartRow label="Out of SLA" value={outOfSlaCases.length} total={inProgress} color="#ef4444" /></div>
-                <div className="card"><h3 className="card-header">Priority Distribution</h3><ChartRow label="High Priority" value={cases.filter(c => c.priority === 'High').length} total={totalCases} color="#ef4444" /><ChartRow label="Medium Priority" value={cases.filter(c => c.priority === 'Medium').length} total={totalCases} color="#f59e0b" /><ChartRow label="Low Priority" value={cases.filter(c => c.priority === 'Low').length} total={totalCases} color="#64748b" /></div>
+                <div className="card">
+                  <h3 className="card-header">Case Status Breakdown</h3>
+                  <ChartRow label="In Progress" value={aInProgress} total={aTotal} color="#3b82f6" />
+                  <ChartRow label="Completed" value={aCompleted} total={aTotal} color="#10b981" />
+                  <ChartRow label="Cancelled" value={aCancelled} total={aTotal} color="#ef4444" />
+                </div>
+                <div className="card">
+                  <h3 className="card-header">SLA Compliance (Active Cases)</h3>
+                  <ChartRow label="Within SLA" value={aInProgress - aBreached} total={aInProgress} color="#10b981" />
+                  <ChartRow label="Out of SLA" value={aBreached} total={aInProgress} color="#ef4444" />
+                </div>
+                <div className="card">
+                  <h3 className="card-header">Priority Distribution</h3>
+                  <ChartRow label="High Priority" value={aHigh} total={aTotal} color="#ef4444" />
+                  <ChartRow label="Medium Priority" value={aMed} total={aTotal} color="#f59e0b" />
+                  <ChartRow label="Low Priority" value={aLow} total={aTotal} color="#64748b" />
+                  {aNone > 0 && <ChartRow label="Unassigned" value={aNone} total={aTotal} color="#cbd5e1" />}
+                </div>
               </div>
+
+              <div className="card" style={{ marginTop: '16px', padding: 0 }}>
+                <div style={{ padding: '16px', borderBottom: '1px solid #e2e8f0' }}>
+                  <h3 className="card-header" style={{ margin: 0 }}>Workload by PIC</h3>
+                  <p style={{ margin: '5px 0 0 0', color: '#64748b', fontSize: '13px' }}>Sorted by SLA breaches, then case count.</p>
+                </div>
+                <div className="table-container" style={{ border: 'none' }}>
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <th style={{ cursor: 'default' }}>PIC</th>
+                        <th style={{ cursor: 'default', textAlign: 'center' }}>Total Cases</th>
+                        <th style={{ cursor: 'default', textAlign: 'center' }}>In Progress</th>
+                        <th style={{ cursor: 'default', textAlign: 'center' }}>Completed</th>
+                        <th style={{ cursor: 'default', textAlign: 'center' }}>Out of SLA</th>
+                        <th style={{ cursor: 'default', textAlign: 'center' }}>Breach Rate</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {picRows.map(r => (
+                        <tr key={r.pic}>
+                          <td style={{ fontWeight: 600, color: '#0f172a' }}>{r.pic}</td>
+                          <td style={{ textAlign: 'center', fontWeight: 600 }}>{r.total}</td>
+                          <td style={{ textAlign: 'center', color: '#d97706', fontWeight: 600 }}>{r.open}</td>
+                          <td style={{ textAlign: 'center', color: '#059669', fontWeight: 600 }}>{r.done}</td>
+                          <td style={{ textAlign: 'center', fontWeight: 700, color: r.breach > 0 ? '#dc2626' : '#94a3b8' }}>{r.breach}</td>
+                          <td style={{ textAlign: 'center' }}>
+                            {r.open === 0
+                              ? <span style={{ color: '#94a3b8' }}>—</span>
+                              : <span className={`badge ${r.breach / r.open > 0.5 ? 'badge-red' : r.breach > 0 ? 'badge-yellow' : 'badge-green'}`}>
+                                  {Math.round((r.breach / r.open) * 100)}%
+                                </span>}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              </>
+              )}
             </>
-          )}
+            );
+          })()}
                               {activeTab === 'india' && (
             <>
               <div className="page-header">
@@ -3437,9 +3701,121 @@ const [wipImportProgress, setWipImportProgress] = useState('');
                   <button onClick={handleBulkDeleteNoId} className="btn-action btn-warning" disabled={indiaNoIdCount === 0}>
                     🗑 Delete {indiaNoIdCount} No ID
                   </button>
+                  <button onClick={handleScanIndiaDupes} className="btn-action" disabled={indiaDupBusy}>
+                    {indiaDupBusy ? 'Scanning...' : '🔍 Scan for Duplicates'}
+                  </button>
+                  <button onClick={handleScanIndiaStale} style={{ padding: '8px 14px', background: '#fff', border: '1px solid #f59e0b', color: '#b45309', borderRadius: 6, cursor: 'pointer', fontWeight: 600, marginLeft: 8 }}>
+              🧭 Scan for Stale Cases
+            </button>
                 </div>
               </div>
-
+              {staleReport && (
+                <div className="card" style={{ marginBottom: '16px', borderColor: '#f59e0b' }}>
+                  {staleReport.loading ? <p className="card-subtitle">Scanning…</p> : (
+                    <>
+                      <h3 className="card-header" style={{ margin: 0 }}>
+                        🧭 Stale Case Scan — nothing has been changed
+                      </h3>
+                      <table style={{ borderCollapse: 'collapse', margin: '10px 0' }}>
+                        <tbody>
+                          <tr><td style={{ padding: '3px 14px 3px 0' }}>Case numbers in the uploaded file</td><td style={{ fontWeight: 700 }}>{staleReport.fileCount}</td></tr>
+                          <tr><td style={{ padding: '3px 14px 3px 0' }}>India cases in the database</td><td style={{ fontWeight: 700 }}>{staleReport.dbCount}</td></tr>
+                          <tr><td style={{ padding: '3px 14px 3px 0', color: '#15803d' }}>Matched — real, keep</td><td style={{ fontWeight: 700, color: '#15803d' }}>{staleReport.matched}</td></tr>
+                          <tr><td style={{ padding: '3px 14px 3px 0', color: '#b91c1c' }}>Stale — in DB but not in the file</td><td style={{ fontWeight: 700, color: '#b91c1c' }}>{staleReport.stale}</td></tr>
+                          <tr><td style={{ padding: '3px 14px 3px 0' }}>In the file but missing from the DB</td><td style={{ fontWeight: 700 }}>{staleReport.missingFromDb}</td></tr>
+                        </tbody>
+                      </table>
+                      <div style={{ fontWeight: 600, marginBottom: 4 }}>Stale cases by year created:</div>
+                      <div style={{ marginBottom: 10 }}>
+                        {Object.keys(staleReport.byYear).sort().map(y => (
+                          <div key={y}>• {y}: {staleReport.byYear[y]} case(s)</div>
+                        ))}
+                      </div>
+                      <div style={{ fontWeight: 600, marginBottom: 4 }}>Sample of up to 20 stale cases:</div>
+                      <table style={{ borderCollapse: 'collapse', fontSize: 12 }}>
+                        <thead>
+                          <tr style={{ background: '#fef3c7' }}>
+                            <th style={{ padding: '4px 10px', textAlign: 'left' }}>Case Number</th>
+                            <th style={{ padding: '4px 10px', textAlign: 'left' }}>Created</th>
+                            <th style={{ padding: '4px 10px', textAlign: 'left' }}>Status</th>
+                            <th style={{ padding: '4px 10px', textAlign: 'left' }}>PIC</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {staleReport.sample.map(c => (
+                            <tr key={c.case_number}>
+                              <td style={{ padding: '3px 10px' }}>{c.case_number}</td>
+                              <td style={{ padding: '3px 10px' }}>{c.created_on || '—'}</td>
+                              <td style={{ padding: '3px 10px' }}>{c.case_status || '—'}</td>
+                              <td style={{ padding: '3px 10px' }}>{c.pic || '—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </>
+                  )}
+                </div>
+              )}
+              {indiaDupReport && (
+                <div className="card" style={{ marginBottom: '16px', borderColor: indiaDupReport.dupeCases.length > 0 ? '#fbbf24' : '#bbf7d0' }}>
+                  <h3 className="card-header" style={{ margin: 0 }}>
+                    🔍 Duplicate Scan — {indiaDupReport.dupeCases.length === 0 ? 'all clear' : `${indiaDupReport.dupeCases.length} case(s) with more than one record`}
+                  </h3>
+                  <p className="card-subtitle">
+                    Scanned {indiaDupReport.totalRows} record(s) across {indiaDupReport.totalCases} India case(s). Nothing has been changed.
+                  </p>
+                  {indiaDupReport.dupeCases.length > 0 && (
+                    <div style={{ maxHeight: '340px', overflow: 'auto', border: '1px solid #e2e8f0', borderRadius: '6px' }}>
+                      <table className="table">
+                        <thead>
+                          <tr>
+                            <th style={{ cursor: 'default' }}>Case Number</th>
+                            <th style={{ cursor: 'default' }}>Rows</th>
+                            <th style={{ cursor: 'default' }}>Names stored</th>
+                            <th style={{ cursor: 'default' }}>IDs stored</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {indiaDupReport.sample.map(([cn, rows]) => (
+                            <tr key={cn}>
+                              <td style={{ fontWeight: 600 }}>{cn}</td>
+                              <td style={{ textAlign: 'center', fontWeight: 700, color: '#d97706' }}>{rows.length}</td>
+                              <td style={{ fontSize: '11px' }}>
+                                {rows.map((r, i) => <div key={i}>{r.respondent_name || r.complainant_name || '—'}</div>)}
+                              </td>
+                              <td style={{ fontSize: '11px' }}>
+                                {rows.map((r, i) => <div key={i}>{r.respondent_id || r.complainant_id || '—'}</div>)}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                  {(() => {
+                    const spread = {};
+                    indiaDupReport.dupeCases.forEach(([, rows]) => { spread[rows.length] = (spread[rows.length] || 0) + 1; });
+                    const idMismatch = indiaDupReport.dupeCases.filter(([, rows]) => {
+                      const ids = new Set(rows.map(r => (r.respondent_id || r.complainant_id || '').trim().toUpperCase()));
+                      return ids.size > 1;
+                    });
+                    const blankIdPairs = indiaDupReport.dupeCases.filter(([, rows]) =>
+                      rows.some(r => !(r.respondent_id || r.complainant_id)) &&
+                      rows.some(r => (r.respondent_id || r.complainant_id))
+                    );
+                    return (
+                      <div style={{ marginTop: '10px', fontSize: '13px', color: '#334155' }}>
+                        <div style={{ fontWeight: 600, marginBottom: '4px' }}>Breakdown of all {indiaDupReport.dupeCases.length} duplicate case(s):</div>
+                        {Object.entries(spread).sort().map(([n, count]) => (
+                          <div key={n}>• {count} case(s) have <b>{n} rows</b></div>
+                        ))}
+                        <div style={{ marginTop: '6px' }}>• <b>{blankIdPairs.length}</b> are an old blank-ID row sitting beside a new row that has the ID</div>
+                        <div>• <b>{idMismatch.length}</b> have <b>different</b> IDs on each row — these need your eyes, not a bulk action</div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
               <div className="table-container">
                 <div style={{ padding: '16px', borderBottom: '1px solid #e2e8f0', display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
                   <input type="text" placeholder="Search case #, person, ID..." value={indiaSearch} onChange={(e) => { setIndiaSearch(e.target.value); setIndiaPage(1); }} style={{ flex: 1, minWidth: '200px', padding: '10px 16px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '14px', outline: 'none', color: '#334155' }} />
