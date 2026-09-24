@@ -894,7 +894,28 @@ const handleUpdateRespondent = async (e, daId) => {
     setWipNotes(w.notes || '');
     setShowWipForm(true);
   };
+// ==== WIP FOLLOW-UPS: append-only record of chasing a lapsed item ====
+const [followUpDates, setFollowUpDates] = useState({});
+const [followUpBusy, setFollowUpBusy] = useState(null);
 
+const handleAddFollowUp = async (wipId) => {
+  const theDate = followUpDates[wipId] || new Date().toISOString().split('T')[0];
+  if (!theDate) { alert('Please pick a follow-up date first.'); return; }
+  const w = wipList.find(x => x.id === wipId);
+  if (!w) return;
+  const existing = Array.isArray(w.follow_ups) ? w.follow_ups : [];
+  const next = [...existing, { date: theDate, by: userEmail, at: new Date().toISOString() }];
+  setFollowUpBusy(wipId);
+  const { error } = await supabase.from('wip_actions').update({
+    follow_ups: next, modified_by_email: userEmail, last_modified: new Date().toISOString()
+  }).eq('id', wipId);
+  setFollowUpBusy(null);
+  if (error) { alert('Error saving follow-up: ' + error.message); return; }
+  const { data: newWipData } = await supabase.from('wip_actions').select('*').eq('case_number', selectedCase).order('date_sent', { ascending: false }).order('last_modified', { ascending: false });
+  setWipList(newWipData || []);
+  setFollowUpDates(prev => ({ ...prev, [wipId]: '' }));
+  refreshOneCase(selectedCase);
+};
   const handleCompleteWip = async (wipId) => {
     const { error } = await supabase.from('wip_actions').update({
       status: 'Done', completed_at: new Date().toISOString(), pic: userEmail, last_modified: new Date().toISOString()
@@ -1900,6 +1921,7 @@ const [wipImportProgress, setWipImportProgress] = useState('');
   const [wipMineOnly, setWipMineOnly] = React.useState(false);
   const [wipBreachedOnly, setWipBreachedOnly] = React.useState(false);
   const [wipHideClosed, setWipHideClosed] = React.useState(false);
+  const [wipNoFollowUp, setWipNoFollowUp] = React.useState(false);
   const [wipExpanded, setWipExpanded] = React.useState({});
   const handleWipFileUpload = async (e) => {
     const file = e.target.files?.[0];
@@ -2116,7 +2138,9 @@ const [wipImportProgress, setWipImportProgress] = useState('');
         expiry_date: w.expiry_date,
         pic: (w.cases && w.cases.pic) || w.pic || '',
         case_status: w.cases ? w.cases.case_status : '',
-        who: ''
+        who: '',
+        wip_id: w.id,
+        follow_ups: Array.isArray(w.follow_ups) ? w.follow_ups : []
       });
     });
   
@@ -2713,10 +2737,10 @@ const [wipImportProgress, setWipImportProgress] = useState('');
         Complainant(s):
         {complainants.map((comp, i) => (
           <span key={i} className="complainant-line">
-            <span className="complainant-name">{comp.complainant_name}{comp.is_anchor ? ' ⚓' : ''}</span>
-            <span className="badge badge-purple" style={{ marginLeft: '4px' }}>QNET ID#: {comp.complainant_id || '—'}</span>
-            {comp.complainant_country && <span className="badge badge-grey" style={{ marginLeft: '4px' }}>{comp.complainant_country}</span>}
-          </span>
+          <span className="complainant-name">{comp.complainant_name}</span>
+          {comp.complainant_id && <span style={{ marginLeft: '6px', color: '#475569' }}>· {comp.complainant_id}</span>}
+          {comp.complainant_country && <span style={{ marginLeft: '6px', color: '#475569' }}>· {comp.complainant_country}</span>}
+        </span>
         ))}
       </div>
     );
@@ -2728,7 +2752,7 @@ const [wipImportProgress, setWipImportProgress] = useState('');
                                         <div style={{ textAlign: 'right' }}>
                                           <span className="expanded-label">SLA DUE DATE</span>
                                           <div className="expanded-value">{c.sla_due_date || '—'}</div>
-                                          <div className="expanded-sub">Created: {c.created_on || '—'}</div>
+                                          <div className="expanded-sub">Created: {c.created_on || '—'}{(() => { const d = businessDaysFromStart(c.created_on, c.sla_due_date); return d != null ? ` · ${d} working days` : ''; })()}</div>
 {renderClosureInfo(c)}
 {renderModifiedInfo(c)}
                                         </div>
@@ -2843,14 +2867,14 @@ const [wipImportProgress, setWipImportProgress] = useState('');
 
                                       <div className="section-divider">
                                         <div className="section-title">
-                                          <span>⏳ WIP Tracker (Daily Actions)</span>
+                                        <span>⏳ WIP Tracker</span>
                                           {!showWipForm && <button onClick={() => { setEditingWipId(null); setShowWipForm(true); }} className="btn-action btn-purple" style={{ color: 'white' }}>+ Log Action</button>}
                                         </div>
 
                                         {showWipForm && (
                                           <form onSubmit={handleAddWIP} className="wip-form">
                                             <div className="wip-input-group"><label>Action Type</label><select value={wipActionType} onChange={(e) => setWipActionType(e.target.value)} required><option value="">Select...</option>{mappingRules.map(rule => <option key={rule.id} value={rule.action_type}>{rule.action_type}</option>)}</select></div>
-                                            <div className="wip-input-group"><label>Description</label><input type="text" value={wipDesc} onChange={(e) => setWipDesc(e.target.value)} required /></div>
+                                            
                                             <div className="wip-input-group"><label>Date Sent</label><input type="date" value={wipDateSent} onChange={(e) => setWipDateSent(e.target.value)} required /></div>
                                             <div className="wip-input-group"><label>SLA Days (1-100)</label><input type="number" min="1" max="100" value={wipSlaDays} onChange={(e) => setWipSlaDays(Math.max(1, Math.min(100, parseInt(e.target.value) || 2)))} required /></div>
                                             <div style={{ display: 'flex', gap: '4px' }}>
@@ -2858,8 +2882,12 @@ const [wipImportProgress, setWipImportProgress] = useState('');
                                               <button type="button" onClick={resetWipForm} className="btn-action">Cancel</button>
                                             </div>
                                             <div className="wip-input-group wip-notes-row" style={{ gridColumn: '1 / -1' }}>
+                                              <label>Description</label>
+                                              <textarea value={wipDesc} onChange={(e) => setWipDesc(e.target.value)} rows="3" required placeholder="What was sent / done..."></textarea>
+                                            </div>
+                                            <div className="wip-input-group wip-notes-row" style={{ gridColumn: '1 / -1' }}>
                                               <label>Notes / Replies</label>
-                                              <textarea value={wipNotes} onChange={(e) => setWipNotes(e.target.value)} rows="2" placeholder="e.g., Reply 1 (Date)..."></textarea>
+                                              <textarea value={wipNotes} onChange={(e) => setWipNotes(e.target.value)} rows="3" placeholder="e.g., Reply 1 (Date)..."></textarea>
                                             </div>
                                           </form>
                                         )}
@@ -2881,6 +2909,31 @@ const [wipImportProgress, setWipImportProgress] = useState('');
                                                   </div>
                                                   <div className="item-meta"><div className="expanded-label">Stage</div><span className="badge badge-blue">{w.stage_auto || '—'}</span></div>
                                                   <div className="item-meta"><div className="expanded-label">SLA Timer</div><span style={{ fontWeight: 600, color: wipSlaDays < 0 ? '#dc2626' : '#059669' }}>{wipSlaDays < 0 ? `🔴 ${Math.abs(wipSlaDays)}wd` : `🟢 ${wipSlaDays}wd`}</span></div>
+                                                  {(wipSlaDays < 0 || (Array.isArray(w.follow_ups) && w.follow_ups.length > 0)) && w.status !== 'Done' && (() => {
+                                                    const fu = Array.isArray(w.follow_ups) ? w.follow_ups : [];
+                                                    const prev = fu.length > 1 ? fu[fu.length - 2] : null;
+                                                    const latest = fu.length > 0 ? fu[fu.length - 1] : null;
+                                                    return (
+                                                      <div style={{ width: '100%', marginTop: '8px', paddingTop: '8px', borderTop: '1px dashed #e2e8f0', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                                        <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>📅 Follow-up:</span>
+                                                        <input type="date"
+                                                          value={followUpDates[w.id] ?? new Date().toISOString().split('T')[0]}
+                                                          onChange={(e) => setFollowUpDates(prev2 => ({ ...prev2, [w.id]: e.target.value }))}
+                                                          style={{ padding: '4px 6px', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '12px' }} />
+                                                        <button onClick={() => handleAddFollowUp(w.id)} disabled={followUpBusy === w.id} className="btn-action btn-purple" style={{ color: 'white' }}>
+                                                          {followUpBusy === w.id ? 'Saving...' : 'Update'}
+                                                        </button>
+                                                        {fu.length > 0 && (
+                                                          <span style={{ fontSize: '11px', color: '#475569', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                                            Follow-ups: <b>{fu.length}</b>
+                                                            <span style={{ color: '#94a3b8' }}>· last {latest.date}</span>
+                                                            <span title={prev ? `Previous follow-up: ${prev.date}` : 'No earlier follow-up'}
+                                                              style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '15px', height: '15px', borderRadius: '50%', border: '1px solid #94a3b8', color: '#64748b', fontSize: '10px', fontWeight: 700, cursor: 'help' }}>i</span>
+                                                          </span>
+                                                        )}
+                                                      </div>
+                                                    );
+                                                  })()}
                                                   {w.status !== 'Done' && (<div className="item-actions"><button onClick={() => handleEditWip(w)} className="btn-action">Edit</button><button onClick={() => handleCompleteWip(w.id)} className="btn-action btn-success">Complete</button></div>)}
                                                 </div>
                                               );
@@ -3257,6 +3310,7 @@ const [wipImportProgress, setWipImportProgress] = useState('');
                 <label className="resp-toggle"><input type="checkbox" checked={wipMineOnly} onChange={(ev) => setWipMineOnly(ev.target.checked)} /> My cases only</label>
                 <label className="resp-toggle"><input type="checkbox" checked={wipBreachedOnly} onChange={(ev) => setWipBreachedOnly(ev.target.checked)} /> Breached only</label>
                 <label className="resp-toggle"><input type="checkbox" checked={wipHideClosed} onChange={(ev) => setWipHideClosed(ev.target.checked)} /> Hide closed cases</label>
+                <label className="resp-toggle"><input type="checkbox" checked={wipNoFollowUp} onChange={(ev) => setWipNoFollowUp(ev.target.checked)} /> Never followed up</label>
                 <button className="btn-secondary" onClick={() => { setWipSearch(''); setWipPicFilter(''); setWipMineOnly(false); setWipBreachedOnly(false); setWipHideClosed(false); }}>Clear</button>
               </div>
 
@@ -3273,6 +3327,7 @@ const [wipImportProgress, setWipImportProgress] = useState('');
                     if (wipMineOnly && !(r.pic || '').toLowerCase().includes(myName)) return false;
                     if (wipBreachedOnly && !(r.days !== null && r.days < 0)) return false;
                     if (wipHideClosed && isClosed(r.case_status)) return false;
+                    if (wipNoFollowUp && !(r.kind === 'WIP' && (!Array.isArray(r.follow_ups) || r.follow_ups.length === 0))) return false;
                     if (q) {
                       const hay = `${r.case_number} ${r.description} ${r.who} ${r.action_type}`.toLowerCase();
                       if (!hay.includes(q)) return false;
@@ -3330,6 +3385,12 @@ const [wipImportProgress, setWipImportProgress] = useState('');
                                       ? <span className="badge badge-red" style={{ fontSize: '10px' }}>🔴 Breached {Math.abs(r.days)}d</span>
                                       : <span className="badge badge-yellow" style={{ fontSize: '10px' }}>🟡 Due in {r.days}d</span>}
                                   <span className="badge badge-grey" style={{ fontSize: '10px' }}>{r.kind}</span>
+                                  {Array.isArray(r.follow_ups) && r.follow_ups.length > 0 && (
+                                    <span className="badge badge-purple" style={{ fontSize: '10px', cursor: 'help' }}
+                                      title={`Last follow-up: ${r.follow_ups[r.follow_ups.length - 1].date}${r.follow_ups.length > 1 ? ` · Previous: ${r.follow_ups[r.follow_ups.length - 2].date}` : ''}`}>
+                                      📅 {r.follow_ups.length}
+                                    </span>
+                                  )}
                                   <span style={{ flex: 1, minWidth: '200px' }}>{r.description}</span>
                                   {many
                                     ? <button className="btn-action" style={{ fontSize: '10px', padding: '2px 6px' }} onClick={() => setWipExpanded(p => ({ ...p, [`${caseNum}|${li}`]: !open }))}>↳ {items.length} respondents {open ? '▾' : '▸'}</button>
