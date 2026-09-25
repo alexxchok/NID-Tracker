@@ -128,7 +128,7 @@ const normalizeCountry = (val) => {
   return s;
 };
 function App() {
-  const [session, setSession] = useState(null);
+    const [session, setSession] = useState(null);
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => setSession(session));
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => setSession(session));
@@ -238,7 +238,8 @@ function Dashboard({ userEmail, onSignOut }) {
 
   const [hideRespondents, setHideRespondents] = useState(true);
   // ==== ADMIN: case edit state ====
-const isAdmin = ADMIN_EMAILS.includes((userEmail || '').toLowerCase());
+  const isRealAdmin = ADMIN_EMAILS.includes((userEmail || '').toLowerCase());
+const isAdmin = isRealAdmin && window.localStorage.getItem('viewAsStandard') !== 'yes';
 const [editingCase, setEditingCase] = useState(false);
 const [caseForm, setCaseForm] = useState({
   case_number: '', pic: '', country: '', sla_due_date: '', created_on: '', sla_days: '', priority: 'Medium',
@@ -700,12 +701,40 @@ const openCaseEdit = () => {
   setEditingCase(true);
 };
 
-// ==== ADMIN: save the edited case (handles rename + complainant sync) ====
+// ==== SAVE EDITED CASE — admins: all fields · standard users: 6 fields only ====
 const handleUpdateCase = async (e) => {
   e.preventDefault();
   const c = cases.find(x => x.case_number === selectedCase);
   if (!c) return;
+  const stamp = new Date().toISOString();
+  const isClosed = (s) => s === 'COMPLETED' || s === 'CANCELLED';
 
+  // ---- STANDARD USER: only these 6 fields are ever saved ----
+  if (!isAdmin) {
+    const limited = {
+      priority: caseForm.priority,
+      stage: cleanVal(caseForm.stage),
+      case_folder_no: cleanVal(caseForm.case_folder_no),
+      findings_url: cleanVal(caseForm.findings_url),
+      case_status: caseForm.case_status,
+      remarks: cleanVal(caseForm.remarks),
+      modified_by_email: userEmail,
+      last_modified: stamp
+    };
+    if (isClosed(caseForm.case_status) && !isClosed(c.case_status)) {
+      limited.date_completed = new Date().toISOString().split('T')[0];
+      if (caseForm.priority === c.priority) limited.priority = 'Low';
+    } else if (!isClosed(caseForm.case_status) && isClosed(c.case_status)) {
+      limited.date_completed = null;
+    }
+    const { error } = await supabase.from('cases').update(limited).eq('case_number', selectedCase);
+    if (error) { alert('Error updating case: ' + error.message); return; }
+    setEditingCase(false);
+    refreshOneCase(selectedCase);
+    return;
+  }
+
+  // ---- ADMIN: full edit (unchanged behaviour) ----
   // 1) Case-number rename — moves respondents, WIP actions & complainants along with it
   const newCaseNum = cleanVal(caseForm.case_number);
   let caseNumToUse = selectedCase;
@@ -734,7 +763,6 @@ const handleUpdateCase = async (e) => {
   const compName = cleanVal(caseForm.complainant_name);
   const compId = cleanVal(caseForm.complainant_id);
   const compCountry = cleanVal(caseForm.complainant_country);
-  const stamp = new Date().toISOString();
 
   if (compName || compId || compCountry) {
     const { data: rows } = await supabase
@@ -758,7 +786,6 @@ const handleUpdateCase = async (e) => {
       if (ccErr) { alert('Error saving complainant: ' + ccErr.message); return; }
     }
 
-    // Keep respondent rows showing the same complainant
     if (daList.length > 0) {
       await supabase.from('disciplinary_actions').update({
         complainant_name: compName, complainant_id: compId, complainant_country: compCountry,
@@ -782,7 +809,6 @@ const handleUpdateCase = async (e) => {
     modified_by_email: userEmail,
     last_modified: stamp
   };
-  const isClosed = (s) => s === 'COMPLETED' || s === 'CANCELLED';
   if (isClosed(caseForm.case_status) && !isClosed(c.case_status)) {
     updates.date_completed = cleanVal(caseForm.date_completed) || new Date().toISOString().split('T')[0];
     if (caseForm.priority === c.priority) updates.priority = 'Low';
@@ -950,7 +976,20 @@ const handleAddFollowUp = async (wipId) => {
       refreshOneCase(selectedCase);
     }
   };
-
+// ==== ADMIN: reactivate a completed WIP action ====
+const handleReactivateWip = async (wipId) => {
+  if (!isAdmin) return;
+  if (!window.confirm('Reactivate this completed WIP action? It will go back to open.')) return;
+  const stamp = new Date().toISOString();
+  const { error } = await supabase.from('wip_actions').update({
+    status: 'Pending', completed_at: null, last_modified: stamp
+  }).eq('id', wipId);
+  if (error) { alert('Error reactivating WIP: ' + error.message); return; }
+  const { data: newWipData } = await supabase.from('wip_actions').select('*').eq('case_number', selectedCase).order('date_sent', { ascending: false }).order('last_modified', { ascending: false });
+  setWipList(newWipData || []);
+  await supabase.from('cases').update({ modified_by_email: userEmail, last_modified: stamp }).eq('case_number', selectedCase);
+  refreshOneCase(selectedCase);
+};
   const refreshDaList = async () => {
     const { data: newDaData } = await supabase.from('disciplinary_actions').select('*').eq('case_number', selectedCase);
     setDaList(newDaData || []);
@@ -2368,6 +2407,36 @@ const [wipImportProgress, setWipImportProgress] = useState('');
 .close-case-panel { flex-basis: 100%; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 10px 12px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
 .close-case-label { font-size: 13px; font-weight: 600; color: #0f172a; }
 .btn-cancel-status { background-color: #64748b; color: white; border: none; }
+/* ==== SECONDARY BUTTONS (Refresh / Clear / Import / Previous / Next) ==== */
+.btn-secondary {
+  padding: 8px 14px;
+  background-color: #ffffff;
+  color: #334155;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+}
+.btn-secondary:hover:not(:disabled) {
+  background-color: #f1f5f9;
+  border-color: #cbd5e1;
+  color: #0f172a;
+}
+.btn-secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+/* ==== Locked (admin-only) fields in Edit Case ==== */
+.wip-input-group input:disabled,
+.wip-input-group select:disabled,
+.wip-input-group textarea:disabled {
+  background-color: #f1f5f9;
+  color: #94a3b8;
+  cursor: not-allowed;
+}
 /* ===== HORIZONTAL TOP NAV ===== */
 .app-container { display: block; }
 
@@ -2438,6 +2507,22 @@ const [wipImportProgress, setWipImportProgress] = useState('');
   .topnav-item .label { display: none; }
   .topnav-item { padding: 8px 12px; }
   .topbar-user .user-details { display: none; }
+}
+/* ===== TOP BAR TIDY-UP (same sizes, no scroll bar) ===== */
+.topbar { gap: 16px; height: 56px; }
+.topbar-brand h1 { font-size: 15px; }
+.topnav { min-width: 0; overflow-x: auto; scrollbar-width: none; -ms-overflow-style: none; }
+.topnav::-webkit-scrollbar { display: none; }
+.topnav-item { height: 34px; padding: 0 12px; font-size: 13px; gap: 6px; }
+.topnav-item .icon { font-size: 15px; }
+.topbar-user { gap: 8px; }
+.topbar-user .user-avatar { width: 30px; height: 30px; font-size: 13px; }
+.topbar-user .user-details .email { font-size: 12px; max-width: 160px; }
+.topbar-user .user-details .role { font-size: 11px; color: #94a3b8; }
+.topbar-user .btn-signout { height: 30px; padding: 0 12px; font-size: 12px; font-weight: 500; display: inline-flex; align-items: center; gap: 4px; line-height: 1; }
+@media (max-width: 1200px) {
+  .topnav-item { padding: 0 10px; }
+  .topbar-user .user-details .email { max-width: 120px; }
 }
 /* ===== RESPONDENTS TAB ===== */
         .resp-filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
@@ -2571,6 +2656,24 @@ const [wipImportProgress, setWipImportProgress] = useState('');
               <div className="email">{userEmail}</div>
               <div className="role">{isAdmin ? 'Administrator' : 'Standard User'}</div>
             </div>
+            {isRealAdmin && (
+              <button
+                type="button"
+                className="btn-signout"
+                style={isAdmin ? {} : { background: '#f59e0b', color: '#ffffff', borderColor: '#f59e0b' }}
+                onClick={() => {
+                  if (isAdmin) {
+                    window.localStorage.setItem('viewAsStandard', 'yes');
+                  } else {
+                    window.localStorage.removeItem('viewAsStandard');
+                  }
+                  window.location.reload();
+                }}
+                title={isAdmin ? 'Preview the app as a standard user' : 'Return to full admin access'}
+              >
+                {isAdmin ? '👁️ View as Standard' : '🛡️ Back to Admin'}
+              </button>
+            )}
             <button onClick={onSignOut} className="btn-signout">Sign Out</button>
           </div>
         </header>
@@ -2669,7 +2772,7 @@ const [wipImportProgress, setWipImportProgress] = useState('');
 <button onClick={() => { setShowMyCases(!showMyCases); setCurrentPage(1); }} style={{ padding: '10px 16px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '14px', cursor: 'pointer', backgroundColor: showMyCases ? '#3b82f6' : 'white', color: showMyCases ? 'white' : '#334155', whiteSpace: 'nowrap' }}>
                     👤 My Cases
                   </button>
-<button onClick={() => { setSearchInput(''); setSearchTerm(''); setFilters({ pic: '', status: '', da_in_force: '' }); setSortConfig({ key: 'sla_due_date', direction: 'ascending' }); setCurrentPage(1); setShowMyCases(false); }}>✕ Clear</button>
+                  <button className="btn-secondary" style={{ padding: '10px 16px', fontSize: '14px' }} onClick={() => { setSearchInput(''); setSearchTerm(''); setFilters({ pic: '', status: '', da_in_force: '' }); setSortConfig({ key: 'sla_due_date', direction: 'ascending' }); setCurrentPage(1); setShowMyCases(false); }}>✕ Clear</button>
                 </div>
 
                 {loading ? (
@@ -2804,20 +2907,24 @@ const [wipImportProgress, setWipImportProgress] = useState('');
     🔗 Case Findings
   </button>
 )}
-{isAdmin && !editingCase && (
+{!editingCase && (
   <button className="btn-admin" onClick={openCaseEdit}>✏️ Edit Case</button>
 )}
 {editingCase && (
   <form className="admin-edit-form" onSubmit={handleUpdateCase}>
     <p className="form-title">✏️ Edit Case — {selectedCase}</p>
-    <p className="form-sub">Admin only. Changing the case number moves all respondents &amp; WIP actions to the new number.</p>
+    <p className="form-sub">
+      {isAdmin
+        ? 'Admin access — all fields editable. Changing the case number moves all respondents & WIP actions to the new number.'
+        : 'Standard access — you can edit Priority, Stage, Case Folder No., Case Findings Link, Case Status and Remarks. 🔒 fields are admin only.'}
+    </p>
     <div className="admin-form-grid">
-      <div className="wip-input-group"><label>Case Number *</label><input type="text" value={caseForm.case_number} onChange={(e) => setCaseForm({ ...caseForm, case_number: e.target.value })} required /></div>
-      <div className="wip-input-group"><label>PIC</label><input type="text" value={caseForm.pic} onChange={(e) => setCaseForm({ ...caseForm, pic: e.target.value })} /></div>
-      <div className="wip-input-group"><label>Case Country</label><input type="text" value={caseForm.country} onChange={(e) => setCaseForm({ ...caseForm, country: e.target.value })} /></div>
-      <div className="wip-input-group"><label>SLA Days (working days)</label><input type="number" placeholder="auto from Created On" value={caseForm.sla_days} onChange={(e) => { const days = parseInt(e.target.value, 10); const base = caseForm.created_on || (cases.find(x => x.case_number === selectedCase) || {}).created_on; if (!isNaN(days) && days > 0 && base) { setCaseForm({ ...caseForm, sla_days: days, sla_due_date: addBusinessDays(base, days) }); } else { setCaseForm({ ...caseForm, sla_days: e.target.value }); } }} /></div>
-      <div className="wip-input-group"><label>SLA Due Date</label><input type="date" value={caseForm.sla_due_date} onChange={(e) => setCaseForm({ ...caseForm, sla_due_date: e.target.value })} /></div>
-      <div className="wip-input-group"><label>Created On</label><input type="date" value={caseForm.created_on} onChange={(e) => setCaseForm({ ...caseForm, created_on: e.target.value })} /></div>
+      <div className="wip-input-group"><label>{!isAdmin && '🔒 '}Case Number *</label><input type="text" value={caseForm.case_number} disabled={!isAdmin} onChange={(e) => setCaseForm({ ...caseForm, case_number: e.target.value })} required /></div>
+      <div className="wip-input-group"><label>{!isAdmin && '🔒 '}PIC</label><input type="text" value={caseForm.pic} disabled={!isAdmin} onChange={(e) => setCaseForm({ ...caseForm, pic: e.target.value })} /></div>
+      <div className="wip-input-group"><label>{!isAdmin && '🔒 '}Case Country</label><input type="text" value={caseForm.country} disabled={!isAdmin} onChange={(e) => setCaseForm({ ...caseForm, country: e.target.value })} /></div>
+      <div className="wip-input-group"><label>{!isAdmin && '🔒 '}SLA Days (working days)</label><input type="number" placeholder="auto from Created On" value={caseForm.sla_days} disabled={!isAdmin} onChange={(e) => { const days = parseInt(e.target.value, 10); const base = caseForm.created_on || (cases.find(x => x.case_number === selectedCase) || {}).created_on; if (!isNaN(days) && days > 0 && base) { setCaseForm({ ...caseForm, sla_days: days, sla_due_date: addBusinessDays(base, days) }); } else { setCaseForm({ ...caseForm, sla_days: e.target.value }); } }} /></div>
+      <div className="wip-input-group"><label>{!isAdmin && '🔒 '}SLA Due Date</label><input type="date" value={caseForm.sla_due_date} disabled={!isAdmin} onChange={(e) => setCaseForm({ ...caseForm, sla_due_date: e.target.value })} /></div>
+      <div className="wip-input-group"><label>{!isAdmin && '🔒 '}Created On</label><input type="date" value={caseForm.created_on} disabled={!isAdmin} onChange={(e) => setCaseForm({ ...caseForm, created_on: e.target.value })} /></div>
       <div className="wip-input-group"><label>Priority</label>
         <select value={caseForm.priority} onChange={(e) => setCaseForm({ ...caseForm, priority: e.target.value })}>
           <option>High</option><option>Medium</option><option>Low</option>
@@ -2828,24 +2935,28 @@ const [wipImportProgress, setWipImportProgress] = useState('');
       <div className="wip-input-group full-width"><label>Case Findings Link (D365)</label><input type="text" placeholder="Paste the full D365 link here" value={caseForm.findings_url} onChange={(e) => setCaseForm({ ...caseForm, findings_url: e.target.value })} /></div>
       <div className="wip-input-group"><label>Case Status</label>
         <select value={caseForm.case_status} onChange={(e) => setCaseForm({ ...caseForm, case_status: e.target.value })}>
-        <option>IN PROGRESS</option><option>COMPLETED</option><option>CANCELLED</option>
+          <option>IN PROGRESS</option><option>COMPLETED</option><option>CANCELLED</option>
         </select>
       </div>
       {(caseForm.case_status === 'COMPLETED' || caseForm.case_status === 'CANCELLED') && (
         <div className="wip-input-group">
-          <label>{caseForm.case_status === 'CANCELLED' ? 'Closed (Cancelled) Date' : 'Completed Date'}</label>
-          <input type="date" value={caseForm.date_completed} onChange={(e) => setCaseForm({ ...caseForm, date_completed: e.target.value })} />
+          <label>{!isAdmin && '🔒 '}{caseForm.case_status === 'CANCELLED' ? 'Closed (Cancelled) Date' : 'Completed Date'}</label>
+          <input type="date" value={caseForm.date_completed} disabled={!isAdmin} placeholder={!isAdmin ? 'auto: today' : ''} onChange={(e) => setCaseForm({ ...caseForm, date_completed: e.target.value })} />
         </div>
       )}
       <div className="wip-input-group full-width"><label>Remarks</label><textarea value={caseForm.remarks} onChange={(e) => setCaseForm({ ...caseForm, remarks: e.target.value })} /></div>
     </div>
-    <p className="form-title" style={{ marginTop: '16px' }}>👤 Complainant Details</p>
-    <p className="form-sub">Applies to this case (saved on all respondent rows).</p>
-    <div className="admin-form-grid">
-      <div className="wip-input-group"><label>Complainant Name</label><input type="text" value={caseForm.complainant_name} onChange={(e) => setCaseForm({ ...caseForm, complainant_name: e.target.value })} /></div>
-      <div className="wip-input-group"><label>Complainant ID</label><input type="text" value={caseForm.complainant_id} onChange={(e) => setCaseForm({ ...caseForm, complainant_id: e.target.value })} /></div>
-      <div className="wip-input-group"><label>Complainant Country</label><input type="text" value={caseForm.complainant_country} onChange={(e) => setCaseForm({ ...caseForm, complainant_country: e.target.value })} /></div>
-    </div>
+    {isAdmin && (
+      <>
+        <p className="form-title" style={{ marginTop: '16px' }}>👤 Complainant Details</p>
+        <p className="form-sub">Applies to this case (saved on all respondent rows).</p>
+        <div className="admin-form-grid">
+          <div className="wip-input-group"><label>Complainant Name</label><input type="text" value={caseForm.complainant_name} onChange={(e) => setCaseForm({ ...caseForm, complainant_name: e.target.value })} /></div>
+          <div className="wip-input-group"><label>Complainant ID</label><input type="text" value={caseForm.complainant_id} onChange={(e) => setCaseForm({ ...caseForm, complainant_id: e.target.value })} /></div>
+          <div className="wip-input-group"><label>Complainant Country</label><input type="text" value={caseForm.complainant_country} onChange={(e) => setCaseForm({ ...caseForm, complainant_country: e.target.value })} /></div>
+        </div>
+      </>
+    )}
     <div className="admin-form-actions">
       <button type="submit" className="btn-save-admin">💾 Save Changes</button>
       <button type="button" className="btn-cancel-admin" onClick={() => setEditingCase(false)}>Cancel</button>
@@ -2947,31 +3058,36 @@ const [wipImportProgress, setWipImportProgress] = useState('');
                                                   <div className="item-meta"><div className="expanded-label">Stage</div><span className="badge badge-blue">{w.stage_auto || '—'}</span></div>
                                                   <div className="item-meta"><div className="expanded-label">SLA Timer</div><span style={{ fontWeight: 600, color: wipSlaDays < 0 ? '#dc2626' : '#059669' }}>{wipSlaDays < 0 ? `🔴 ${Math.abs(wipSlaDays)}wd` : `🟢 ${wipSlaDays}wd`}</span></div>
                                                   {(wipSlaDays < 0 || (Array.isArray(w.follow_ups) && w.follow_ups.length > 0)) && w.status !== 'Done' && (() => {
-                                                    const fu = Array.isArray(w.follow_ups) ? w.follow_ups : [];
-                                                    const prev = fu.length > 1 ? fu[fu.length - 2] : null;
-                                                    const latest = fu.length > 0 ? fu[fu.length - 1] : null;
-                                                    return (
-                                                      <div style={{ width: '100%', marginTop: '8px', paddingTop: '8px', borderTop: '1px dashed #e2e8f0', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                                                        <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>📅 Follow-up:</span>
-                                                        <input type="date"
-                                                          value={followUpDates[w.id] || new Date().toISOString().split('T')[0]}
-                                                          onChange={(e) => setFollowUpDates(prev2 => ({ ...prev2, [w.id]: e.target.value }))}
-                                                          style={{ padding: '4px 6px', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '12px' }} />
-                                                        <button onClick={() => handleAddFollowUp(w.id)} disabled={followUpBusy === w.id} className="btn-action btn-purple" style={{ color: 'white' }}>
-                                                          {followUpBusy === w.id ? 'Saving...' : 'Update'}
-                                                        </button>
-                                                        {fu.length > 0 && (
-                                                          <span style={{ fontSize: '11px', color: '#475569', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                                            Follow-ups: <b>{fu.length}</b>
-                                                            <span style={{ color: '#94a3b8' }}>· last {latest.date}</span>
-                                                            <span title={prev ? `Previous follow-up: ${prev.date}` : 'No earlier follow-up'}
-                                                              style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '15px', height: '15px', borderRadius: '50%', border: '1px solid #94a3b8', color: '#64748b', fontSize: '10px', fontWeight: 700, cursor: 'help' }}>i</span>
-                                                          </span>
-                                                        )}
-                                                      </div>
-                                                    );
-                                                  })()}
-                                                  {w.status !== 'Done' && (<div className="item-actions"><button onClick={() => handleEditWip(w)} className="btn-action">Edit</button><button onClick={() => handleCompleteWip(w.id)} className="btn-action btn-success">Complete</button></div>)}
+  const fu = Array.isArray(w.follow_ups) ? w.follow_ups : [];
+  const prev = fu.length > 1 ? fu[fu.length - 2] : null;
+  const latest = fu.length > 0 ? fu[fu.length - 1] : null;
+  return (
+    <div style={{ width: '100%', marginTop: '8px', paddingTop: '8px', borderTop: '1px dashed #e2e8f0', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+      <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>📅 Follow-up:</span>
+      <input type="date"
+        value={followUpDates[w.id] || new Date().toISOString().split('T')[0]}
+        onChange={(e) => setFollowUpDates(prev2 => ({ ...prev2, [w.id]: e.target.value }))}
+        style={{ padding: '4px 6px', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '12px' }} />
+      <button onClick={() => handleAddFollowUp(w.id)} disabled={followUpBusy === w.id} className="btn-action btn-purple" style={{ color: 'white' }}>
+        {followUpBusy === w.id ? 'Saving...' : 'Update'}
+      </button>
+      {fu.length > 0 && (
+        <span style={{ fontSize: '11px', color: '#475569', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+          Follow-ups: <b>{fu.length}</b>
+          <span style={{ color: '#94a3b8' }}>· last {latest.date}</span>
+          <span title={prev ? `Previous follow-up: ${prev.date}` : 'No earlier follow-up'}
+            style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '15px', height: '15px', borderRadius: '50%', border: '1px solid #94a3b8', color: '#64748b', fontSize: '10px', fontWeight: 700, cursor: 'help' }}>i</span>
+        </span>
+      )}
+      <div style={{ marginLeft: 'auto', display: 'flex', gap: '6px' }}>
+        <button onClick={() => handleEditWip(w)} className="btn-action">Edit</button>
+        <button onClick={() => handleCompleteWip(w.id)} className="btn-action btn-success">Complete</button>
+      </div>
+    </div>
+  );
+})()}
+{!(wipSlaDays < 0 || (Array.isArray(w.follow_ups) && w.follow_ups.length > 0)) && w.status !== 'Done' && (<div className="item-actions"><button onClick={() => handleEditWip(w)} className="btn-action">Edit</button><button onClick={() => handleCompleteWip(w.id)} className="btn-action btn-success">Complete</button></div>)}
+{isAdmin && w.status === 'Done' && (<div className="item-actions"><button onClick={() => handleReactivateWip(w.id)} className="btn-action" style={{ color: '#7c3aed', borderColor: '#c4b5fd' }}>↩️ Reactivate</button></div>)}
                                                 </div>
                                               );
                                             })}
