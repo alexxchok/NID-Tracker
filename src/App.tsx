@@ -242,7 +242,7 @@ const isAdmin = ADMIN_EMAILS.includes((userEmail || '').toLowerCase());
 const [editingCase, setEditingCase] = useState(false);
 const [caseForm, setCaseForm] = useState({
   case_number: '', pic: '', country: '', sla_due_date: '', created_on: '', sla_days: '', priority: 'Medium',
-  stage: '', case_status: 'IN PROGRESS', remarks: '', date_completed: '',
+  stage: '', case_status: 'IN PROGRESS', remarks: '', date_completed: '', case_folder_no: '', findings_url: '',
   complainant_name: '', complainant_id: '', complainant_country: ''
 });
 // ==== ADMIN: respondent edit state ====
@@ -691,6 +691,8 @@ const openCaseEdit = () => {
     sla_days: businessDaysFromStart(c.created_on, c.sla_due_date) ?? '',
     priority: c.priority || 'Medium', stage: c.stage || '',
     case_status: c.case_status || 'IN PROGRESS', remarks: c.remarks || '', date_completed: c.date_completed || '',
+    case_folder_no: c.case_folder_no || '',
+    findings_url: c.findings_url || '',
     complainant_name: anchor.complainant_name || '',
     complainant_id: anchor.complainant_id || '',
     complainant_country: anchor.complainant_country || ''
@@ -775,6 +777,8 @@ const handleUpdateCase = async (e) => {
     stage: cleanVal(caseForm.stage),
     case_status: caseForm.case_status,
     remarks: cleanVal(caseForm.remarks),
+    case_folder_no: cleanVal(caseForm.case_folder_no),
+    findings_url: cleanVal(caseForm.findings_url),
     modified_by_email: userEmail,
     last_modified: stamp
   };
@@ -916,6 +920,24 @@ const handleAddFollowUp = async (wipId) => {
   setFollowUpDates(prev => ({ ...prev, [wipId]: '' }));
   refreshOneCase(selectedCase);
 };
+// ==== WIP TAB follow-up: same append-only rule, but works with no case open.
+  // Reads the current list straight from the database instead of wipList.
+  const handleAddFollowUpFromTab = async (wipId) => {
+    if (!wipId) { alert('This item has no linked WIP record.'); return; }
+    const theDate = followUpDates[wipId] || new Date().toISOString().split('T')[0];
+    if (!theDate) { alert('Please pick a follow-up date first.'); return; }
+    setFollowUpBusy(wipId);
+    const { data: row } = await supabase.from('wip_actions').select('follow_ups').eq('id', wipId).single();
+    const existing = row && Array.isArray(row.follow_ups) ? row.follow_ups : [];
+    const next = [...existing, { date: theDate, by: userEmail, at: new Date().toISOString() }];
+    const { error } = await supabase.from('wip_actions').update({
+      follow_ups: next, modified_by_email: userEmail, last_modified: new Date().toISOString()
+    }).eq('id', wipId);
+    setFollowUpBusy(null);
+    if (error) { alert('Error saving follow-up: ' + error.message); return; }
+    setWipRows(prev => prev.map(r => r.wip_id === wipId ? { ...r, follow_ups: next } : r));
+    setFollowUpDates(prev => ({ ...prev, [wipId]: '' }));
+  };
   const handleCompleteWip = async (wipId) => {
     const { error } = await supabase.from('wip_actions').update({
       status: 'Done', completed_at: new Date().toISOString(), pic: userEmail, last_modified: new Date().toISOString()
@@ -2747,7 +2769,7 @@ const [wipImportProgress, setWipImportProgress] = useState('');
   }
   return null;
 })()}
-                                          <div className="expanded-sub">Priority: {c.priority || '—'} | Stage: {c.stage || '—'}</div>
+                                          <div className="expanded-sub">Priority: {c.priority || '—'} | Stage: {c.stage || '—'} | Case Folder: {c.case_folder_no || '—'}</div>
                                         </div>
                                         <div style={{ textAlign: 'right' }}>
                                           <span className="expanded-label">SLA DUE DATE</span>
@@ -2769,6 +2791,19 @@ const [wipImportProgress, setWipImportProgress] = useState('');
     <button onClick={() => setShowCloseOptions(false)} className="btn-action">↩ Back</button>
   </div>
 )}
+{c.findings_url ? (
+  <button className="btn-action" style={{ backgroundColor: '#2563eb', color: 'white', border: 'none' }}
+    onClick={() => window.open(c.findings_url, '_blank', 'noopener,noreferrer')}
+    title="Open the case findings notes in D365">
+    🔗 Case Findings
+  </button>
+) : (
+  <button className="btn-action" disabled
+    style={{ opacity: 0.45, cursor: 'not-allowed' }}
+    title="No findings link saved — add one via ✏️ Edit Case">
+    🔗 Case Findings
+  </button>
+)}
 {isAdmin && !editingCase && (
   <button className="btn-admin" onClick={openCaseEdit}>✏️ Edit Case</button>
 )}
@@ -2789,6 +2824,8 @@ const [wipImportProgress, setWipImportProgress] = useState('');
         </select>
       </div>
       <div className="wip-input-group"><label>Stage</label><input type="text" placeholder="e.g. Stage 3" value={caseForm.stage} onChange={(e) => setCaseForm({ ...caseForm, stage: e.target.value })} /></div>
+      <div className="wip-input-group"><label>Case Folder No.</label><input type="text" placeholder="e.g. ABC-123" value={caseForm.case_folder_no} onChange={(e) => setCaseForm({ ...caseForm, case_folder_no: e.target.value })} /></div>
+      <div className="wip-input-group full-width"><label>Case Findings Link (D365)</label><input type="text" placeholder="Paste the full D365 link here" value={caseForm.findings_url} onChange={(e) => setCaseForm({ ...caseForm, findings_url: e.target.value })} /></div>
       <div className="wip-input-group"><label>Case Status</label>
         <select value={caseForm.case_status} onChange={(e) => setCaseForm({ ...caseForm, case_status: e.target.value })}>
         <option>IN PROGRESS</option><option>COMPLETED</option><option>CANCELLED</option>
@@ -2917,7 +2954,7 @@ const [wipImportProgress, setWipImportProgress] = useState('');
                                                       <div style={{ width: '100%', marginTop: '8px', paddingTop: '8px', borderTop: '1px dashed #e2e8f0', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                                                         <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>📅 Follow-up:</span>
                                                         <input type="date"
-                                                          value={followUpDates[w.id] ?? new Date().toISOString().split('T')[0]}
+                                                          value={followUpDates[w.id] || new Date().toISOString().split('T')[0]}
                                                           onChange={(e) => setFollowUpDates(prev2 => ({ ...prev2, [w.id]: e.target.value }))}
                                                           style={{ padding: '4px 6px', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '12px' }} />
                                                         <button onClick={() => handleAddFollowUp(w.id)} disabled={followUpBusy === w.id} className="btn-action btn-purple" style={{ color: 'white' }}>
@@ -3311,7 +3348,7 @@ const [wipImportProgress, setWipImportProgress] = useState('');
                 <label className="resp-toggle"><input type="checkbox" checked={wipBreachedOnly} onChange={(ev) => setWipBreachedOnly(ev.target.checked)} /> Breached only</label>
                 <label className="resp-toggle"><input type="checkbox" checked={wipHideClosed} onChange={(ev) => setWipHideClosed(ev.target.checked)} /> Hide closed cases</label>
                 <label className="resp-toggle"><input type="checkbox" checked={wipNoFollowUp} onChange={(ev) => setWipNoFollowUp(ev.target.checked)} /> Never followed up</label>
-                <button className="btn-secondary" onClick={() => { setWipSearch(''); setWipPicFilter(''); setWipMineOnly(false); setWipBreachedOnly(false); setWipHideClosed(false); }}>Clear</button>
+                <button className="btn-secondary" onClick={() => { setWipSearch(''); setWipPicFilter(''); setWipMineOnly(false); setWipBreachedOnly(false); setWipHideClosed(false); setWipNoFollowUp(false); }}>Clear</button>
               </div>
 
               {wipTabLoading ? (
@@ -3392,6 +3429,19 @@ const [wipImportProgress, setWipImportProgress] = useState('');
                                     </span>
                                   )}
                                   <span style={{ flex: 1, minWidth: '200px' }}>{r.description}</span>
+                                  {r.kind === 'WIP' && r.wip_id && r.days !== null && (r.days < 0 || (Array.isArray(r.follow_ups) && r.follow_ups.length > 0)) && (
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                      <input type="date"
+                                        value={followUpDates[r.wip_id] || new Date().toISOString().split('T')[0]}
+                                        onChange={(ev) => setFollowUpDates(p => ({ ...p, [r.wip_id]: ev.target.value }))}
+                                        style={{ padding: '2px 4px', border: '1px solid #e2e8f0', borderRadius: '5px', fontSize: '11px' }} />
+                                      <button className="btn-action btn-purple" style={{ color: 'white', fontSize: '10px', padding: '2px 8px', marginRight: 0 }}
+                                        disabled={followUpBusy === r.wip_id}
+                                        onClick={() => handleAddFollowUpFromTab(r.wip_id)}>
+                                        {followUpBusy === r.wip_id ? '...' : '📅 Log'}
+                                      </button>
+                                    </span>
+                                  )}
                                   {many
                                     ? <button className="btn-action" style={{ fontSize: '10px', padding: '2px 6px' }} onClick={() => setWipExpanded(p => ({ ...p, [`${caseNum}|${li}`]: !open }))}>↳ {items.length} respondents {open ? '▾' : '▸'}</button>
                                     : (r.who && <span style={{ fontSize: '11px', color: '#94a3b8' }}>↳ {r.who}{r.action_type ? ` · ${r.action_type}` : ''}</span>)}
