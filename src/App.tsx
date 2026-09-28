@@ -5,7 +5,8 @@ import * as XLSX from 'xlsx';
 import CaseSummary, { CaseSummaryButton } from './CaseSummary';
 
 const supabaseUrl = 'https://yymvagbwxdaxrldrhmtm.supabase.co';
-const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl5bXZhZ2J3eGRheHJsZHJobXRtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY2OTEyMjcsImV4cCI6MjEwMjI2NzIyN30.W6WFGXzR7gMU0ln-vfMIJlsxwctWqnCv5Cb7qW8UXXY';
+const supabaseKey =
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl5bXZhZ2J3eGRheHJsZHJobXRtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY2OTEyMjcsImV4cCI6MjEwMjI2NzIyN30.W6WFGXzR7gMU0ln-vfMIJlsxwctWqnCv5Cb7qW8UXXY';
 const supabase = createClient(supabaseUrl, supabaseKey);
 // ==== ADMIN ACCESS CONTROL ====
 // Enter admin emails in lowercase. Only these users see edit buttons.
@@ -24,8 +25,10 @@ const isHoliday = (dateObj) => {
 
 const calculateBusinessDays = (dueDate) => {
   if (!dueDate) return 0;
-  const today = new Date(); today.setHours(0, 0, 0, 0);
-  const due = new Date(dueDate); due.setHours(0, 0, 0, 0);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const due = new Date(dueDate);
+  due.setHours(0, 0, 0, 0);
   let diff = 0;
   let cur = new Date(today);
   if (cur < due) {
@@ -64,7 +67,10 @@ const addBusinessDays = (startDate, daysToAdd) => {
 };
 
 // ==== SLA clock start: reactivation date if the case was reopened, otherwise the created date ====
-const toLocalDateStr = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const toLocalDateStr = (d) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
+    d.getDate()
+  ).padStart(2, '0')}`;
 const slaStartDate = (c) => {
   if (c && c.reactivated_at) {
     const d = new Date(c.reactivated_at);
@@ -75,10 +81,13 @@ const slaStartDate = (c) => {
 // ==== ADMIN: count business days between a start date and a due date ====
 const businessDaysFromStart = (startDate, dueDate) => {
   if (!startDate || !dueDate) return null;
-  const start = new Date(startDate); const due = new Date(dueDate);
+  const start = new Date(startDate);
+  const due = new Date(dueDate);
   if (isNaN(start.getTime()) || isNaN(due.getTime())) return null;
-  start.setHours(0, 0, 0, 0); due.setHours(0, 0, 0, 0);
-  let count = 0; let cur = new Date(start);
+  start.setHours(0, 0, 0, 0);
+  due.setHours(0, 0, 0, 0);
+  let count = 0;
+  let cur = new Date(start);
   while (cur < due) {
     cur.setDate(cur.getDate() + 1);
     const day = cur.getDay();
@@ -97,9 +106,12 @@ const formatDateTime = (timestamp) => {
   if (!timestamp) return '—';
   const date = new Date(timestamp);
   return date.toLocaleString('en-GB', {
-    day: '2-digit', month: 'short', year: 'numeric',
-    hour: '2-digit', minute: '2-digit',
-    timeZone: 'Asia/Kuala_Lumpur'
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'Asia/Kuala_Lumpur',
   });
 };
 
@@ -110,8 +122,8 @@ const normalizeCaseNumber = (val) => {
   if (s === '') return null;
   s = s.toUpperCase().replace(/\s+/g, '');
   if (s.includes('/')) {
-    const parts = s.split('/').filter(p => p !== '');
-    const cxnPart = parts.find(p => p.startsWith('CXN'));
+    const parts = s.split('/').filter((p) => p !== '');
+    const cxnPart = parts.find((p) => p.startsWith('CXN'));
     if (cxnPart) return cxnPart;
     if (parts.length > 0) return parts[0];
   }
@@ -124,9 +136,24 @@ const normalizeStatus = (val) => {
   if (raw === '') return null;
   const s = raw.toUpperCase().replace(/[^A-Z]/g, '');
   if (s.startsWith('CANCEL')) return 'CANCELLED';
-  if (s.startsWith('COMPLET') || s === 'DONE' || s === 'CLOSED' || s === 'PROBLEMSOLVED') return 'COMPLETED';
-  if (s === 'INPROGRESS' || s === 'OPEN' || s === 'ACTIVE' || s === 'PENDING' ||
-      s === 'WAITINGDISTRIBUTORRESPONSE' || s === 'PENDINGINFO' || s === 'FOLLOWUP' || s === 'PENDINGAPPROVAL') return 'IN PROGRESS';
+  if (
+    s.startsWith('COMPLET') ||
+    s === 'DONE' ||
+    s === 'CLOSED' ||
+    s === 'PROBLEMSOLVED'
+  )
+    return 'COMPLETED';
+  if (
+    s === 'INPROGRESS' ||
+    s === 'OPEN' ||
+    s === 'ACTIVE' ||
+    s === 'PENDING' ||
+    s === 'WAITINGDISTRIBUTORRESPONSE' ||
+    s === 'PENDINGINFO' ||
+    s === 'FOLLOWUP' ||
+    s === 'PENDINGAPPROVAL'
+  )
+    return 'IN PROGRESS';
   return raw;
 };
 
@@ -138,14 +165,25 @@ const normalizeCountry = (val) => {
   return s;
 };
 function App() {
-    const [session, setSession] = useState(null);
+  const [session, setSession] = useState(null);
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => setSession(session));
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => setSession(session));
+    supabase.auth
+      .getSession()
+      .then(({ data: { session } }) => setSession(session));
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) =>
+      setSession(session)
+    );
     return () => subscription.unsubscribe();
   }, []);
   if (!session) return <AuthScreen />;
-  return <Dashboard userEmail={session.user.email} onSignOut={() => supabase.auth.signOut()} />;
+  return (
+    <Dashboard
+      userEmail={session.user.email}
+      onSignOut={() => supabase.auth.signOut()}
+    />
+  );
 }
 
 function AuthScreen() {
@@ -156,7 +194,10 @@ function AuthScreen() {
   const handleLogin = async (e) => {
     e.preventDefault();
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
     if (error) setError(error.message);
     setLoading(false);
   };
@@ -169,10 +210,28 @@ function AuthScreen() {
           <p>Sign in to your dashboard</p>
         </div>
         <form onSubmit={handleLogin}>
-          <div className="form-group"><label>Email</label><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required /></div>
-          <div className="form-group"><label>Password</label><input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required /></div>
+          <div className="form-group">
+            <label>Email</label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
+          </div>
+          <div className="form-group">
+            <label>Password</label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+            />
+          </div>
           {error && <div className="error-box">{error}</div>}
-          <button type="submit" disabled={loading} className="btn-primary">{loading ? 'Signing in...' : 'Sign In'}</button>
+          <button type="submit" disabled={loading} className="btn-primary">
+            {loading ? 'Signing in...' : 'Sign In'}
+          </button>
         </form>
       </div>
     </div>
@@ -207,8 +266,15 @@ function Dashboard({ userEmail, onSignOut }) {
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 25;
 
-  const [sortConfig, setSortConfig] = useState({ key: 'sla_due_date', direction: 'ascending' });
-  const [filters, setFilters] = useState({ pic: '', status: '', da_in_force: '' });
+  const [sortConfig, setSortConfig] = useState({
+    key: 'sla_due_date',
+    direction: 'ascending',
+  });
+  const [filters, setFilters] = useState({
+    pic: '',
+    status: '',
+    da_in_force: '',
+  });
 
   const [showCaseForm, setShowCaseForm] = useState(false);
   const [newCaseNum, setNewCaseNum] = useState('');
@@ -218,14 +284,18 @@ function Dashboard({ userEmail, onSignOut }) {
 
   const [wipActionType, setWipActionType] = useState('');
   const [wipDesc, setWipDesc] = useState('');
-  const [wipDateSent, setWipDateSent] = useState(new Date().toISOString().split('T')[0]);
+  const [wipDateSent, setWipDateSent] = useState(
+    new Date().toISOString().split('T')[0]
+  );
   const [wipSlaDays, setWipSlaDays] = useState(2);
   const [wipNotes, setWipNotes] = useState('');
   const [editingWipId, setEditingWipId] = useState(null);
 
   const [addingDaFor, setAddingDaFor] = useState(null);
   const [newDaAction, setNewDaAction] = useState('');
-  const [newDaDate, setNewDaDate] = useState(new Date().toISOString().split('T')[0]);
+  const [newDaDate, setNewDaDate] = useState(
+    new Date().toISOString().split('T')[0]
+  );
   const [expandedDAs, setExpandedDAs] = useState({});
   const [newViolation, setNewViolation] = useState({});
 
@@ -239,7 +309,9 @@ function Dashboard({ userEmail, onSignOut }) {
   const [editDaActionDate, setEditDaActionDate] = useState('');
   const [addingSubAction, setAddingSubAction] = useState(null);
   const [newSubActionDesc, setNewSubActionDesc] = useState('');
-  const [newSubActionDate, setNewSubActionDate] = useState(new Date().toISOString().split('T')[0]);
+  const [newSubActionDate, setNewSubActionDate] = useState(
+    new Date().toISOString().split('T')[0]
+  );
   const [newSubActionSla, setNewSubActionSla] = useState(2);
   const [editingSubActionEntry, setEditingSubActionEntry] = useState(null);
   const [editSubActionDesc, setEditSubActionDesc] = useState('');
@@ -249,48 +321,78 @@ function Dashboard({ userEmail, onSignOut }) {
   const [hideRespondents, setHideRespondents] = useState(true);
   // ==== ADMIN: case edit state ====
   const isRealAdmin = ADMIN_EMAILS.includes((userEmail || '').toLowerCase());
-const isAdmin = isRealAdmin && window.localStorage.getItem('viewAsStandard') !== 'yes';
-const [editingCase, setEditingCase] = useState(false);
-const [caseForm, setCaseForm] = useState({
-  case_number: '', pic: '', country: '', sla_due_date: '', created_on: '', sla_days: '', priority: 'Medium',
-  stage: '', case_status: 'IN PROGRESS', remarks: '', date_completed: '', case_folder_no: '', findings_url: '',
-  complainant_name: '', complainant_id: '', complainant_country: ''
-});
-// ==== ADMIN: respondent edit state ====
-const [editingRespondentId, setEditingRespondentId] = useState(null);
-const [respondentEdits, setRespondentEdits] = useState({});
-// ==== Close-case chooser state ====
-const [showCloseOptions, setShowCloseOptions] = useState(false);
-const [showMyCases, setShowMyCases] = useState(false);
-const [analyticsYear, setAnalyticsYear] = useState(String(new Date().getFullYear()));
+  const isAdmin =
+    isRealAdmin && window.localStorage.getItem('viewAsStandard') !== 'yes';
+  const [editingCase, setEditingCase] = useState(false);
+  const [caseForm, setCaseForm] = useState({
+    case_number: '',
+    pic: '',
+    country: '',
+    sla_due_date: '',
+    created_on: '',
+    sla_days: '',
+    priority: 'Medium',
+    stage: '',
+    case_status: 'IN PROGRESS',
+    remarks: '',
+    date_completed: '',
+    case_folder_no: '',
+    findings_url: '',
+    complainant_name: '',
+    complainant_id: '',
+    complainant_country: '',
+  });
+  // ==== ADMIN: respondent edit state ====
+  const [editingRespondentId, setEditingRespondentId] = useState(null);
+  const [respondentEdits, setRespondentEdits] = useState({});
+  // ==== Close-case chooser state ====
+  const [showCloseOptions, setShowCloseOptions] = useState(false);
+  const [showMyCases, setShowMyCases] = useState(false);
+  const [analyticsYear, setAnalyticsYear] = useState(
+    String(new Date().getFullYear())
+  );
 
-const fetchCases = async (silent = false) => {
-  if (!silent) setLoading(true);
-  // PERF FIX (two-stage load):
-  // WAVE 1 — just the cases. Small and fast, so the list appears almost at once.
-  const { data, error } = await supabase
-    .from('cases')
-    .select('*')
-    .order('sla_due_date', { ascending: true });
-  if (error) { console.error('Error:', error); setLoading(false); return; }
-  setCases(data || []);
-  setLoading(false);
-  setCasesDetailLoaded(false);
+  const fetchCases = async (silent = false) => {
+    if (!silent) setLoading(true);
+    // PERF FIX (two-stage load):
+    // WAVE 1 — just the cases. Small and fast, so the list appears almost at once.
+    const { data, error } = await supabase
+      .from('cases')
+      .select('*')
+      .order('sla_due_date', { ascending: true });
+    if (error) {
+      console.error('Error:', error);
+      setLoading(false);
+      return;
+    }
+    setCases(data || []);
+    setLoading(false);
+    setCasesDetailLoaded(false);
 
-  // WAVE 2 — respondent + WIP data, fetched behind the scenes and merged in
-  // when it arrives. Powers the DA In Force / Active WIP columns and name search.
-  const { data: detail } = await supabase
-    .from('cases')
-    .select('case_number, disciplinary_actions(id, case_number, respondent_name, respondent_id, complainant_name, complainant_id, current_action, previous_action, da_confirmed, action_history), wip_actions(status)')
-    .order('sla_due_date', { ascending: true });
-  if (!detail) return;
-  const byCase = new Map(detail.map(d => [d.case_number, d]));
-  setCases(prev => prev.map(c => {
-    const d = byCase.get(c.case_number);
-    return d ? { ...c, disciplinary_actions: d.disciplinary_actions, wip_actions: d.wip_actions } : c;
-  }));
-  setCasesDetailLoaded(true);
-};
+    // WAVE 2 — respondent + WIP data, fetched behind the scenes and merged in
+    // when it arrives. Powers the DA In Force / Active WIP columns and name search.
+    const { data: detail } = await supabase
+      .from('cases')
+      .select(
+        'case_number, disciplinary_actions(id, case_number, respondent_name, respondent_id, complainant_name, complainant_id, current_action, previous_action, da_confirmed, action_history), wip_actions(status)'
+      )
+      .order('sla_due_date', { ascending: true });
+    if (!detail) return;
+    const byCase = new Map(detail.map((d) => [d.case_number, d]));
+    setCases((prev) =>
+      prev.map((c) => {
+        const d = byCase.get(c.case_number);
+        return d
+          ? {
+              ...c,
+              disciplinary_actions: d.disciplinary_actions,
+              wip_actions: d.wip_actions,
+            }
+          : c;
+      })
+    );
+    setCasesDetailLoaded(true);
+  };
 
   // PERF FIX: refresh ONE case in the on-screen list instead of re-downloading
   // all 263 cases with their respondent records. Used after every save.
@@ -298,64 +400,88 @@ const fetchCases = async (silent = false) => {
     if (!caseNum) return;
     const { data } = await supabase
       .from('cases')
-      .select('*, disciplinary_actions(id, case_number, respondent_name, respondent_id, complainant_name, complainant_id, current_action, previous_action, da_confirmed, action_history), wip_actions(status)')
+      .select(
+        '*, disciplinary_actions(id, case_number, respondent_name, respondent_id, complainant_name, complainant_id, current_action, previous_action, da_confirmed, action_history), wip_actions(status)'
+      )
       .eq('case_number', caseNum)
       .single();
     if (!data) return;
-    setCases(prev => prev.map(c => c.case_number === caseNum ? data : c));
+    setCases((prev) => prev.map((c) => (c.case_number === caseNum ? data : c)));
   };
 
   useEffect(() => {
     fetchCases();
-    supabase.from('mapping_rules').select('*').then(({ data }) => setMappingRules(data || []));
+    supabase
+      .from('mapping_rules')
+      .select('*')
+      .then(({ data }) => setMappingRules(data || []));
   }, []);
 
-  const cleanVal = (val) => val === undefined || val === null ? null : String(val).trim() === '' ? null : String(val).trim();
-// ==== PIC NAME CLEANUP ====
+  const cleanVal = (val) =>
+    val === undefined || val === null
+      ? null
+      : String(val).trim() === ''
+      ? null
+      : String(val).trim();
+  // ==== PIC NAME CLEANUP ====
   // Messy spellings map to one tidy name. Add new variants on the left.
   const PIC_ALIASES = {
     'alex chok chok': 'Alex Chok',
     'alex chok': 'Alex Chok',
-    'dennis': 'Dennis Ho',
+    dennis: 'Dennis Ho',
     'dennis ho': 'Dennis Ho',
-    'izzati': 'Nur Izzati Shazana Mohamad Fadzil',
-    'nur izzati shazana mohamad fadzil': 'Nur Izzati Shazana Mohamad Fadzil'
+    izzati: 'Nur Izzati Shazana Mohamad Fadzil',
+    'nur izzati shazana mohamad fadzil': 'Nur Izzati Shazana Mohamad Fadzil',
   };
   const tidyPic = (val) => {
-    const raw = String(val || '').replace(/\s+/g, ' ').trim();
+    const raw = String(val || '')
+      .replace(/\s+/g, ' ')
+      .trim();
     if (!raw) return '';
     return PIC_ALIASES[raw.toLowerCase()] || raw;
   };
   const formatDateString = (dateStr) => {
     if (!dateStr && dateStr !== 0) return null;
-    if (typeof dateStr === 'string' && !isNaN(dateStr) && dateStr.trim() !== '') dateStr = parseFloat(dateStr);
+    if (typeof dateStr === 'string' && !isNaN(dateStr) && dateStr.trim() !== '')
+      dateStr = parseFloat(dateStr);
     if (typeof dateStr === 'number') {
       const utc_days = Math.floor(dateStr - 25569);
       const date_info = new Date(utc_days * 86400 * 1000);
-      if (!isNaN(date_info.getTime())) return `${date_info.getFullYear()}-${String(date_info.getMonth() + 1).padStart(2, '0')}-${String(date_info.getDate()).padStart(2, '0')}`;
+      if (!isNaN(date_info.getTime()))
+        return `${date_info.getFullYear()}-${String(
+          date_info.getMonth() + 1
+        ).padStart(2, '0')}-${String(date_info.getDate()).padStart(2, '0')}`;
     }
     const cleanStr = String(dateStr).trim().split(' ')[0];
     const parts = cleanStr.split(/[-/]/);
     if (parts.length === 3) {
-      let [p1, p2, p3] = parts.map(p => parseInt(p, 10));
+      let [p1, p2, p3] = parts.map((p) => parseInt(p, 10));
       if (!isNaN(p1) && !isNaN(p2) && !isNaN(p3)) {
         if (p3 < 100) p3 = 2000 + p3;
         let dateObj = new Date(p3, p2 - 1, p1);
         if (p2 > 12 && p1 <= 12) dateObj = new Date(p3, p1 - 1, p2);
-        if (!isNaN(dateObj.getTime())) return `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}-${String(dateObj.getDate()).padStart(2, '0')}`;
+        if (!isNaN(dateObj.getTime()))
+          return `${dateObj.getFullYear()}-${String(
+            dateObj.getMonth() + 1
+          ).padStart(2, '0')}-${String(dateObj.getDate()).padStart(2, '0')}`;
       }
     }
     const fallbackDate = new Date(cleanStr);
     if (!isNaN(fallbackDate.getTime())) {
       const year = fallbackDate.getFullYear();
-      if (year > 1900 && year < 2100) return `${year}-${String(fallbackDate.getMonth() + 1).padStart(2, '0')}-${String(fallbackDate.getDate()).padStart(2, '0')}`;
+      if (year > 1900 && year < 2100)
+        return `${year}-${String(fallbackDate.getMonth() + 1).padStart(
+          2,
+          '0'
+        )}-${String(fallbackDate.getDate()).padStart(2, '0')}`;
     }
     return null;
   };
 
   const chunkArray = (array, size) => {
     const result = [];
-    for (let i = 0; i < array.length; i += size) result.push(array.slice(i, i + size));
+    for (let i = 0; i < array.length; i += size)
+      result.push(array.slice(i, i + size));
     return result;
   };
 
@@ -364,8 +490,13 @@ const fetchCases = async (silent = false) => {
       const ws = wb.Sheets[name];
       const json = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
       if (json.length > 0) {
-        const headers = json[0].map(h => String(h || '').trim().toLowerCase());
-        if (headers.some(h => h.includes(headerSearch.toLowerCase()))) return name;
+        const headers = json[0].map((h) =>
+          String(h || '')
+            .trim()
+            .toLowerCase()
+        );
+        if (headers.some((h) => h.includes(headerSearch.toLowerCase())))
+          return name;
       }
     }
     return null;
@@ -387,10 +518,22 @@ const fetchCases = async (silent = false) => {
         const findSheetByHeaders = (phrases) => {
           for (let name of wb.SheetNames) {
             const ws = wb.Sheets[name];
-            const json = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
+            const json = XLSX.utils.sheet_to_json(ws, {
+              header: 1,
+              defval: null,
+            });
             if (json.length > 0) {
-              const headers = json[0].map(h => String(h || '').trim().toLowerCase());
-              if (headers.some(h => phrases.some(p => norm(h).includes(norm(p))))) return name;
+              const headers = json[0].map((h) =>
+                String(h || '')
+                  .trim()
+                  .toLowerCase()
+              );
+              if (
+                headers.some((h) =>
+                  phrases.some((p) => norm(h).includes(norm(p)))
+                )
+              )
+                return name;
             }
           }
           return null;
@@ -402,212 +545,425 @@ const fetchCases = async (silent = false) => {
         let indiaCaseCount = 0;
 
         // A) MASTER: sheet named "sla_tracker"
-        const slaSheetName = wb.SheetNames.find(name => name.trim().toLowerCase() === 'sla_tracker');
+        const slaSheetName = wb.SheetNames.find(
+          (name) => name.trim().toLowerCase() === 'sla_tracker'
+        );
         if (slaSheetName) {
-          const json = XLSX.utils.sheet_to_json(wb.Sheets[slaSheetName], { defval: null });
-          const masterCases = json.map(row => {
-            const getVal = (terms) => {
-              const list = Array.isArray(terms) ? terms : [terms];
-              for (const t of list) {
-                for (let k in row) { if (norm(k).includes(norm(t))) return row[k]; }
-              }
-              return null;
-            };
-            const caseNum = normalizeCaseNumber(cleanVal(getVal(['CASE NUMBER', 'Case Number', 'CXN No'])));
-            if (!caseNum) return null;
-            return {
-              case_number: caseNum, created_on: formatDateString(cleanVal(getVal(['CREATED ON']))),
-              sla_due_date: formatDateString(cleanVal(getVal(['CASE DUE DATE', 'SLA DATE', 'Due Date']))),
-              country: normalizeCountry(cleanVal(getVal(['COUNTRY']))), pic: cleanVal(getVal(['PIC'])),
-              priority: cleanVal(getVal(['PRIORITY'])) || 'Medium',
-              case_status: normalizeStatus(cleanVal(getVal(['CASE STATUS', 'Status']))) || 'IN PROGRESS',
-              stage: cleanVal(getVal(['STAGE OF CASE'])),
-              date_completed: formatDateString(cleanVal(getVal(['DATE COMPLETED']))),
-              remarks: cleanVal(getVal(['REMARKS']))
-            };
-          }).filter(Boolean);
+          const json = XLSX.utils.sheet_to_json(wb.Sheets[slaSheetName], {
+            defval: null,
+          });
+          const masterCases = json
+            .map((row) => {
+              const getVal = (terms) => {
+                const list = Array.isArray(terms) ? terms : [terms];
+                for (const t of list) {
+                  for (let k in row) {
+                    if (norm(k).includes(norm(t))) return row[k];
+                  }
+                }
+                return null;
+              };
+              const caseNum = normalizeCaseNumber(
+                cleanVal(getVal(['CASE NUMBER', 'Case Number', 'CXN No']))
+              );
+              if (!caseNum) return null;
+              return {
+                case_number: caseNum,
+                created_on: formatDateString(cleanVal(getVal(['CREATED ON']))),
+                sla_due_date: formatDateString(
+                  cleanVal(getVal(['CASE DUE DATE', 'SLA DATE', 'Due Date']))
+                ),
+                country: normalizeCountry(cleanVal(getVal(['COUNTRY']))),
+                pic: cleanVal(getVal(['PIC'])),
+                priority: cleanVal(getVal(['PRIORITY'])) || 'Medium',
+                case_status:
+                  normalizeStatus(
+                    cleanVal(getVal(['CASE STATUS', 'Status']))
+                  ) || 'IN PROGRESS',
+                stage: cleanVal(getVal(['STAGE OF CASE'])),
+                date_completed: formatDateString(
+                  cleanVal(getVal(['DATE COMPLETED']))
+                ),
+                remarks: cleanVal(getVal(['REMARKS'])),
+              };
+            })
+            .filter(Boolean);
           masterCaseCount = masterCases.length;
           casesToUpsert = masterCases;
         }
 
         // B) INDIA FILE: correct column structure
-        const indiaSheetName = findSheetByHeaders(['Complaint/Respondent', 'Stage Status']);
+        const indiaSheetName = findSheetByHeaders([
+          'Complaint/Respondent',
+          'Stage Status',
+        ]);
         if (indiaSheetName && indiaSheetName !== slaSheetName) {
-          const json = XLSX.utils.sheet_to_json(wb.Sheets[indiaSheetName], { defval: null });
-          const indiaCases = json.map(row => {
-            const getVal = (terms) => {
-              const list = Array.isArray(terms) ? terms : [terms];
-              for (const t of list) {
-                for (let k in row) { if (norm(k).includes(norm(t))) return row[k]; }
-              }
-              return null;
-            };
-            const caseNum = normalizeCaseNumber(cleanVal(getVal(['Case Number'])));
-            if (!caseNum) return null;
-            const role = String(cleanVal(getVal(['Complaint/Respondent'])) || '').trim();
-            const isRespondent = role.toLowerCase().includes('respondent');
-            const customerStr = String(cleanVal(getVal(['Customer'])) || '').trim();
-            let personName = null;
-            // FIX: the IR ID column wins. Only dig the ID out of the Customer
-            // text when the IR ID column is genuinely empty. Previously a messy
-            // Customer value could block a perfectly good IR ID from being read.
-            let personId = cleanVal(getVal(['IR ID']));
-            if (customerStr) {
-              // Strip a leading IR:<id> (or ID:/IR-) prefix off the name, however it's spaced
-              const m = customerStr.match(/^\s*IR\s*[:\-]?\s*(\S+)\s+(.*)$/i);
-              if (m) {
-                if (!personId) personId = m[1];
-                personName = m[2].trim() || null;
-              } else {
-                // Company mailboxes look like: "Qnet India Grievance" grievancecell@qnetindia.in
-                personName = customerStr.replace(/^"(.*?)"\s*.*$/, '$1').trim() || customerStr;
-              }
-            }
-            if (personId) personId = String(personId).trim().toUpperCase();
-            const status = normalizeStatus(cleanVal(getVal(['Case Status']))) || 'IN PROGRESS';
-            const country = normalizeCountry(cleanVal(getVal(['Country']))) || 'India';
-            const stage = cleanVal(getVal(['Stage Status']));
-            const pic = cleanVal(getVal(['In-Charge']));
-            const created = formatDateString(cleanVal(getVal(['Created On'])));
-            const dueRaw = formatDateString(cleanVal(getVal(['Due Date'])));
-            const priority = cleanVal(getVal(['Priority'])) || 'Medium';
-            const noticeType = cleanVal(getVal(['Type of Notices Issued']));
-            // CLASSIFIER FIX: the two anomaly columns the app was blind to
-            const caseSummaryStatus = cleanVal(getVal(['Case Summary Status']));
-            const currentStatus = cleanVal(getVal(['Current Status']));
-            let slaDue = dueRaw;
-            if (!slaDue) { const base = created ? new Date(created) : new Date(); base.setDate(base.getDate() + 30); slaDue = base.toISOString().split('T')[0]; }
-            if (personName || personId) {
-              const pr = {
-                case_number: caseNum, current_action: noticeType,
-                remarks: cleanVal(getVal(['Remarks'])),
-                unique_key: isRespondent ? `${caseNum}|${personId || personName}` : `${caseNum}|complainant_${personId || personName}`
+          const json = XLSX.utils.sheet_to_json(wb.Sheets[indiaSheetName], {
+            defval: null,
+          });
+          const indiaCases = json
+            .map((row) => {
+              const getVal = (terms) => {
+                const list = Array.isArray(terms) ? terms : [terms];
+                for (const t of list) {
+                  for (let k in row) {
+                    if (norm(k).includes(norm(t))) return row[k];
+                  }
+                }
+                return null;
               };
-              if (isRespondent) { pr.respondent_name = personName; pr.respondent_id = personId; pr.respondent_country = country; }
-              else { pr.complainant_name = personName; pr.complainant_id = personId; pr.complainant_country = country; }
-              daDataToInsert.push(pr);
-            }
-            return {
-              case_number: caseNum, created_on: created, sla_due_date: slaDue, country: country, pic: pic,
-              priority: priority, case_status: status, stage: stage,
-              case_summary_status: caseSummaryStatus,
-              current_status: currentStatus,
-              remarks: noticeType ? `[${noticeType}]` : cleanVal(getVal(['Remarks']))
-            };
-          }).filter(Boolean);
+              const caseNum = normalizeCaseNumber(
+                cleanVal(getVal(['Case Number']))
+              );
+              if (!caseNum) return null;
+              const role = String(
+                cleanVal(getVal(['Complaint/Respondent'])) || ''
+              ).trim();
+              const isRespondent = role.toLowerCase().includes('respondent');
+              const customerStr = String(
+                cleanVal(getVal(['Customer'])) || ''
+              ).trim();
+              let personName = null;
+              // FIX: the IR ID column wins. Only dig the ID out of the Customer
+              // text when the IR ID column is genuinely empty. Previously a messy
+              // Customer value could block a perfectly good IR ID from being read.
+              let personId = cleanVal(getVal(['IR ID']));
+              if (customerStr) {
+                // Strip a leading IR:<id> (or ID:/IR-) prefix off the name, however it's spaced
+                const m = customerStr.match(/^\s*IR\s*[:\-]?\s*(\S+)\s+(.*)$/i);
+                if (m) {
+                  if (!personId) personId = m[1];
+                  personName = m[2].trim() || null;
+                } else {
+                  // Company mailboxes look like: "Qnet India Grievance" grievancecell@qnetindia.in
+                  personName =
+                    customerStr.replace(/^"(.*?)"\s*.*$/, '$1').trim() ||
+                    customerStr;
+                }
+              }
+              if (personId) personId = String(personId).trim().toUpperCase();
+              const status =
+                normalizeStatus(cleanVal(getVal(['Case Status']))) ||
+                'IN PROGRESS';
+              const country =
+                normalizeCountry(cleanVal(getVal(['Country']))) || 'India';
+              const stage = cleanVal(getVal(['Stage Status']));
+              const pic = cleanVal(getVal(['In-Charge']));
+              const created = formatDateString(
+                cleanVal(getVal(['Created On']))
+              );
+              const dueRaw = formatDateString(cleanVal(getVal(['Due Date'])));
+              const priority = cleanVal(getVal(['Priority'])) || 'Medium';
+              const noticeType = cleanVal(getVal(['Type of Notices Issued']));
+              // CLASSIFIER FIX: the two anomaly columns the app was blind to
+              const caseSummaryStatus = cleanVal(
+                getVal(['Case Summary Status'])
+              );
+              const currentStatus = cleanVal(getVal(['Current Status']));
+              let slaDue = dueRaw;
+              if (!slaDue) {
+                const base = created ? new Date(created) : new Date();
+                base.setDate(base.getDate() + 30);
+                slaDue = base.toISOString().split('T')[0];
+              }
+              if (personName || personId) {
+                const pr = {
+                  case_number: caseNum,
+                  current_action: noticeType,
+                  remarks: cleanVal(getVal(['Remarks'])),
+                  unique_key: isRespondent
+                    ? `${caseNum}|${personId || personName}`
+                    : `${caseNum}|complainant_${personId || personName}`,
+                };
+                if (isRespondent) {
+                  pr.respondent_name = personName;
+                  pr.respondent_id = personId;
+                  pr.respondent_country = country;
+                } else {
+                  pr.complainant_name = personName;
+                  pr.complainant_id = personId;
+                  pr.complainant_country = country;
+                }
+                daDataToInsert.push(pr);
+              }
+              return {
+                case_number: caseNum,
+                created_on: created,
+                sla_due_date: slaDue,
+                country: country,
+                pic: pic,
+                priority: priority,
+                case_status: status,
+                stage: stage,
+                case_summary_status: caseSummaryStatus,
+                current_status: currentStatus,
+                remarks: noticeType
+                  ? `[${noticeType}]`
+                  : cleanVal(getVal(['Remarks'])),
+              };
+            })
+            .filter(Boolean);
           indiaCaseCount = indiaCases.length;
           casesToUpsert = casesToUpsert.concat(indiaCases);
           // CLEANUP: remember which case numbers were in this file, so the
           // stale-case scan can tell real cases from leftovers.
-          setIndiaFileCaseNumbers(indiaCases.map(c => c.case_number));
+          setIndiaFileCaseNumbers(indiaCases.map((c) => c.case_number));
         }
 
         // C) RESPONDENT SHEET (shared folder or master DA sheet)
-        const daSheetName = findSheetByHeaders(['Action Taken', 'Current Action', 'Respondent Name', "Respondent's Name"]);
-        if (daSheetName && daSheetName !== slaSheetName && daSheetName !== indiaSheetName) {
-          const json = XLSX.utils.sheet_to_json(wb.Sheets[daSheetName], { defval: null });
-          daDataToInsert = daDataToInsert.concat(json.map(row => {
-            const getVal = (terms) => {
-              const list = Array.isArray(terms) ? terms : [terms];
-              for (const t of list) {
-                for (let k in row) { if (norm(k).includes(norm(t))) return row[k]; }
-              }
-              return null;
-            };
-            const caseNum = normalizeCaseNumber(cleanVal(getVal(['CXN No', 'CXN #', 'Case Number', 'Case No'])));
-            const respId = cleanVal(getVal(["Respondent ID#", 'Respondent ID No', "Respondents' IR ID No", 'IR ID']));
-            const respName = cleanVal(getVal(['Respondent Name', "Respondent's Name"]));
-            let history = [];
-            for (let i = 1; i <= 4; i++) {
-              const action = cleanVal(getVal([`Action Taken ${i}`]));
-              const date = formatDateString(cleanVal(getVal([`Date of execution ${i}`])));
-              if (action) history.push({ step: i, action, date });
-            }
-            if (history.length === 0) {
-              const currAction = cleanVal(getVal(['Current Action', 'Action Taken', 'Action']));
-              const currDate = formatDateString(cleanVal(getVal(['Current Action (Execution Date)', 'Execution Date', 'Date of Execution'])));
-              if (currAction) history.push({ step: 1, action: currAction, date: currDate });
-              const prevAction = cleanVal(getVal(['Previous Action']));
-              const prevDate = formatDateString(cleanVal(getVal(['(Previous Action (Execution Date)', 'Previous Action (Execution Date)'])));
-              if (prevAction) history.push({ step: 2, action: prevAction, date: prevDate });
-            }
-            const latestAction = history.length > 0 ? history[history.length - 1].action : cleanVal(getVal(['Current Action', 'Action Taken', 'Action']));
-            const latestDate = history.length > 0 ? history[history.length - 1].date : formatDateString(cleanVal(getVal(['Execution Date'])));
-            const violationType = cleanVal(getVal(['Violation Type', 'Type of Violation', 'Violation']));
-            const vCategory = cleanVal(getVal(['Violation Category']));
-            const refId = cleanVal(getVal(["Respondent's Referrer ID", 'Referrer ID']));
-            const refName = cleanVal(getVal(["Respondent's Referrer Name", 'Referrer Name']));
-            const upId = cleanVal(getVal(['nearest VA Upline ID', 'VA Upline ID']));
-            const upName = cleanVal(getVal(['nearest VA Upline Name', 'VA Upline Name']));
-            const teamName = cleanVal(getVal(['Team Name']));
-            const sentBy = cleanVal(getVal(['Sent by']));
-            const nidNo = cleanVal(getVal(['NID case no', 'NID Case No']));
-            const dateRecv = formatDateString(cleanVal(getVal(['Date of instruction received'])));
-            const respCountry = normalizeCountry(cleanVal(getVal(['Country'])));
-            const uniqueBase = respId || respName;
-            const rawComp = cleanVal(getVal(["Complainant Name", "Complainant's Name and IR ID No"]));
-            const explicitCompId = cleanVal(getVal(['Complainant ID#']));
-            const compList = parseComplainants(rawComp);
-            if (!caseNum || !uniqueBase) return null;
-            return compList.map((c, ci) => ({
-              case_number: caseNum,
-              complainant_name: c.name,
-              complainant_id: explicitCompId || c.id,
-              complainant_cust_id: c.cust,
-              respondent_name: respName, respondent_id: respId,
-              current_action: latestAction, execution_date: latestDate,
-              action_history: history.length > 0 ? history : null,
-              violations: violationType ? [violationType] : undefined,
-              remarks: cleanVal(getVal(['Remarks'])),
-              violation_category: vCategory,
-              referrer_id: refId,
-              referrer_name: refName,
-              upline_id: upId,
-              upline_name: upName,
-              team_name: teamName,
-              sent_by: sentBy,
-              nid_case_no: nidNo,
-              date_received: dateRecv,
-              respondent_country: respCountry,
-              unique_key: `${caseNum}|${uniqueBase}|${c.id || c.name || ci}`
-            }));
-          }).flat().filter(item => item && item.case_number && item.unique_key));
+        const daSheetName = findSheetByHeaders([
+          'Action Taken',
+          'Current Action',
+          'Respondent Name',
+          "Respondent's Name",
+        ]);
+        if (
+          daSheetName &&
+          daSheetName !== slaSheetName &&
+          daSheetName !== indiaSheetName
+        ) {
+          const json = XLSX.utils.sheet_to_json(wb.Sheets[daSheetName], {
+            defval: null,
+          });
+          daDataToInsert = daDataToInsert.concat(
+            json
+              .map((row) => {
+                const getVal = (terms) => {
+                  const list = Array.isArray(terms) ? terms : [terms];
+                  for (const t of list) {
+                    for (let k in row) {
+                      if (norm(k).includes(norm(t))) return row[k];
+                    }
+                  }
+                  return null;
+                };
+                const caseNum = normalizeCaseNumber(
+                  cleanVal(
+                    getVal(['CXN No', 'CXN #', 'Case Number', 'Case No'])
+                  )
+                );
+                const respId = cleanVal(
+                  getVal([
+                    'Respondent ID#',
+                    'Respondent ID No',
+                    "Respondents' IR ID No",
+                    'IR ID',
+                  ])
+                );
+                const respName = cleanVal(
+                  getVal(['Respondent Name', "Respondent's Name"])
+                );
+                let history = [];
+                for (let i = 1; i <= 4; i++) {
+                  const action = cleanVal(getVal([`Action Taken ${i}`]));
+                  const date = formatDateString(
+                    cleanVal(getVal([`Date of execution ${i}`]))
+                  );
+                  if (action) history.push({ step: i, action, date });
+                }
+                if (history.length === 0) {
+                  const currAction = cleanVal(
+                    getVal(['Current Action', 'Action Taken', 'Action'])
+                  );
+                  const currDate = formatDateString(
+                    cleanVal(
+                      getVal([
+                        'Current Action (Execution Date)',
+                        'Execution Date',
+                        'Date of Execution',
+                      ])
+                    )
+                  );
+                  if (currAction)
+                    history.push({
+                      step: 1,
+                      action: currAction,
+                      date: currDate,
+                    });
+                  const prevAction = cleanVal(getVal(['Previous Action']));
+                  const prevDate = formatDateString(
+                    cleanVal(
+                      getVal([
+                        '(Previous Action (Execution Date)',
+                        'Previous Action (Execution Date)',
+                      ])
+                    )
+                  );
+                  if (prevAction)
+                    history.push({
+                      step: 2,
+                      action: prevAction,
+                      date: prevDate,
+                    });
+                }
+                const latestAction =
+                  history.length > 0
+                    ? history[history.length - 1].action
+                    : cleanVal(
+                        getVal(['Current Action', 'Action Taken', 'Action'])
+                      );
+                const latestDate =
+                  history.length > 0
+                    ? history[history.length - 1].date
+                    : formatDateString(cleanVal(getVal(['Execution Date'])));
+                const violationType = cleanVal(
+                  getVal(['Violation Type', 'Type of Violation', 'Violation'])
+                );
+                const vCategory = cleanVal(getVal(['Violation Category']));
+                const refId = cleanVal(
+                  getVal(["Respondent's Referrer ID", 'Referrer ID'])
+                );
+                const refName = cleanVal(
+                  getVal(["Respondent's Referrer Name", 'Referrer Name'])
+                );
+                const upId = cleanVal(
+                  getVal(['nearest VA Upline ID', 'VA Upline ID'])
+                );
+                const upName = cleanVal(
+                  getVal(['nearest VA Upline Name', 'VA Upline Name'])
+                );
+                const teamName = cleanVal(getVal(['Team Name']));
+                const sentBy = cleanVal(getVal(['Sent by']));
+                const nidNo = cleanVal(getVal(['NID case no', 'NID Case No']));
+                const dateRecv = formatDateString(
+                  cleanVal(getVal(['Date of instruction received']))
+                );
+                const respCountry = normalizeCountry(
+                  cleanVal(getVal(['Country']))
+                );
+                const uniqueBase = respId || respName;
+                const rawComp = cleanVal(
+                  getVal([
+                    'Complainant Name',
+                    "Complainant's Name and IR ID No",
+                  ])
+                );
+                const explicitCompId = cleanVal(getVal(['Complainant ID#']));
+                const compList = parseComplainants(rawComp);
+                if (!caseNum || !uniqueBase) return null;
+                return compList.map((c, ci) => ({
+                  case_number: caseNum,
+                  complainant_name: c.name,
+                  complainant_id: explicitCompId || c.id,
+                  complainant_cust_id: c.cust,
+                  respondent_name: respName,
+                  respondent_id: respId,
+                  current_action: latestAction,
+                  execution_date: latestDate,
+                  action_history: history.length > 0 ? history : null,
+                  violations: violationType ? [violationType] : undefined,
+                  remarks: cleanVal(getVal(['Remarks'])),
+                  violation_category: vCategory,
+                  referrer_id: refId,
+                  referrer_name: refName,
+                  upline_id: upId,
+                  upline_name: upName,
+                  team_name: teamName,
+                  sent_by: sentBy,
+                  nid_case_no: nidNo,
+                  date_received: dateRecv,
+                  respondent_country: respCountry,
+                  unique_key: `${caseNum}|${uniqueBase}|${
+                    c.id || c.name || ci
+                  }`,
+                }));
+              })
+              .flat()
+              .filter((item) => item && item.case_number && item.unique_key)
+          );
         }
 
-        if (casesToUpsert.length === 0 && daDataToInsert.length === 0) { setUploadMessage('❌ Error: No recognized sheets found.'); setUploading(false); return; }
+        if (casesToUpsert.length === 0 && daDataToInsert.length === 0) {
+          setUploadMessage('❌ Error: No recognized sheets found.');
+          setUploading(false);
+          return;
+        }
 
         setUploadMessage('3/6 Syncing cases...');
-        if (casesToUpsert.length > 0) for (let chunk of chunkArray(casesToUpsert, 100)) await supabase.from('cases').upsert(chunk, { onConflict: 'case_number' });
+        if (casesToUpsert.length > 0)
+          for (let chunk of chunkArray(casesToUpsert, 100))
+            await supabase
+              .from('cases')
+              .upsert(chunk, { onConflict: 'case_number' });
 
         setUploadMessage('4/6 Ensuring parent cases exist...');
-        const { data: existingCases } = await supabase.from('cases').select('case_number');
-        const existingSet = new Set(existingCases.map(c => c.case_number));
-        const missingCases = [...new Set(daDataToInsert.map(item => item.case_number))].filter(cn => !existingSet.has(cn) && !casesToUpsert.some(c => c.case_number === cn)).map(cn => {
-          const today = new Date(); const slaDate = new Date(today.setDate(today.getDate() + 30)).toISOString().split('T')[0];
-          return { case_number: cn, case_status: 'IN PROGRESS', sla_due_date: slaDate, created_on: new Date().toISOString().split('T')[0], priority: 'Medium', stage: 'Stage 1' };
-        });
-        if (missingCases.length > 0) for (let chunk of chunkArray(missingCases, 100)) await supabase.from('cases').upsert(chunk, { onConflict: 'case_number', ignoreDuplicates: true });
+        const { data: existingCases } = await supabase
+          .from('cases')
+          .select('case_number');
+        const existingSet = new Set(existingCases.map((c) => c.case_number));
+        const missingCases = [
+          ...new Set(daDataToInsert.map((item) => item.case_number)),
+        ]
+          .filter(
+            (cn) =>
+              !existingSet.has(cn) &&
+              !casesToUpsert.some((c) => c.case_number === cn)
+          )
+          .map((cn) => {
+            const today = new Date();
+            const slaDate = new Date(today.setDate(today.getDate() + 30))
+              .toISOString()
+              .split('T')[0];
+            return {
+              case_number: cn,
+              case_status: 'IN PROGRESS',
+              sla_due_date: slaDate,
+              created_on: new Date().toISOString().split('T')[0],
+              priority: 'Medium',
+              stage: 'Stage 1',
+            };
+          });
+        if (missingCases.length > 0)
+          for (let chunk of chunkArray(missingCases, 100))
+            await supabase
+              .from('cases')
+              .upsert(chunk, {
+                onConflict: 'case_number',
+                ignoreDuplicates: true,
+              });
 
         setUploadMessage('5/6 Merging respondents...');
         const daRowsToUpsert = [];
         const daRowsToUpdate = [];
-        const involved = [...new Set(daDataToInsert.filter(i => !i.respondent_id && i.respondent_name).map(i => i.case_number))];
+        const involved = [
+          ...new Set(
+            daDataToInsert
+              .filter((i) => !i.respondent_id && i.respondent_name)
+              .map((i) => i.case_number)
+          ),
+        ];
         const nameToRow = new Map();
         for (let chunk of chunkArray(involved, 50)) {
-          const { data: existingDa } = await supabase.from('disciplinary_actions').select('id, case_number, respondent_name, violations').in('case_number', chunk);
-          (existingDa || []).forEach(r => {
-            const nn = (r.respondent_name || '').toUpperCase().replace(/\s+/g, ' ').trim();
+          const { data: existingDa } = await supabase
+            .from('disciplinary_actions')
+            .select('id, case_number, respondent_name, violations')
+            .in('case_number', chunk);
+          (existingDa || []).forEach((r) => {
+            const nn = (r.respondent_name || '')
+              .toUpperCase()
+              .replace(/\s+/g, ' ')
+              .trim();
             if (nn) nameToRow.set(`${r.case_number}|${nn}`, r);
           });
         }
-        daDataToInsert.forEach(item => {
+        daDataToInsert.forEach((item) => {
           if (!item.respondent_id && item.respondent_name) {
-            const nn = item.respondent_name.toUpperCase().replace(/\s+/g, ' ').trim();
+            const nn = item.respondent_name
+              .toUpperCase()
+              .replace(/\s+/g, ' ')
+              .trim();
             const match = nameToRow.get(`${item.case_number}|${nn}`);
             if (match) {
-              const patch = { modified_by_email: userEmail, last_modified: new Date().toISOString() };
-              if (item.violations && item.violations.length) patch.violations = [...new Set([...(match.violations || []), ...item.violations])];
-              if (item.current_action) patch.current_action = item.current_action;
+              const patch = {
+                modified_by_email: userEmail,
+                last_modified: new Date().toISOString(),
+              };
+              if (item.violations && item.violations.length)
+                patch.violations = [
+                  ...new Set([...(match.violations || []), ...item.violations]),
+                ];
+              if (item.current_action)
+                patch.current_action = item.current_action;
               if (item.remarks) patch.remarks = item.remarks;
               daRowsToUpdate.push({ id: match.id, patch });
               return;
@@ -615,33 +971,57 @@ const fetchCases = async (silent = false) => {
           }
           daRowsToUpsert.push(item);
         });
-        for (const u of daRowsToUpdate) { await supabase.from('disciplinary_actions').update(u.patch).eq('id', u.id); }
+        for (const u of daRowsToUpdate) {
+          await supabase
+            .from('disciplinary_actions')
+            .update(u.patch)
+            .eq('id', u.id);
+        }
 
         setUploadMessage('6/6 Uploading respondents...');
         const uniqueMap = new Map();
-        daRowsToUpsert.forEach(item => uniqueMap.set(item.unique_key, item));
+        daRowsToUpsert.forEach((item) => uniqueMap.set(item.unique_key, item));
         const finalDataToInsert = Array.from(uniqueMap.values());
-        let errorCount = 0; let firstError = null;
+        let errorCount = 0;
+        let firstError = null;
         for (let chunk of chunkArray(finalDataToInsert, 100)) {
-          const { error } = await supabase.from('disciplinary_actions').upsert(chunk, { onConflict: 'unique_key' });
-          if (error) { errorCount++; if (!firstError) firstError = error.message; }
+          const { error } = await supabase
+            .from('disciplinary_actions')
+            .upsert(chunk, { onConflict: 'unique_key' });
+          if (error) {
+            errorCount++;
+            if (!firstError) firstError = error.message;
+          }
         }
         let finalMsg = `✅ Sync Complete! `;
-        if (masterCaseCount > 0) finalMsg += `Master: ${masterCaseCount} cases. `;
-        if (indiaCaseCount > 0) finalMsg += `India: ${indiaCaseCount} CVN cases. `;
-        if (daRowsToUpdate.length > 0) finalMsg += `Merged ${daRowsToUpdate.length} respondents. `;
-        if (finalDataToInsert.length > 0) finalMsg += `Processed ${finalDataToInsert.length} respondents. `;
-        if (missingCases.length > 0) finalMsg += `Auto-created ${missingCases.length} missing cases. `;
-        if (errorCount > 0) finalMsg = `⚠️ Completed with ${errorCount} errors. First: ${firstError}`;
+        if (masterCaseCount > 0)
+          finalMsg += `Master: ${masterCaseCount} cases. `;
+        if (indiaCaseCount > 0)
+          finalMsg += `India: ${indiaCaseCount} CVN cases. `;
+        if (daRowsToUpdate.length > 0)
+          finalMsg += `Merged ${daRowsToUpdate.length} respondents. `;
+        if (finalDataToInsert.length > 0)
+          finalMsg += `Processed ${finalDataToInsert.length} respondents. `;
+        if (missingCases.length > 0)
+          finalMsg += `Auto-created ${missingCases.length} missing cases. `;
+        if (errorCount > 0)
+          finalMsg = `⚠️ Completed with ${errorCount} errors. First: ${firstError}`;
         setUploadMessage(finalMsg);
-        fetchCases(true); setUploading(false);
-      } catch (err) { setUploadMessage(`❌ Unexpected Error: ${err.message}`); setUploading(false); }
+        fetchCases(true);
+        setUploading(false);
+      } catch (err) {
+        setUploadMessage(`❌ Unexpected Error: ${err.message}`);
+        setUploading(false);
+      }
     };
     reader.readAsArrayBuffer(file);
   };
 
   const handleCaseClick = async (caseNum) => {
-    if (selectedCase === caseNum) { setSelectedCase(null); return; }
+    if (selectedCase === caseNum) {
+      setSelectedCase(null);
+      return;
+    }
     setSelectedCase(caseNum);
     setShowWipForm(false);
     setEditingWipId(null);
@@ -649,11 +1029,20 @@ const fetchCases = async (silent = false) => {
     setShowAddPersonForm(null);
     setHideRespondents(true);
     setEditingCase(false);
-setShowCloseOptions(false);
-setEditingRespondentId(null);
-    const { data: daData } = await supabase.from('disciplinary_actions').select('*').eq('case_number', caseNum);
-    const { data: wipData } = await supabase.from('wip_actions').select('*').eq('case_number', caseNum).order('date_sent', { ascending: false }).order('last_modified', { ascending: false });
-    setDaList(daData || []); setWipList(wipData || []);
+    setShowCloseOptions(false);
+    setEditingRespondentId(null);
+    const { data: daData } = await supabase
+      .from('disciplinary_actions')
+      .select('*')
+      .eq('case_number', caseNum);
+    const { data: wipData } = await supabase
+      .from('wip_actions')
+      .select('*')
+      .eq('case_number', caseNum)
+      .order('date_sent', { ascending: false })
+      .order('last_modified', { ascending: false });
+    setDaList(daData || []);
+    setWipList(wipData || []);
   };
 
   const handleAddCase = async (e) => {
@@ -661,276 +1050,467 @@ setEditingRespondentId(null);
     const today = new Date().toISOString().split('T')[0];
     const slaDate = addBusinessDays(today, newSlaDays);
     const priority = calculatePriority(slaDate);
-    const { error } = await supabase.from('cases').insert([{
-      case_number: newCaseNum, pic: newPic, country: newCountry, case_status: 'IN PROGRESS',
-      sla_due_date: slaDate, priority: priority, stage: 'Stage 1', created_on: today
-    }]);
+    const { error } = await supabase.from('cases').insert([
+      {
+        case_number: newCaseNum,
+        pic: newPic,
+        country: newCountry,
+        case_status: 'IN PROGRESS',
+        sla_due_date: slaDate,
+        priority: priority,
+        stage: 'Stage 1',
+        created_on: today,
+      },
+    ]);
     if (error) alert('Error saving case: ' + error.message);
-    else { setShowCaseForm(false); setNewCaseNum(''); setNewPic(''); setNewCountry(''); setNewSlaDays(30); fetchCases(true); }
+    else {
+      setShowCaseForm(false);
+      setNewCaseNum('');
+      setNewPic('');
+      setNewCountry('');
+      setNewSlaDays(30);
+      fetchCases(true);
+    }
   };
 
   const handleCompleteCase = async (caseNum, closeStatus = 'COMPLETED') => {
-    const { error } = await supabase.from('cases').update({
-      case_status: closeStatus, priority: 'Low', date_completed: new Date().toISOString().split('T')[0], modified_by_email: userEmail, last_modified: new Date().toISOString()
-    }).eq('case_number', caseNum);
+    const { error } = await supabase
+      .from('cases')
+      .update({
+        case_status: closeStatus,
+        priority: 'Low',
+        date_completed: new Date().toISOString().split('T')[0],
+        modified_by_email: userEmail,
+        last_modified: new Date().toISOString(),
+      })
+      .eq('case_number', caseNum);
     if (error) alert('Error closing case: ' + error.message);
-    else { setShowCloseOptions(false); refreshOneCase(caseNum); }
+    else {
+      setShowCloseOptions(false);
+      refreshOneCase(caseNum);
+    }
   };
 
   const handleReactivateCase = async (caseNum) => {
     const today = toLocalDateStr(new Date());
     const newSlaDate = addBusinessDays(today, STANDARD_CASE_SLA_DAYS);
-    const { error } = await supabase.from('cases').update({
-      case_status: 'IN PROGRESS', date_completed: null, sla_due_date: newSlaDate, priority: calculatePriority(newSlaDate), modified_by_email: userEmail, reactivated_at: new Date().toISOString(), last_modified: new Date().toISOString()
-    }).eq('case_number', caseNum);
+    const { error } = await supabase
+      .from('cases')
+      .update({
+        case_status: 'IN PROGRESS',
+        date_completed: null,
+        sla_due_date: newSlaDate,
+        priority: calculatePriority(newSlaDate),
+        modified_by_email: userEmail,
+        reactivated_at: new Date().toISOString(),
+        last_modified: new Date().toISOString(),
+      })
+      .eq('case_number', caseNum);
     if (error) alert('Error reactivating case: ' + error.message);
     else refreshOneCase(caseNum);
   };
 
   // ==== ADMIN: open the edit form pre-filled with current case values ====
-const openCaseEdit = () => {
-  const c = cases.find(x => x.case_number === selectedCase);
-  if (!c) return;
-  const anchor = (caseComplainants || []).find(x => x.is_anchor)
-              || (caseComplainants || [])[0]
-              || daList.find(d => d.complainant_name || d.complainant_id)
-              || {};
-  setCaseForm({
-    case_number: c.case_number || '',
-    pic: c.pic || '', country: c.country || '', sla_due_date: c.sla_due_date || '',
-    created_on: c.created_on || '',
-    sla_days: businessDaysFromStart(slaStartDate(c), c.sla_due_date) ?? '', sla_base: c.reactivated_at ? slaStartDate(c) : '',
-    priority: c.priority || 'Medium', stage: c.stage || '',
-    case_status: c.case_status || 'IN PROGRESS', remarks: c.remarks || '', date_completed: c.date_completed || '',
-    case_folder_no: c.case_folder_no || '',
-    findings_url: c.findings_url || '',
-    complainant_name: anchor.complainant_name || '',
-    complainant_id: anchor.complainant_id || '',
-    complainant_country: anchor.complainant_country || ''
-  });
-  setEditingCase(true);
-};
+  const openCaseEdit = () => {
+    const c = cases.find((x) => x.case_number === selectedCase);
+    if (!c) return;
+    const anchor =
+      (caseComplainants || []).find((x) => x.is_anchor) ||
+      (caseComplainants || [])[0] ||
+      daList.find((d) => d.complainant_name || d.complainant_id) ||
+      {};
+    setCaseForm({
+      case_number: c.case_number || '',
+      pic: c.pic || '',
+      country: c.country || '',
+      sla_due_date: c.sla_due_date || '',
+      created_on: c.created_on || '',
+      sla_days: businessDaysFromStart(slaStartDate(c), c.sla_due_date) ?? '',
+      sla_base: c.reactivated_at ? slaStartDate(c) : '',
+      priority: c.priority || 'Medium',
+      stage: c.stage || '',
+      case_status: c.case_status || 'IN PROGRESS',
+      remarks: c.remarks || '',
+      date_completed: c.date_completed || '',
+      case_folder_no: c.case_folder_no || '',
+      findings_url: c.findings_url || '',
+      complainant_name: anchor.complainant_name || '',
+      complainant_id: anchor.complainant_id || '',
+      complainant_country: anchor.complainant_country || '',
+    });
+    setEditingCase(true);
+  };
 
-// ==== SAVE EDITED CASE — admins: all fields · standard users: 6 fields only ====
-const handleUpdateCase = async (e) => {
-  e.preventDefault();
-  const c = cases.find(x => x.case_number === selectedCase);
-  if (!c) return;
-  const stamp = new Date().toISOString();
-  const isClosed = (s) => s === 'COMPLETED' || s === 'CANCELLED';
+  // ==== SAVE EDITED CASE — admins: all fields · standard users: 6 fields only ====
+  const handleUpdateCase = async (e) => {
+    e.preventDefault();
+    const c = cases.find((x) => x.case_number === selectedCase);
+    if (!c) return;
+    const stamp = new Date().toISOString();
+    const isClosed = (s) => s === 'COMPLETED' || s === 'CANCELLED';
 
-  // ---- STANDARD USER: only these 6 fields are ever saved ----
-  if (!isAdmin) {
-    const limited = {
-      priority: caseForm.priority,
-      stage: cleanVal(caseForm.stage),
-      case_folder_no: cleanVal(caseForm.case_folder_no),
-      findings_url: cleanVal(caseForm.findings_url),
-      case_status: caseForm.case_status,
-      remarks: cleanVal(caseForm.remarks),
-      modified_by_email: userEmail,
-      last_modified: stamp
-    };
-    if (isClosed(caseForm.case_status) && !isClosed(c.case_status)) {
-      limited.date_completed = new Date().toISOString().split('T')[0];
-      if (caseForm.priority === c.priority) limited.priority = 'Low';
-    } else if (!isClosed(caseForm.case_status) && isClosed(c.case_status)) {
-      limited.date_completed = null;
-        const restartDate = addBusinessDays(toLocalDateStr(new Date()), STANDARD_CASE_SLA_DAYS);
+    // ---- STANDARD USER: only these 6 fields are ever saved ----
+    if (!isAdmin) {
+      const limited = {
+        priority: caseForm.priority,
+        stage: cleanVal(caseForm.stage),
+        case_folder_no: cleanVal(caseForm.case_folder_no),
+        findings_url: cleanVal(caseForm.findings_url),
+        case_status: caseForm.case_status,
+        remarks: cleanVal(caseForm.remarks),
+        modified_by_email: userEmail,
+        last_modified: stamp,
+      };
+      if (isClosed(caseForm.case_status) && !isClosed(c.case_status)) {
+        limited.date_completed = new Date().toISOString().split('T')[0];
+        if (caseForm.priority === c.priority) limited.priority = 'Low';
+      } else if (!isClosed(caseForm.case_status) && isClosed(c.case_status)) {
+        limited.date_completed = null;
+        const restartDate = addBusinessDays(
+          toLocalDateStr(new Date()),
+          STANDARD_CASE_SLA_DAYS
+        );
         limited.sla_due_date = restartDate;
         limited.priority = calculatePriority(restartDate);
         limited.reactivated_at = new Date().toISOString();
-    }
-    const { error } = await supabase.from('cases').update(limited).eq('case_number', selectedCase);
-    if (error) { alert('Error updating case: ' + error.message); return; }
-    setEditingCase(false);
-    refreshOneCase(selectedCase);
-    return;
-  }
-
-  // ---- ADMIN: full edit (unchanged behaviour) ----
-  // 1) Case-number rename — moves respondents, WIP actions & complainants along with it
-  const newCaseNum = cleanVal(caseForm.case_number);
-  let caseNumToUse = selectedCase;
-  if (newCaseNum && newCaseNum !== selectedCase) {
-    const { data: clash } = await supabase.from('cases').select('case_number').eq('case_number', newCaseNum);
-    if (clash && clash.length > 0) { alert('Cannot rename: case number "' + newCaseNum + '" already exists.'); return; }
-    const { data: daRows } = await supabase.from('disciplinary_actions').select('id, unique_key').eq('case_number', selectedCase);
-    let renameError = null;
-    for (const row of (daRows || [])) {
-      const patch = { case_number: newCaseNum };
-      if (row.unique_key && row.unique_key.startsWith(selectedCase + '|')) {
-        patch.unique_key = newCaseNum + row.unique_key.slice(selectedCase.length);
       }
-      const { error } = await supabase.from('disciplinary_actions').update(patch).eq('id', row.id);
-      if (error) renameError = error.message;
-    }
-    const { error: wipError } = await supabase.from('wip_actions').update({ case_number: newCaseNum }).eq('case_number', selectedCase);
-    await supabase.from('case_complainants').update({ case_number: newCaseNum }).eq('case_number', selectedCase);
-    if (renameError || wipError) { alert('Rename failed: ' + (renameError || wipError)); return; }
-    await supabase.from('cases').update({ case_number: newCaseNum }).eq('case_number', selectedCase);
-    caseNumToUse = newCaseNum;
-    setSelectedCase(newCaseNum);
-  }
-
-  // 2) Complainant details — saved to case_complainants (the master list)
-  const compName = cleanVal(caseForm.complainant_name);
-  const compId = cleanVal(caseForm.complainant_id);
-  const compCountry = cleanVal(caseForm.complainant_country);
-
-  if (compName || compId || compCountry) {
-    const { data: rows } = await supabase
-      .from('case_complainants').select('id, is_anchor')
-      .eq('case_number', caseNumToUse)
-      .order('is_anchor', { ascending: false });
-    const target = (rows || []).find(r => r.is_anchor) || (rows || [])[0];
-
-    if (target) {
-      const { error: ccErr } = await supabase.from('case_complainants').update({
-        complainant_name: compName, complainant_id: compId, complainant_country: compCountry,
-        modified_by_email: userEmail, last_modified: stamp
-      }).eq('id', target.id);
-      if (ccErr) { alert('Error saving complainant: ' + ccErr.message); return; }
-    } else {
-      const { error: ccErr } = await supabase.from('case_complainants').insert([{
-        case_number: caseNumToUse,
-        complainant_name: compName, complainant_id: compId, complainant_country: compCountry,
-        is_anchor: true, modified_by_email: userEmail, last_modified: stamp
-      }]);
-      if (ccErr) { alert('Error saving complainant: ' + ccErr.message); return; }
+      const { error } = await supabase
+        .from('cases')
+        .update(limited)
+        .eq('case_number', selectedCase);
+      if (error) {
+        alert('Error updating case: ' + error.message);
+        return;
+      }
+      setEditingCase(false);
+      refreshOneCase(selectedCase);
+      return;
     }
 
-    if (daList.length > 0) {
-      await supabase.from('disciplinary_actions').update({
-        complainant_name: compName, complainant_id: compId, complainant_country: compCountry,
-        modified_by_email: userEmail, last_modified: stamp
-      }).eq('case_number', caseNumToUse);
-    }
-  }
-
-  // 3) Case fields
-  const updates = {
-    pic: cleanVal(caseForm.pic),
-    country: cleanVal(caseForm.country),
-    sla_due_date: cleanVal(caseForm.sla_due_date) || c.sla_due_date,
-    created_on: cleanVal(caseForm.created_on) || c.created_on,
-    priority: caseForm.priority,
-    stage: cleanVal(caseForm.stage),
-    case_status: caseForm.case_status,
-    remarks: cleanVal(caseForm.remarks),
-    case_folder_no: cleanVal(caseForm.case_folder_no),
-    findings_url: cleanVal(caseForm.findings_url),
-    modified_by_email: userEmail,
-    last_modified: stamp
-  };
-  if (isClosed(caseForm.case_status) && !isClosed(c.case_status)) {
-    updates.date_completed = cleanVal(caseForm.date_completed) || new Date().toISOString().split('T')[0];
-    if (caseForm.priority === c.priority) updates.priority = 'Low';
-  } else if (isClosed(caseForm.case_status) && isClosed(c.case_status)) {
-    if (caseForm.date_completed !== (c.date_completed || '')) {
-      updates.date_completed = cleanVal(caseForm.date_completed) || c.date_completed;
-    }
-  } else if (!isClosed(caseForm.case_status) && isClosed(c.case_status)) {
-    updates.date_completed = null;
-        if (!cleanVal(caseForm.sla_due_date) || caseForm.sla_due_date === c.sla_due_date) {
-          const restartDate = addBusinessDays(toLocalDateStr(new Date()), STANDARD_CASE_SLA_DAYS);
-          updates.sla_due_date = restartDate;
-          updates.priority = calculatePriority(restartDate);
+    // ---- ADMIN: full edit (unchanged behaviour) ----
+    // 1) Case-number rename — moves respondents, WIP actions & complainants along with it
+    const newCaseNum = cleanVal(caseForm.case_number);
+    let caseNumToUse = selectedCase;
+    if (newCaseNum && newCaseNum !== selectedCase) {
+      const { data: clash } = await supabase
+        .from('cases')
+        .select('case_number')
+        .eq('case_number', newCaseNum);
+      if (clash && clash.length > 0) {
+        alert(
+          'Cannot rename: case number "' + newCaseNum + '" already exists.'
+        );
+        return;
+      }
+      const { data: daRows } = await supabase
+        .from('disciplinary_actions')
+        .select('id, unique_key')
+        .eq('case_number', selectedCase);
+      let renameError = null;
+      for (const row of daRows || []) {
+        const patch = { case_number: newCaseNum };
+        if (row.unique_key && row.unique_key.startsWith(selectedCase + '|')) {
+          patch.unique_key =
+            newCaseNum + row.unique_key.slice(selectedCase.length);
         }
-        updates.reactivated_at = new Date().toISOString();
-  }
-  const { error } = await supabase.from('cases').update(updates).eq('case_number', caseNumToUse);
-  if (error) { alert('Error updating case: ' + error.message); return; }
-
-  setEditingCase(false);
-  refreshOneCase(caseNumToUse);
-  const { data: refreshedDa } = await supabase.from('disciplinary_actions').select('*').eq('case_number', caseNumToUse);
-  setDaList(refreshedDa || []);
-  await loadCaseComplainants(caseNumToUse);
-};
-
-// ==== ADMIN: open the respondent editor ====
-// ==== ADMIN: delete a respondent row ====
-const handleDeleteRespondent = async (daId) => {
-  const da = daList.find(d => d.id === daId);
-  if (!da) return;
-  const isLastRow = daList.length <= 1;
-  let msg = `Delete this respondent row?\n\n${da.respondent_name || '(unnamed)'}${da.respondent_id ? ' · ' + da.respondent_id : ''}`;
-  if (isLastRow) {
-    msg += `\n\n⚠️ This is the LAST respondent row for this case.`;
-    if (da.complainant_name || da.complainant_id) {
-      msg += `\nThe complainant details (${da.complainant_name || da.complainant_id}) are stored on this row and will be deleted too. Re-add them via ✏️ Edit Case if still needed.`;
+        const { error } = await supabase
+          .from('disciplinary_actions')
+          .update(patch)
+          .eq('id', row.id);
+        if (error) renameError = error.message;
+      }
+      const { error: wipError } = await supabase
+        .from('wip_actions')
+        .update({ case_number: newCaseNum })
+        .eq('case_number', selectedCase);
+      await supabase
+        .from('case_complainants')
+        .update({ case_number: newCaseNum })
+        .eq('case_number', selectedCase);
+      if (renameError || wipError) {
+        alert('Rename failed: ' + (renameError || wipError));
+        return;
+      }
+      await supabase
+        .from('cases')
+        .update({ case_number: newCaseNum })
+        .eq('case_number', selectedCase);
+      caseNumToUse = newCaseNum;
+      setSelectedCase(newCaseNum);
     }
-  }
-  if (!window.confirm(msg)) return;
-  const { error } = await supabase.from('disciplinary_actions').delete().eq('id', daId);
-  if (error) alert('Error deleting respondent: ' + error.message);
-  else { setEditingRespondentId(null); refreshDaList(); }
-};
-const startRespondentEdit = (da) => {
-  setEditingRespondentId(da.id);
-  setRespondentEdits(prev => ({
-    ...prev,
-    [da.id]: { name: da.respondent_name || '', id: da.respondent_id || '', country: da.respondent_country || '' }
-  }));
-};
 
-// ==== ADMIN: save respondent details ====
-const handleUpdateRespondent = async (e, daId) => {
-  e.preventDefault();
-  const edits = respondentEdits[daId];
-  if (!edits) return;
-  const oldDa = daList.find(d => d.id === daId);
-  const newId = cleanVal(edits.id);
-  const updates = {
-    respondent_name: cleanVal(edits.name),
-    respondent_id: newId,
-    respondent_country: cleanVal(edits.country),
-    modified_by_email: userEmail,
-    last_modified: new Date().toISOString()
+    // 2) Complainant details — saved to case_complainants (the master list)
+    const compName = cleanVal(caseForm.complainant_name);
+    const compId = cleanVal(caseForm.complainant_id);
+    const compCountry = cleanVal(caseForm.complainant_country);
+
+    if (compName || compId || compCountry) {
+      const { data: rows } = await supabase
+        .from('case_complainants')
+        .select('id, is_anchor')
+        .eq('case_number', caseNumToUse)
+        .order('is_anchor', { ascending: false });
+      const target = (rows || []).find((r) => r.is_anchor) || (rows || [])[0];
+
+      if (target) {
+        const { error: ccErr } = await supabase
+          .from('case_complainants')
+          .update({
+            complainant_name: compName,
+            complainant_id: compId,
+            complainant_country: compCountry,
+            modified_by_email: userEmail,
+            last_modified: stamp,
+          })
+          .eq('id', target.id);
+        if (ccErr) {
+          alert('Error saving complainant: ' + ccErr.message);
+          return;
+        }
+      } else {
+        const { error: ccErr } = await supabase
+          .from('case_complainants')
+          .insert([
+            {
+              case_number: caseNumToUse,
+              complainant_name: compName,
+              complainant_id: compId,
+              complainant_country: compCountry,
+              is_anchor: true,
+              modified_by_email: userEmail,
+              last_modified: stamp,
+            },
+          ]);
+        if (ccErr) {
+          alert('Error saving complainant: ' + ccErr.message);
+          return;
+        }
+      }
+
+      if (daList.length > 0) {
+        await supabase
+          .from('disciplinary_actions')
+          .update({
+            complainant_name: compName,
+            complainant_id: compId,
+            complainant_country: compCountry,
+            modified_by_email: userEmail,
+            last_modified: stamp,
+          })
+          .eq('case_number', caseNumToUse);
+      }
+    }
+
+    // 3) Case fields
+    const updates = {
+      pic: cleanVal(caseForm.pic),
+      country: cleanVal(caseForm.country),
+      sla_due_date: cleanVal(caseForm.sla_due_date) || c.sla_due_date,
+      created_on: cleanVal(caseForm.created_on) || c.created_on,
+      priority: caseForm.priority,
+      stage: cleanVal(caseForm.stage),
+      case_status: caseForm.case_status,
+      remarks: cleanVal(caseForm.remarks),
+      case_folder_no: cleanVal(caseForm.case_folder_no),
+      findings_url: cleanVal(caseForm.findings_url),
+      modified_by_email: userEmail,
+      last_modified: stamp,
+    };
+    if (isClosed(caseForm.case_status) && !isClosed(c.case_status)) {
+      updates.date_completed =
+        cleanVal(caseForm.date_completed) ||
+        new Date().toISOString().split('T')[0];
+      if (caseForm.priority === c.priority) updates.priority = 'Low';
+    } else if (isClosed(caseForm.case_status) && isClosed(c.case_status)) {
+      if (caseForm.date_completed !== (c.date_completed || '')) {
+        updates.date_completed =
+          cleanVal(caseForm.date_completed) || c.date_completed;
+      }
+    } else if (!isClosed(caseForm.case_status) && isClosed(c.case_status)) {
+      updates.date_completed = null;
+      if (
+        !cleanVal(caseForm.sla_due_date) ||
+        caseForm.sla_due_date === c.sla_due_date
+      ) {
+        const restartDate = addBusinessDays(
+          toLocalDateStr(new Date()),
+          STANDARD_CASE_SLA_DAYS
+        );
+        updates.sla_due_date = restartDate;
+        updates.priority = calculatePriority(restartDate);
+      }
+      updates.reactivated_at = new Date().toISOString();
+    }
+    const { error } = await supabase
+      .from('cases')
+      .update(updates)
+      .eq('case_number', caseNumToUse);
+    if (error) {
+      alert('Error updating case: ' + error.message);
+      return;
+    }
+
+    setEditingCase(false);
+    refreshOneCase(caseNumToUse);
+    const { data: refreshedDa } = await supabase
+      .from('disciplinary_actions')
+      .select('*')
+      .eq('case_number', caseNumToUse);
+    setDaList(refreshedDa || []);
+    await loadCaseComplainants(caseNumToUse);
   };
-  // Keep unique_key in sync when the ID changes (so future Excel uploads match)
-  if (newId && newId !== oldDa?.respondent_id) {
-    updates.unique_key = `${selectedCase}|${newId}`;
-  }
-  const { error } = await supabase.from('disciplinary_actions').update(updates).eq('id', daId);
-  if (error) alert('Error updating respondent: ' + error.message);
-  else { setEditingRespondentId(null); refreshDaList(); }
-};
+
+  // ==== ADMIN: open the respondent editor ====
+  // ==== ADMIN: delete a respondent row ====
+  const handleDeleteRespondent = async (daId) => {
+    const da = daList.find((d) => d.id === daId);
+    if (!da) return;
+    const isLastRow = daList.length <= 1;
+    let msg = `Delete this respondent row?\n\n${
+      da.respondent_name || '(unnamed)'
+    }${da.respondent_id ? ' · ' + da.respondent_id : ''}`;
+    if (isLastRow) {
+      msg += `\n\n⚠️ This is the LAST respondent row for this case.`;
+      if (da.complainant_name || da.complainant_id) {
+        msg += `\nThe complainant details (${
+          da.complainant_name || da.complainant_id
+        }) are stored on this row and will be deleted too. Re-add them via ✏️ Edit Case if still needed.`;
+      }
+    }
+    if (!window.confirm(msg)) return;
+    const { error } = await supabase
+      .from('disciplinary_actions')
+      .delete()
+      .eq('id', daId);
+    if (error) alert('Error deleting respondent: ' + error.message);
+    else {
+      setEditingRespondentId(null);
+      refreshDaList();
+    }
+  };
+  const startRespondentEdit = (da) => {
+    setEditingRespondentId(da.id);
+    setRespondentEdits((prev) => ({
+      ...prev,
+      [da.id]: {
+        name: da.respondent_name || '',
+        id: da.respondent_id || '',
+        country: da.respondent_country || '',
+      },
+    }));
+  };
+
+  // ==== ADMIN: save respondent details ====
+  const handleUpdateRespondent = async (e, daId) => {
+    e.preventDefault();
+    const edits = respondentEdits[daId];
+    if (!edits) return;
+    const oldDa = daList.find((d) => d.id === daId);
+    const newId = cleanVal(edits.id);
+    const updates = {
+      respondent_name: cleanVal(edits.name),
+      respondent_id: newId,
+      respondent_country: cleanVal(edits.country),
+      modified_by_email: userEmail,
+      last_modified: new Date().toISOString(),
+    };
+    // Keep unique_key in sync when the ID changes (so future Excel uploads match)
+    if (newId && newId !== oldDa?.respondent_id) {
+      updates.unique_key = `${selectedCase}|${newId}`;
+    }
+    const { error } = await supabase
+      .from('disciplinary_actions')
+      .update(updates)
+      .eq('id', daId);
+    if (error) alert('Error updating respondent: ' + error.message);
+    else {
+      setEditingRespondentId(null);
+      refreshDaList();
+    }
+  };
   const resetWipForm = () => {
-    setWipActionType(''); setWipDesc(''); setWipDateSent(new Date().toISOString().split('T')[0]); setWipSlaDays(2); setWipNotes(''); setEditingWipId(null); setShowWipForm(false);
+    setWipActionType('');
+    setWipDesc('');
+    setWipDateSent(new Date().toISOString().split('T')[0]);
+    setWipSlaDays(2);
+    setWipNotes('');
+    setEditingWipId(null);
+    setShowWipForm(false);
   };
 
   const handleAddWIP = async (e) => {
     e.preventDefault();
-    const rule = mappingRules.find(r => r.action_type === wipActionType);
+    const rule = mappingRules.find((r) => r.action_type === wipActionType);
     let stageToAssign = rule?.default_stage || null;
-    let slaDays = Math.max(1, Math.min(100, wipSlaDays || rule?.default_sla_days || 2));
+    let slaDays = Math.max(
+      1,
+      Math.min(100, wipSlaDays || rule?.default_sla_days || 2)
+    );
     if (rule && rule.initial_stage && rule.concluding_stage) {
-      const currentCase = cases.find(c => c.case_number === selectedCase);
-      const currentStageNum = parseInt(currentCase?.stage?.replace('Stage ', '') || '0', 10);
-      stageToAssign = currentStageNum >= 6 ? rule.concluding_stage : rule.initial_stage;
+      const currentCase = cases.find((c) => c.case_number === selectedCase);
+      const currentStageNum = parseInt(
+        currentCase?.stage?.replace('Stage ', '') || '0',
+        10
+      );
+      stageToAssign =
+        currentStageNum >= 6 ? rule.concluding_stage : rule.initial_stage;
     }
     let expiryDate = addBusinessDays(wipDateSent, slaDays);
 
     if (editingWipId) {
-      const { error } = await supabase.from('wip_actions').update({
-        action_type: wipActionType, description: wipDesc, stage_auto: stageToAssign,
-        date_sent: wipDateSent, sla_days: slaDays, expiry_date: expiryDate, notes: wipNotes, pic: userEmail, last_modified: new Date().toISOString()
-      }).eq('id', editingWipId);
+      const { error } = await supabase
+        .from('wip_actions')
+        .update({
+          action_type: wipActionType,
+          description: wipDesc,
+          stage_auto: stageToAssign,
+          date_sent: wipDateSent,
+          sla_days: slaDays,
+          expiry_date: expiryDate,
+          notes: wipNotes,
+          pic: userEmail,
+          last_modified: new Date().toISOString(),
+        })
+        .eq('id', editingWipId);
       if (error) alert('Error updating WIP: ' + error.message);
     } else {
-      const { error } = await supabase.from('wip_actions').insert([{
-        case_number: selectedCase, action_type: wipActionType, description: wipDesc, stage_auto: stageToAssign,
-        date_sent: wipDateSent, sla_days: slaDays, expiry_date: expiryDate, status: 'Pending', notes: wipNotes, pic: userEmail, last_modified: new Date().toISOString()
-      }]);
+      const { error } = await supabase.from('wip_actions').insert([
+        {
+          case_number: selectedCase,
+          action_type: wipActionType,
+          description: wipDesc,
+          stage_auto: stageToAssign,
+          date_sent: wipDateSent,
+          sla_days: slaDays,
+          expiry_date: expiryDate,
+          status: 'Pending',
+          notes: wipNotes,
+          pic: userEmail,
+          last_modified: new Date().toISOString(),
+        },
+      ]);
       if (error) alert('Error logging WIP: ' + error.message);
     }
 
-    await supabase.from('cases').update({ modified_by_email: userEmail, last_modified: new Date().toISOString() }).eq('case_number', selectedCase);
-    if (stageToAssign) await supabase.from('cases').update({ stage: stageToAssign }).eq('case_number', selectedCase);
+    await supabase
+      .from('cases')
+      .update({
+        modified_by_email: userEmail,
+        last_modified: new Date().toISOString(),
+      })
+      .eq('case_number', selectedCase);
+    if (stageToAssign)
+      await supabase
+        .from('cases')
+        .update({ stage: stageToAssign })
+        .eq('case_number', selectedCase);
 
-    const { data: newWipData } = await supabase.from('wip_actions').select('*').eq('case_number', selectedCase).order('date_sent', { ascending: false }).order('last_modified', { ascending: false });
+    const { data: newWipData } = await supabase
+      .from('wip_actions')
+      .select('*')
+      .eq('case_number', selectedCase)
+      .order('date_sent', { ascending: false })
+      .order('last_modified', { ascending: false });
     setWipList(newWipData || []);
     resetWipForm();
     refreshOneCase(selectedCase);
@@ -944,118 +1524,344 @@ const handleUpdateRespondent = async (e, daId) => {
     setWipNotes(w.notes || '');
     setShowWipForm(true);
   };
-// ==== WIP FOLLOW-UPS: append-only record of chasing a lapsed item ====
-const [followUpDates, setFollowUpDates] = useState({});
-const [followUpBusy, setFollowUpBusy] = useState(null);
+  // ==== WIP FOLLOW-UPS: append-only record of chasing a lapsed item ====
+  const [followUpDates, setFollowUpDates] = useState({});
+  const [followUpBusy, setFollowUpBusy] = useState(null);
 
-const handleAddFollowUp = async (wipId) => {
-  const theDate = followUpDates[wipId] || new Date().toISOString().split('T')[0];
-  if (!theDate) { alert('Please pick a follow-up date first.'); return; }
-  const w = wipList.find(x => x.id === wipId);
-  if (!w) return;
-  const existing = Array.isArray(w.follow_ups) ? w.follow_ups : [];
-  const next = [...existing, { date: theDate, by: userEmail, at: new Date().toISOString() }];
-  setFollowUpBusy(wipId);
-  const { error } = await supabase.from('wip_actions').update({
-    follow_ups: next, modified_by_email: userEmail, last_modified: new Date().toISOString()
-  }).eq('id', wipId);
-  setFollowUpBusy(null);
-  if (error) { alert('Error saving follow-up: ' + error.message); return; }
-  const { data: newWipData } = await supabase.from('wip_actions').select('*').eq('case_number', selectedCase).order('date_sent', { ascending: false }).order('last_modified', { ascending: false });
-  setWipList(newWipData || []);
-  setFollowUpDates(prev => ({ ...prev, [wipId]: '' }));
-  refreshOneCase(selectedCase);
-};
-// ==== WIP TAB follow-up: same append-only rule, but works with no case open.
+  const handleAddFollowUp = async (wipId) => {
+    const theDate =
+      followUpDates[wipId] || new Date().toISOString().split('T')[0];
+    if (!theDate) {
+      alert('Please pick a follow-up date first.');
+      return;
+    }
+    const w = wipList.find((x) => x.id === wipId);
+    if (!w) return;
+    const existing = Array.isArray(w.follow_ups) ? w.follow_ups : [];
+    const next = [
+      ...existing,
+      { date: theDate, by: userEmail, at: new Date().toISOString() },
+    ];
+    setFollowUpBusy(wipId);
+    const { error } = await supabase
+      .from('wip_actions')
+      .update({
+        follow_ups: next,
+        modified_by_email: userEmail,
+        last_modified: new Date().toISOString(),
+      })
+      .eq('id', wipId);
+    setFollowUpBusy(null);
+    if (error) {
+      alert('Error saving follow-up: ' + error.message);
+      return;
+    }
+    const { data: newWipData } = await supabase
+      .from('wip_actions')
+      .select('*')
+      .eq('case_number', selectedCase)
+      .order('date_sent', { ascending: false })
+      .order('last_modified', { ascending: false });
+    setWipList(newWipData || []);
+    setFollowUpDates((prev) => ({ ...prev, [wipId]: '' }));
+    refreshOneCase(selectedCase);
+  };
+  // ==== WIP TAB follow-up: same append-only rule, but works with no case open.
   // Reads the current list straight from the database instead of wipList.
   const handleAddFollowUpFromTab = async (wipId) => {
-    if (!wipId) { alert('This item has no linked WIP record.'); return; }
-    const theDate = followUpDates[wipId] || new Date().toISOString().split('T')[0];
-    if (!theDate) { alert('Please pick a follow-up date first.'); return; }
+    if (!wipId) {
+      alert('This item has no linked WIP record.');
+      return;
+    }
+    const theDate =
+      followUpDates[wipId] || new Date().toISOString().split('T')[0];
+    if (!theDate) {
+      alert('Please pick a follow-up date first.');
+      return;
+    }
     setFollowUpBusy(wipId);
-    const { data: row } = await supabase.from('wip_actions').select('follow_ups').eq('id', wipId).single();
+    const { data: row } = await supabase
+      .from('wip_actions')
+      .select('follow_ups')
+      .eq('id', wipId)
+      .single();
     const existing = row && Array.isArray(row.follow_ups) ? row.follow_ups : [];
-    const next = [...existing, { date: theDate, by: userEmail, at: new Date().toISOString() }];
-    const { error } = await supabase.from('wip_actions').update({
-      follow_ups: next, modified_by_email: userEmail, last_modified: new Date().toISOString()
-    }).eq('id', wipId);
+    const next = [
+      ...existing,
+      { date: theDate, by: userEmail, at: new Date().toISOString() },
+    ];
+    const { error } = await supabase
+      .from('wip_actions')
+      .update({
+        follow_ups: next,
+        modified_by_email: userEmail,
+        last_modified: new Date().toISOString(),
+      })
+      .eq('id', wipId);
     setFollowUpBusy(null);
-    if (error) { alert('Error saving follow-up: ' + error.message); return; }
-    setWipRows(prev => prev.map(r => r.wip_id === wipId ? { ...r, follow_ups: next } : r));
-    setFollowUpDates(prev => ({ ...prev, [wipId]: '' }));
+    if (error) {
+      alert('Error saving follow-up: ' + error.message);
+      return;
+    }
+    setWipRows((prev) =>
+      prev.map((r) => (r.wip_id === wipId ? { ...r, follow_ups: next } : r))
+    );
+    setFollowUpDates((prev) => ({ ...prev, [wipId]: '' }));
+  };
+  // ==== JOURNAL follow-up (WIP tab): same append-only rule as WIP follow-ups.
+  // Saved inside the journal entry in disciplinary_actions.action_history.
+  // If the row covers several respondents, the follow-up is logged for each one.
+  const handleAddJournalFollowUp = async (list) => {
+    const rows = (list || []).filter((x) => x && x.da_id);
+    if (rows.length === 0) {
+      alert('This journal entry has no linked respondent record.');
+      return;
+    }
+    const key = `J|${rows[0].da_id}|${rows[0].h_idx}|${rows[0].sa_idx}`;
+    const theDate =
+      followUpDates[key] || new Date().toISOString().split('T')[0];
+    setFollowUpBusy(key);
+    const entry = {
+      date: theDate,
+      by: userEmail,
+      at: new Date().toISOString(),
+    };
+    for (const it of rows) {
+      const { data: row, error: readErr } = await supabase
+        .from('disciplinary_actions')
+        .select('action_history')
+        .eq('id', it.da_id)
+        .single();
+      if (readErr || !row) {
+        setFollowUpBusy(null);
+        alert(
+          'Error reading journal: ' +
+            (readErr ? readErr.message : 'record not found')
+        );
+        return;
+      }
+      const hist = Array.isArray(row.action_history)
+        ? JSON.parse(JSON.stringify(row.action_history))
+        : [];
+      // Find the same journal entry: check its position first, then match by text + date in case the list changed
+      const h = hist[it.h_idx];
+      let sa =
+        h && Array.isArray(h.sub_actions) ? h.sub_actions[it.sa_idx] : null;
+      if (
+        !sa ||
+        (sa.desc || '—') !== it.description ||
+        sa.date !== it.date_sent
+      ) {
+        sa = null;
+        for (const hh of hist) {
+          for (const s of hh.sub_actions || []) {
+            if (
+              (s.desc || '—') === it.description &&
+              s.date === it.date_sent &&
+              s.status !== 'Done'
+            ) {
+              sa = s;
+              break;
+            }
+          }
+          if (sa) break;
+        }
+      }
+      if (!sa) {
+        setFollowUpBusy(null);
+        alert(
+          'Could not find this journal entry any more. Please click Refresh on the WIP tab.'
+        );
+        return;
+      }
+      sa.follow_ups = [
+        ...(Array.isArray(sa.follow_ups) ? sa.follow_ups : []),
+        entry,
+      ];
+      const { error } = await supabase
+        .from('disciplinary_actions')
+        .update({ action_history: hist })
+        .eq('id', it.da_id);
+      if (error) {
+        setFollowUpBusy(null);
+        alert('Error saving follow-up: ' + error.message);
+        return;
+      }
+    }
+    setFollowUpBusy(null);
+    setWipRows((prev) =>
+      prev.map((x) =>
+        x.kind === 'Journal' &&
+        rows.some(
+          (it) =>
+            it.da_id === x.da_id &&
+            it.description === x.description &&
+            it.date_sent === x.date_sent
+        )
+          ? {
+              ...x,
+              follow_ups: [
+                ...(Array.isArray(x.follow_ups) ? x.follow_ups : []),
+                entry,
+              ],
+            }
+          : x
+      )
+    );
+    setFollowUpDates((prev) => ({ ...prev, [key]: '' }));
   };
   const handleCompleteWip = async (wipId) => {
-    const { error } = await supabase.from('wip_actions').update({
-      status: 'Done', completed_at: new Date().toISOString(), pic: userEmail, last_modified: new Date().toISOString()
-    }).eq('id', wipId);
+    const { error } = await supabase
+      .from('wip_actions')
+      .update({
+        status: 'Done',
+        completed_at: new Date().toISOString(),
+        pic: userEmail,
+        last_modified: new Date().toISOString(),
+      })
+      .eq('id', wipId);
     if (error) alert('Error completing WIP: ' + error.message);
     else {
-      const { data: newWipData } = await supabase.from('wip_actions').select('*').eq('case_number', selectedCase).order('date_sent', { ascending: false }).order('last_modified', { ascending: false });
+      const { data: newWipData } = await supabase
+        .from('wip_actions')
+        .select('*')
+        .eq('case_number', selectedCase)
+        .order('date_sent', { ascending: false })
+        .order('last_modified', { ascending: false });
       setWipList(newWipData || []);
-      await supabase.from('cases').update({ modified_by_email: userEmail, last_modified: new Date().toISOString() }).eq('case_number', selectedCase);
+      await supabase
+        .from('cases')
+        .update({
+          modified_by_email: userEmail,
+          last_modified: new Date().toISOString(),
+        })
+        .eq('case_number', selectedCase);
       refreshOneCase(selectedCase);
     }
   };
-// ==== ADMIN: reactivate a completed WIP action ====
-const handleReactivateWip = async (wipId) => {
-  if (!isAdmin) return;
-  if (!window.confirm('Reactivate this completed WIP action? It will go back to open.')) return;
-  const stamp = new Date().toISOString();
-  const { error } = await supabase.from('wip_actions').update({
-    status: 'Pending', completed_at: null, last_modified: stamp
-  }).eq('id', wipId);
-  if (error) { alert('Error reactivating WIP: ' + error.message); return; }
-  const { data: newWipData } = await supabase.from('wip_actions').select('*').eq('case_number', selectedCase).order('date_sent', { ascending: false }).order('last_modified', { ascending: false });
-  setWipList(newWipData || []);
-  await supabase.from('cases').update({ modified_by_email: userEmail, last_modified: stamp }).eq('case_number', selectedCase);
-  refreshOneCase(selectedCase);
-};
+  // ==== ADMIN: reactivate a completed WIP action ====
+  const handleReactivateWip = async (wipId) => {
+    if (!isAdmin) return;
+    if (
+      !window.confirm(
+        'Reactivate this completed WIP action? It will go back to open.'
+      )
+    )
+      return;
+    const stamp = new Date().toISOString();
+    const { error } = await supabase
+      .from('wip_actions')
+      .update({
+        status: 'Pending',
+        completed_at: null,
+        last_modified: stamp,
+      })
+      .eq('id', wipId);
+    if (error) {
+      alert('Error reactivating WIP: ' + error.message);
+      return;
+    }
+    const { data: newWipData } = await supabase
+      .from('wip_actions')
+      .select('*')
+      .eq('case_number', selectedCase)
+      .order('date_sent', { ascending: false })
+      .order('last_modified', { ascending: false });
+    setWipList(newWipData || []);
+    await supabase
+      .from('cases')
+      .update({ modified_by_email: userEmail, last_modified: stamp })
+      .eq('case_number', selectedCase);
+    refreshOneCase(selectedCase);
+  };
   const refreshDaList = async () => {
-    const { data: newDaData } = await supabase.from('disciplinary_actions').select('*').eq('case_number', selectedCase);
+    const { data: newDaData } = await supabase
+      .from('disciplinary_actions')
+      .select('*')
+      .eq('case_number', selectedCase);
     setDaList(newDaData || []);
-    await supabase.from('cases').update({ modified_by_email: userEmail, last_modified: new Date().toISOString() }).eq('case_number', selectedCase);
+    await supabase
+      .from('cases')
+      .update({
+        modified_by_email: userEmail,
+        last_modified: new Date().toISOString(),
+      })
+      .eq('case_number', selectedCase);
     refreshOneCase(selectedCase);
   };
   const handleAddDaAction = async (e, daId) => {
     e.preventDefault();
-    const da = daList.find(d => d.id === daId);
+    const da = daList.find((d) => d.id === daId);
     if (!da) return;
-    const extraIds = Object.keys(bulkActionTargets).filter(k => bulkActionTargets[k]);
+    const extraIds = Object.keys(bulkActionTargets).filter(
+      (k) => bulkActionTargets[k]
+    );
     const targets = bulkActionMode ? [daId, ...extraIds] : [daId];
     if (bulkActionMode && extraIds.length > 0) {
-      if (!window.confirm(`Add "${newDaAction}" to ${targets.length} respondents?`)) return;
+      if (
+        !window.confirm(
+          `Add "${newDaAction}" to ${targets.length} respondents?`
+        )
+      )
+        return;
     }
 
     const stamp = new Date().toISOString();
     for (const tid of targets) {
-      const t = daList.find(d => d.id === tid);
+      const t = daList.find((d) => d.id === tid);
       if (!t) continue;
       const th = [...(t.action_history || [])];
-      const entry = { step: th.length + 1, action: newDaAction, date: null, added_by: userEmail, added_at: stamp, sub_actions: [] };
+      const entry = {
+        step: th.length + 1,
+        action: newDaAction,
+        date: null,
+        added_by: userEmail,
+        added_at: stamp,
+        sub_actions: [],
+      };
       if (bulkJournalText.trim()) {
-        entry.sub_actions.push({ desc: bulkJournalText.trim(), date: new Date().toISOString().split('T')[0], status: 'Pending', added_by: userEmail, added_at: stamp });
+        entry.sub_actions.push({
+          desc: bulkJournalText.trim(),
+          date: new Date().toISOString().split('T')[0],
+          status: 'Pending',
+          added_by: userEmail,
+          added_at: stamp,
+        });
       }
       th.push(entry);
-      const { error: tErr } = await supabase.from('disciplinary_actions').update({
-        action_history: th,
-        previous_action: t.current_action || null,
-        current_action: newDaAction,
-        execution_date: null,
-        da_confirmed: null, da_confirmed_by: null, da_confirmed_at: null,
-        modified_by_email: userEmail, last_modified: stamp
-      }).eq('id', tid);
-      if (tErr) { alert('Error adding action: ' + tErr.message); return; }
+      const { error: tErr } = await supabase
+        .from('disciplinary_actions')
+        .update({
+          action_history: th,
+          previous_action: t.current_action || null,
+          current_action: newDaAction,
+          execution_date: null,
+          da_confirmed: null,
+          da_confirmed_by: null,
+          da_confirmed_at: null,
+          modified_by_email: userEmail,
+          last_modified: stamp,
+        })
+        .eq('id', tid);
+      if (tErr) {
+        alert('Error adding action: ' + tErr.message);
+        return;
+      }
     }
 
-    setAddingDaFor(null); setNewDaAction(''); setNewDaDate(new Date().toISOString().split('T')[0]);
-    setBulkActionMode(false); setBulkActionTargets({}); setBulkJournalText('');
+    setAddingDaFor(null);
+    setNewDaAction('');
+    setNewDaDate(new Date().toISOString().split('T')[0]);
+    setBulkActionMode(false);
+    setBulkActionTargets({});
+    setBulkJournalText('');
     await refreshDaList();
     return;
   };
 
   const handleEditDaAction = async (e, daId, stepIndex) => {
     e.preventDefault();
-    const da = daList.find(d => d.id === daId);
+    const da = daList.find((d) => d.id === daId);
     const history = [...da.action_history];
     history[stepIndex].action = editDaActionName;
     history[stepIndex].date = editDaActionDate;
@@ -1063,10 +1869,23 @@ const handleReactivateWip = async (wipId) => {
     history[stepIndex].modified_at = new Date().toISOString();
 
     if (stepIndex === history.length - 1) {
-      await supabase.from('disciplinary_actions').update({ current_action: editDaActionName, execution_date: editDaActionDate }).eq('id', daId);
+      await supabase
+        .from('disciplinary_actions')
+        .update({
+          current_action: editDaActionName,
+          execution_date: editDaActionDate,
+        })
+        .eq('id', daId);
     }
 
-    const { error } = await supabase.from('disciplinary_actions').update({ action_history: history, modified_by_email: userEmail, last_modified: new Date().toISOString() }).eq('id', daId);
+    const { error } = await supabase
+      .from('disciplinary_actions')
+      .update({
+        action_history: history,
+        modified_by_email: userEmail,
+        last_modified: new Date().toISOString(),
+      })
+      .eq('id', daId);
     if (error) alert('Error editing action: ' + error.message);
     else {
       setEditingDaAction(null);
@@ -1076,48 +1895,96 @@ const handleReactivateWip = async (wipId) => {
 
   const handleEditSubAction = async (e, daId, stepIndex, saIndex) => {
     e.preventDefault();
-    const da = daList.find(d => d.id === daId);
+    const da = daList.find((d) => d.id === daId);
     if (!da) return;
     const history = [...da.action_history];
-    if (!history[stepIndex] || !history[stepIndex].sub_actions || !history[stepIndex].sub_actions[saIndex]) return;
+    if (
+      !history[stepIndex] ||
+      !history[stepIndex].sub_actions ||
+      !history[stepIndex].sub_actions[saIndex]
+    )
+      return;
     history[stepIndex].sub_actions[saIndex].desc = editSubActionDesc;
     history[stepIndex].sub_actions[saIndex].date = editSubActionDate;
-    history[stepIndex].sub_actions[saIndex].sla_days = Math.max(1, Math.min(100, editSubActionSla || 2));
-    history[stepIndex].sub_actions[saIndex].expiry_date = addBusinessDays(editSubActionDate, Math.max(1, Math.min(100, editSubActionSla || 2)));
+    history[stepIndex].sub_actions[saIndex].sla_days = Math.max(
+      1,
+      Math.min(100, editSubActionSla || 2)
+    );
+    history[stepIndex].sub_actions[saIndex].expiry_date = addBusinessDays(
+      editSubActionDate,
+      Math.max(1, Math.min(100, editSubActionSla || 2))
+    );
     history[stepIndex].sub_actions[saIndex].modified_by = userEmail;
-    history[stepIndex].sub_actions[saIndex].modified_at = new Date().toISOString();
-    const { error } = await supabase.from('disciplinary_actions').update({
-      action_history: history, modified_by_email: userEmail, last_modified: new Date().toISOString()
-    }).eq('id', daId);
+    history[stepIndex].sub_actions[saIndex].modified_at =
+      new Date().toISOString();
+    const { error } = await supabase
+      .from('disciplinary_actions')
+      .update({
+        action_history: history,
+        modified_by_email: userEmail,
+        last_modified: new Date().toISOString(),
+      })
+      .eq('id', daId);
     if (error) alert('Error editing journal entry: ' + error.message);
-    else { setEditingSubActionEntry(null); refreshDaList(); }
+    else {
+      setEditingSubActionEntry(null);
+      refreshDaList();
+    }
   };
   const handleCompleteSubAction = async (daId, stepIndex, saIndex) => {
-    const da = daList.find(d => d.id === daId);
+    const da = daList.find((d) => d.id === daId);
     if (!da) return;
     const history = [...da.action_history];
-    if (!history[stepIndex] || !history[stepIndex].sub_actions || !history[stepIndex].sub_actions[saIndex]) return;
+    if (
+      !history[stepIndex] ||
+      !history[stepIndex].sub_actions ||
+      !history[stepIndex].sub_actions[saIndex]
+    )
+      return;
     history[stepIndex].sub_actions[saIndex].status = 'Done';
     history[stepIndex].sub_actions[saIndex].completed_by = userEmail;
-    history[stepIndex].sub_actions[saIndex].completed_at = new Date().toISOString();
-    const { error } = await supabase.from('disciplinary_actions').update({
-      action_history: history, modified_by_email: userEmail, last_modified: new Date().toISOString()
-    }).eq('id', daId);
+    history[stepIndex].sub_actions[saIndex].completed_at =
+      new Date().toISOString();
+    const { error } = await supabase
+      .from('disciplinary_actions')
+      .update({
+        action_history: history,
+        modified_by_email: userEmail,
+        last_modified: new Date().toISOString(),
+      })
+      .eq('id', daId);
     if (error) alert('Error completing journal entry: ' + error.message);
     else refreshDaList();
   };
   const handleAddSubAction = async (e, daId, stepIndex) => {
     e.preventDefault();
-    const da = daList.find(d => d.id === daId);
+    const da = daList.find((d) => d.id === daId);
     const history = [...da.action_history];
     history[stepIndex].sub_actions = history[stepIndex].sub_actions || [];
     const slaDays = Math.max(1, Math.min(100, newSubActionSla || 2));
-    history[stepIndex].sub_actions.push({ desc: newSubActionDesc, date: newSubActionDate, sla_days: slaDays, expiry_date: addBusinessDays(newSubActionDate, slaDays), added_by: userEmail, added_at: new Date().toISOString(), status: 'Pending' });
+    history[stepIndex].sub_actions.push({
+      desc: newSubActionDesc,
+      date: newSubActionDate,
+      sla_days: slaDays,
+      expiry_date: addBusinessDays(newSubActionDate, slaDays),
+      added_by: userEmail,
+      added_at: new Date().toISOString(),
+      status: 'Pending',
+    });
 
-    const { error } = await supabase.from('disciplinary_actions').update({ action_history: history, modified_by_email: userEmail, last_modified: new Date().toISOString() }).eq('id', daId);
+    const { error } = await supabase
+      .from('disciplinary_actions')
+      .update({
+        action_history: history,
+        modified_by_email: userEmail,
+        last_modified: new Date().toISOString(),
+      })
+      .eq('id', daId);
     if (error) alert('Error adding journal entry: ' + error.message);
     else {
-      setAddingSubAction(null); setNewSubActionDesc(''); setNewSubActionDate(new Date().toISOString().split('T')[0]);
+      setAddingSubAction(null);
+      setNewSubActionDesc('');
+      setNewSubActionDate(new Date().toISOString().split('T')[0]);
       refreshDaList();
     }
   };
@@ -1125,12 +1992,22 @@ const handleReactivateWip = async (wipId) => {
   const handleAddViolation = async (daId) => {
     const violationText = newViolation[daId];
     if (!violationText) return;
-    const da = daList.find(d => d.id === daId);
+    const da = daList.find((d) => d.id === daId);
     const violations = da.violations || [];
     violations.push(violationText);
-    const { error } = await supabase.from('disciplinary_actions').update({ violations: violations, modified_by_email: userEmail, last_modified: new Date().toISOString() }).eq('id', daId);
+    const { error } = await supabase
+      .from('disciplinary_actions')
+      .update({
+        violations: violations,
+        modified_by_email: userEmail,
+        last_modified: new Date().toISOString(),
+      })
+      .eq('id', daId);
     if (error) alert('Error adding violation: ' + error.message);
-    else { refreshDaList(); setNewViolation(prev => ({ ...prev, [daId]: '' })); }
+    else {
+      refreshDaList();
+      setNewViolation((prev) => ({ ...prev, [daId]: '' }));
+    }
   };
   const [bulkMode, setBulkMode] = React.useState(false);
   const [bulkText, setBulkText] = React.useState('');
@@ -1140,54 +2017,82 @@ const handleReactivateWip = async (wipId) => {
   const [bulkActionTargets, setBulkActionTargets] = React.useState({});
   const [bulkJournalText, setBulkJournalText] = React.useState('');
   const parseBulkPeople = (raw) => {
-    const lines = (raw || '').split(/\n+/).map(s => s.replace(/\u2060|\u200b/g, '').trim()).filter(Boolean);
+    const lines = (raw || '')
+      .split(/\n+/)
+      .map((s) => s.replace(/\u2060|\u200b/g, '').trim())
+      .filter(Boolean);
     return lines.map((line, i) => {
       let work = line.replace(/^\s*\d+\s*[\.\)\-]\s*/, '').trim();
-      let id = '', cust = '';
+      let id = '',
+        cust = '';
       work = work.replace(/[\(\[]([^\)\]]+)[\)\]]/g, (m, inner) => {
-        inner.split('/').map(s => s.trim()).filter(Boolean).forEach(p => {
-          if (/^CU/i.test(p)) cust = cust ? `${cust}; ${p}` : p;
-          else if (!id && /^[A-Za-z]{2}\d{4,}$/.test(p)) id = p;
-          else cust = cust ? `${cust}; ${p}` : p;
-        });
+        inner
+          .split('/')
+          .map((s) => s.trim())
+          .filter(Boolean)
+          .forEach((p) => {
+            if (/^CU/i.test(p)) cust = cust ? `${cust}; ${p}` : p;
+            else if (!id && /^[A-Za-z]{2}\d{4,}$/.test(p)) id = p;
+            else cust = cust ? `${cust}; ${p}` : p;
+          });
         return ' ';
       });
       work = work.replace(/\b([A-Za-z]{2}\d{4,})\b/g, (m, found) => {
-        if (/^CU/i.test(found)) { cust = cust ? `${cust}; ${found}` : found; return ' '; }
-        if (!id) { id = found; return ' '; }
+        if (/^CU/i.test(found)) {
+          cust = cust ? `${cust}; ${found}` : found;
+          return ' ';
+        }
+        if (!id) {
+          id = found;
+          return ' ';
+        }
         return ' ';
       });
-      const name = work.replace(/[\(\)\[\]]/g, ' ').replace(/\s+/g, ' ').replace(/^[\.,;\-\s]+|[\.,;\-\s]+$/g, '').trim();
+      const name = work
+        .replace(/[\(\)\[\]]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .replace(/^[\.,;\-\s]+|[\.,;\-\s]+$/g, '')
+        .trim();
       return { row: i + 1, name, id, cust, include: true };
     });
   };
   const handleDeleteDaStep = async (daId, stepIndex) => {
-    const da = daList.find(d => d.id === daId);
+    const da = daList.find((d) => d.id === daId);
     if (!da) return;
     const history = [...(da.action_history || [])];
     const removed = history[stepIndex];
     if (!removed) return;
 
-    const remaining = history.filter((_, i) => i !== stepIndex).map((h, i) => ({ ...h, step: i + 1 }));
+    const remaining = history
+      .filter((_, i) => i !== stepIndex)
+      .map((h, i) => ({ ...h, step: i + 1 }));
     const last = remaining[remaining.length - 1] || null;
     const prev = remaining[remaining.length - 2] || null;
 
-    const msg = `Delete this action from the timeline?\n\n"${removed.action || '—'}" (${removed.date || 'no date'}) will be removed.\n\n`
-      + (last ? `Current action reverts to "${last.action}".` : 'This respondent will have no action recorded.')
-      + `\n\nThis cannot be undone.`;
+    const msg =
+      `Delete this action from the timeline?\n\n"${removed.action || '—'}" (${
+        removed.date || 'no date'
+      }) will be removed.\n\n` +
+      (last
+        ? `Current action reverts to "${last.action}".`
+        : 'This respondent will have no action recorded.') +
+      `\n\nThis cannot be undone.`;
     if (!window.confirm(msg)) return;
 
-    const { error } = await supabase.from('disciplinary_actions').update({
-      action_history: remaining,
-      current_action: last ? last.action : null,
-      execution_date: last ? last.date : null,
-      previous_action: prev ? prev.action : null,
-      da_confirmed: last && last.confirmed_by ? true : null,
-      da_confirmed_by: last && last.confirmed_by ? last.confirmed_by : null,
-      da_confirmed_at: last && last.confirmed_at ? last.confirmed_at : null,
-      modified_by_email: userEmail,
-      last_modified: new Date().toISOString()
-    }).eq('id', daId);
+    const { error } = await supabase
+      .from('disciplinary_actions')
+      .update({
+        action_history: remaining,
+        current_action: last ? last.action : null,
+        execution_date: last ? last.date : null,
+        previous_action: prev ? prev.action : null,
+        da_confirmed: last && last.confirmed_by ? true : null,
+        da_confirmed_by: last && last.confirmed_by ? last.confirmed_by : null,
+        da_confirmed_at: last && last.confirmed_at ? last.confirmed_at : null,
+        modified_by_email: userEmail,
+        last_modified: new Date().toISOString(),
+      })
+      .eq('id', daId);
     if (error) alert('Error deleting action: ' + error.message);
     else refreshDaList();
   };
@@ -1199,57 +2104,93 @@ const handleReactivateWip = async (wipId) => {
       : 'Confirm this Disciplinary Action is in force?';
     if (!window.confirm(msg)) return;
 
-    const da = daList.find(d => d.id === daId);
+    const da = daList.find((d) => d.id === daId);
     const today = new Date().toISOString().split('T')[0];
     const history = (da?.action_history || []).map((h, i, arr) =>
       i === arr.length - 1
-        ? { ...h, date: h.date || today, confirmed_by: userEmail, confirmed_at: new Date().toISOString() }
+        ? {
+            ...h,
+            date: h.date || today,
+            confirmed_by: userEmail,
+            confirmed_at: new Date().toISOString(),
+          }
         : h
     );
     const lastStep = history[history.length - 1] || null;
 
-    const { error } = await supabase.from('disciplinary_actions').update({
-      da_confirmed: true, da_confirmed_by: userEmail, da_confirmed_at: new Date().toISOString(),
-      action_history: history,
-      execution_date: lastStep ? lastStep.date : null,
-      modified_by_email: userEmail, last_modified: new Date().toISOString()
-    }).eq('id', daId);
+    const { error } = await supabase
+      .from('disciplinary_actions')
+      .update({
+        da_confirmed: true,
+        da_confirmed_by: userEmail,
+        da_confirmed_at: new Date().toISOString(),
+        action_history: history,
+        execution_date: lastStep ? lastStep.date : null,
+        modified_by_email: userEmail,
+        last_modified: new Date().toISOString(),
+      })
+      .eq('id', daId);
     if (error) alert('Error confirming DA: ' + error.message);
     else refreshDaList();
   };
   const handleClearDA = async (daId) => {
-    if (!window.confirm('Remove this respondent from the DA In Force count?\n\nThe action stays in the timeline but is no longer counted as a Disciplinary Action taken.\n\nThe "Date DA in force" will be cleared, with a record of what it was.')) return;
-    const da = daList.find(d => d.id === daId);
+    if (
+      !window.confirm(
+        'Remove this respondent from the DA In Force count?\n\nThe action stays in the timeline but is no longer counted as a Disciplinary Action taken.\n\nThe "Date DA in force" will be cleared, with a record of what it was.'
+      )
+    )
+      return;
+    const da = daList.find((d) => d.id === daId);
     const history = (da?.action_history || []).map((h, i, arr) =>
       i === arr.length - 1
-        ? { ...h, date: null, was_in_force_from: h.date || null, cleared_by: userEmail, cleared_at: new Date().toISOString() }
+        ? {
+            ...h,
+            date: null,
+            was_in_force_from: h.date || null,
+            cleared_by: userEmail,
+            cleared_at: new Date().toISOString(),
+          }
         : h
     );
-    const { error } = await supabase.from('disciplinary_actions').update({
-      da_confirmed: false,
-      action_history: history,
-      execution_date: null,
-      modified_by_email: userEmail,
-      last_modified: new Date().toISOString()
-    }).eq('id', daId);
+    const { error } = await supabase
+      .from('disciplinary_actions')
+      .update({
+        da_confirmed: false,
+        action_history: history,
+        execution_date: null,
+        modified_by_email: userEmail,
+        last_modified: new Date().toISOString(),
+      })
+      .eq('id', daId);
     if (error) alert('Error clearing DA: ' + error.message);
     else refreshDaList();
   };
   const handleDeleteViolation = async (daId, index) => {
-    const da = daList.find(d => d.id === daId);
+    const da = daList.find((d) => d.id === daId);
     const violations = da.violations || [];
     violations.splice(index, 1);
-    const { error } = await supabase.from('disciplinary_actions').update({ violations: violations, modified_by_email: userEmail, last_modified: new Date().toISOString() }).eq('id', daId);
+    const { error } = await supabase
+      .from('disciplinary_actions')
+      .update({
+        violations: violations,
+        modified_by_email: userEmail,
+        last_modified: new Date().toISOString(),
+      })
+      .eq('id', daId);
     if (error) alert('Error deleting violation: ' + error.message);
     else refreshDaList();
   };
 
-  const toggleExpandDA = (daId) => setExpandedDAs(prev => ({ ...prev, [daId]: !prev[daId] }));
+  const toggleExpandDA = (daId) =>
+    setExpandedDAs((prev) => ({ ...prev, [daId]: !prev[daId] }));
 
   const [caseComplainants, setCaseComplainants] = React.useState([]);
 
   const loadCaseComplainants = React.useCallback(async (caseNum) => {
-    if (!caseNum) { setCaseComplainants([]); return; }
+    if (!caseNum) {
+      setCaseComplainants([]);
+      return;
+    }
     const { data } = await supabase
       .from('case_complainants')
       .select('*')
@@ -1259,19 +2200,24 @@ const handleReactivateWip = async (wipId) => {
     setCaseComplainants(data || []);
   }, []);
 
-  React.useEffect(() => { loadCaseComplainants(selectedCase); }, [selectedCase]);
+  React.useEffect(() => {
+    loadCaseComplainants(selectedCase);
+  }, [selectedCase]);
 
   const handleRelinkComplainant = async (daId, complainantRowId) => {
-    const c = caseComplainants.find(x => x.id === complainantRowId);
+    const c = caseComplainants.find((x) => x.id === complainantRowId);
     if (!c) return;
-    const { error } = await supabase.from('disciplinary_actions').update({
-      complainant_name: c.complainant_name,
-      complainant_id: c.complainant_id,
-      complainant_cust_id: c.complainant_cust_id,
-      complainant_country: c.complainant_country,
-      modified_by_email: userEmail,
-      last_modified: new Date().toISOString()
-    }).eq('id', daId);
+    const { error } = await supabase
+      .from('disciplinary_actions')
+      .update({
+        complainant_name: c.complainant_name,
+        complainant_id: c.complainant_id,
+        complainant_cust_id: c.complainant_cust_id,
+        complainant_country: c.complainant_country,
+        modified_by_email: userEmail,
+        last_modified: new Date().toISOString(),
+      })
+      .eq('id', daId);
     if (error) alert('Error changing complainant: ' + error.message);
     else await refreshDaList();
   };
@@ -1280,29 +2226,48 @@ const handleReactivateWip = async (wipId) => {
     e.preventDefault();
 
     if (bulkMode && bulkPreview) {
-      const chosen = bulkPreview.filter(p => p.include && p.name);
-      if (chosen.length === 0) { alert('Nothing selected to add.'); return; }
-
-      const anchor = (caseComplainants || []).find(c => c.is_anchor) || (caseComplainants || [])[0] || null;
-      if (showAddPersonForm === 'respondent' && !anchor) {
-        alert('This case has no complainant yet.\n\nAdd a complainant first, then add respondents.');
+      const chosen = bulkPreview.filter((p) => p.include && p.name);
+      if (chosen.length === 0) {
+        alert('Nothing selected to add.');
         return;
       }
-      if (!window.confirm(`Add ${chosen.length} ${showAddPersonForm}${chosen.length > 1 ? 's' : ''} to ${selectedCase}?`)) return;
+
+      const anchor =
+        (caseComplainants || []).find((c) => c.is_anchor) ||
+        (caseComplainants || [])[0] ||
+        null;
+      if (showAddPersonForm === 'respondent' && !anchor) {
+        alert(
+          'This case has no complainant yet.\n\nAdd a complainant first, then add respondents.'
+        );
+        return;
+      }
+      if (
+        !window.confirm(
+          `Add ${chosen.length} ${showAddPersonForm}${
+            chosen.length > 1 ? 's' : ''
+          } to ${selectedCase}?`
+        )
+      )
+        return;
 
       const rows = chosen.map((p, i) => {
         const row = {
           case_number: selectedCase,
           unique_key: `${selectedCase}|${showAddPersonForm}_${Date.now()}_${i}`,
           modified_by_email: userEmail,
-          last_modified: new Date().toISOString()
+          last_modified: new Date().toISOString(),
         };
         if (showAddPersonForm === 'complainant') {
-          row.complainant_name = p.name; row.complainant_id = p.id || null;
-          row.complainant_cust_id = p.cust || null; row.complainant_country = newPersonCountry || null;
+          row.complainant_name = p.name;
+          row.complainant_id = p.id || null;
+          row.complainant_cust_id = p.cust || null;
+          row.complainant_country = newPersonCountry || null;
         } else {
-          row.respondent_name = p.name; row.respondent_id = p.id || null;
-          row.respondent_cust_id = p.cust || null; row.respondent_country = newPersonCountry || null;
+          row.respondent_name = p.name;
+          row.respondent_id = p.id || null;
+          row.respondent_cust_id = p.cust || null;
+          row.respondent_country = newPersonCountry || null;
           row.complainant_name = anchor.complainant_name;
           row.complainant_id = anchor.complainant_id;
           row.complainant_cust_id = anchor.complainant_cust_id;
@@ -1312,38 +2277,71 @@ const handleReactivateWip = async (wipId) => {
       });
 
       for (let i = 0; i < rows.length; i += 10) {
-        const { error: bErr } = await supabase.from('disciplinary_actions').insert(rows.slice(i, i + 10));
-        if (bErr) { alert('Error adding batch: ' + bErr.message); return; }
+        const { error: bErr } = await supabase
+          .from('disciplinary_actions')
+          .insert(rows.slice(i, i + 10));
+        if (bErr) {
+          alert('Error adding batch: ' + bErr.message);
+          return;
+        }
       }
 
       if (showAddPersonForm === 'complainant') {
-        const { data: existing } = await supabase.from('case_complainants').select('id').eq('case_number', selectedCase).limit(1);
+        const { data: existing } = await supabase
+          .from('case_complainants')
+          .select('id')
+          .eq('case_number', selectedCase)
+          .limit(1);
         const hasAny = existing && existing.length > 0;
         const cRows = chosen.map((p, i) => ({
-          case_number: selectedCase, complainant_name: p.name, complainant_id: p.id || null,
-          complainant_cust_id: p.cust || null, complainant_country: newPersonCountry || null,
-          is_anchor: !hasAny && i === 0, modified_by_email: userEmail
+          case_number: selectedCase,
+          complainant_name: p.name,
+          complainant_id: p.id || null,
+          complainant_cust_id: p.cust || null,
+          complainant_country: newPersonCountry || null,
+          is_anchor: !hasAny && i === 0,
+          modified_by_email: userEmail,
         }));
         for (let i = 0; i < cRows.length; i += 10) {
-          await supabase.from('case_complainants').insert(cRows.slice(i, i + 10));
+          await supabase
+            .from('case_complainants')
+            .insert(cRows.slice(i, i + 10));
         }
         await loadCaseComplainants(selectedCase);
       }
 
-      alert(`Added ${chosen.length} ${showAddPersonForm}${chosen.length > 1 ? 's' : ''}.`);
-      setShowAddPersonForm(null); setBulkMode(false); setBulkText(''); setBulkPreview('');
-      setNewPersonName(''); setNewPersonId(''); setNewPersonCountry('');
+      alert(
+        `Added ${chosen.length} ${showAddPersonForm}${
+          chosen.length > 1 ? 's' : ''
+        }.`
+      );
+      setShowAddPersonForm(null);
+      setBulkMode(false);
+      setBulkText('');
+      setBulkPreview('');
+      setNewPersonName('');
+      setNewPersonId('');
+      setNewPersonCountry('');
       await refreshDaList();
       return;
     }
 
     const timestamp = Date.now();
     const uniqueKey = `${selectedCase}|${showAddPersonForm}_${timestamp}`;
-    const insertData = { case_number: selectedCase, unique_key: uniqueKey, modified_by_email: userEmail, last_modified: new Date().toISOString() };
+    const insertData = {
+      case_number: selectedCase,
+      unique_key: uniqueKey,
+      modified_by_email: userEmail,
+      last_modified: new Date().toISOString(),
+    };
     if (showAddPersonForm === 'complainant') {
-      insertData.complainant_name = newPersonName; insertData.complainant_id = newPersonId; insertData.complainant_country = newPersonCountry;
+      insertData.complainant_name = newPersonName;
+      insertData.complainant_id = newPersonId;
+      insertData.complainant_country = newPersonCountry;
     } else {
-      insertData.respondent_name = newPersonName; insertData.respondent_id = newPersonId; insertData.respondent_country = newPersonCountry;
+      insertData.respondent_name = newPersonName;
+      insertData.respondent_id = newPersonId;
+      insertData.respondent_country = newPersonCountry;
     }
     let error = null;
     if (showAddPersonForm === 'respondent') {
@@ -1356,13 +2354,16 @@ const handleReactivateWip = async (wipId) => {
         .order('last_modified', { ascending: true })
         .limit(1);
       if (openRows && openRows.length > 0) {
-        const res = await supabase.from('disciplinary_actions').update({
-          respondent_name: newPersonName,
-          respondent_id: newPersonId,
-          respondent_country: newPersonCountry,
-          modified_by_email: userEmail,
-          last_modified: new Date().toISOString()
-        }).eq('id', openRows[0].id);
+        const res = await supabase
+          .from('disciplinary_actions')
+          .update({
+            respondent_name: newPersonName,
+            respondent_id: newPersonId,
+            respondent_country: newPersonCountry,
+            modified_by_email: userEmail,
+            last_modified: new Date().toISOString(),
+          })
+          .eq('id', openRows[0].id);
         error = res.error;
       } else {
         const { data: anchorRows } = await supabase
@@ -1377,11 +2378,15 @@ const handleReactivateWip = async (wipId) => {
           insertData.complainant_id = anchorRows[0].complainant_id;
           insertData.complainant_country = anchorRows[0].complainant_country;
         }
-        const res = await supabase.from('disciplinary_actions').insert([insertData]);
+        const res = await supabase
+          .from('disciplinary_actions')
+          .insert([insertData]);
         error = res.error;
       }
     } else {
-      const res = await supabase.from('disciplinary_actions').insert([insertData]);
+      const res = await supabase
+        .from('disciplinary_actions')
+        .insert([insertData]);
       error = res.error;
       if (!error) {
         const { data: existing } = await supabase
@@ -1389,34 +2394,46 @@ const handleReactivateWip = async (wipId) => {
           .select('id')
           .eq('case_number', selectedCase)
           .limit(1);
-        await supabase.from('case_complainants').insert([{
-          case_number: selectedCase,
-          complainant_name: newPersonName,
-          complainant_id: newPersonId,
-          complainant_country: newPersonCountry,
-          is_anchor: !existing || existing.length === 0,
-          modified_by_email: userEmail
-        }]);
+        await supabase.from('case_complainants').insert([
+          {
+            case_number: selectedCase,
+            complainant_name: newPersonName,
+            complainant_id: newPersonId,
+            complainant_country: newPersonCountry,
+            is_anchor: !existing || existing.length === 0,
+            modified_by_email: userEmail,
+          },
+        ]);
         await loadCaseComplainants(selectedCase);
       }
     }
-    if (error) alert('Error adding ' + showAddPersonForm + ': ' + error.message);
+    if (error)
+      alert('Error adding ' + showAddPersonForm + ': ' + error.message);
     else {
-      setShowAddPersonForm(null); setNewPersonName(''); setNewPersonId(''); setNewPersonCountry('');
+      setShowAddPersonForm(null);
+      setNewPersonName('');
+      setNewPersonId('');
+      setNewPersonCountry('');
       await refreshDaList();
     }
   };
 
   const requestSort = (key) => {
     let direction = 'ascending';
-    if (sortConfig.key === key && sortConfig.direction === 'ascending') direction = 'descending';
+    if (sortConfig.key === key && sortConfig.direction === 'ascending')
+      direction = 'descending';
     setSortConfig({ key, direction });
   };
 
-  const filteredCases = cases.filter(c => {
-    if ((c.case_number || '').toUpperCase().startsWith('CVN') && !c.promoted) return false;
+  const filteredCases = cases.filter((c) => {
+    if ((c.case_number || '').toUpperCase().startsWith('CVN') && !c.promoted)
+      return false;
     if (showMyCases) {
-      const myName = (userEmail || '').split('@')[0].split('.').join(' ').toLowerCase();
+      const myName = (userEmail || '')
+        .split('@')[0]
+        .split('.')
+        .join(' ')
+        .toLowerCase();
       const picLower = (c.pic || '').toLowerCase();
       if (!picLower.includes(myName)) return false;
     }
@@ -1425,9 +2442,24 @@ const handleReactivateWip = async (wipId) => {
       const matchCase = c.case_number?.toLowerCase().includes(search);
       const matchPic = c.pic?.toLowerCase().includes(search);
       const matchCountry = c.country?.toLowerCase().includes(search);
-      const matchRespondent = c.disciplinary_actions?.some(da => da.respondent_name?.toLowerCase().includes(search) || da.respondent_id?.toLowerCase().includes(search));
-      const matchComplainant = c.disciplinary_actions?.some(da => da.complainant_name?.toLowerCase().includes(search) || da.complainant_id?.toLowerCase().includes(search));
-      if (!matchCase && !matchPic && !matchCountry && !matchRespondent && !matchComplainant) return false;
+      const matchRespondent = c.disciplinary_actions?.some(
+        (da) =>
+          da.respondent_name?.toLowerCase().includes(search) ||
+          da.respondent_id?.toLowerCase().includes(search)
+      );
+      const matchComplainant = c.disciplinary_actions?.some(
+        (da) =>
+          da.complainant_name?.toLowerCase().includes(search) ||
+          da.complainant_id?.toLowerCase().includes(search)
+      );
+      if (
+        !matchCase &&
+        !matchPic &&
+        !matchCountry &&
+        !matchRespondent &&
+        !matchComplainant
+      )
+        return false;
     }
 
     if (filters.pic && tidyPic(c.pic) !== filters.pic) return false;
@@ -1445,29 +2477,43 @@ const handleReactivateWip = async (wipId) => {
     let sortableCases = [...filteredCases];
     if (sortConfig.key === 'active_wip') {
       sortableCases.sort((a, b) => {
-        const aCount = a.wip_actions?.filter(w => w.status === 'Pending').length || 0;
-        const bCount = b.wip_actions?.filter(w => w.status === 'Pending').length || 0;
-        return sortConfig.direction === 'ascending' ? aCount - bCount : bCount - aCount;
+        const aCount =
+          a.wip_actions?.filter((w) => w.status === 'Pending').length || 0;
+        const bCount =
+          b.wip_actions?.filter((w) => w.status === 'Pending').length || 0;
+        return sortConfig.direction === 'ascending'
+          ? aCount - bCount
+          : bCount - aCount;
       });
     } else if (sortConfig.key === 'sla_due_date') {
       const asc = sortConfig.direction === 'ascending';
       const currentYear = new Date().getFullYear();
       const caseInfo = new Map();
-      sortableCases.forEach(c => {
-        const m = String(c.case_number || '').toUpperCase().match(/CXN-?(\d{4})(\d{2})(\d{2})/);
+      sortableCases.forEach((c) => {
+        const m = String(c.case_number || '')
+          .toUpperCase()
+          .match(/CXN-?(\d{4})(\d{2})(\d{2})/);
         caseInfo.set(c.case_number, {
           year: m ? parseInt(m[1], 10) : 0,
-          creationDate: m ? parseInt(m[1] + m[2] + m[3], 10) : 0
+          creationDate: m ? parseInt(m[1] + m[2] + m[3], 10) : 0,
         });
       });
       sortableCases.sort((a, b) => {
-        const aClosed = a.case_status === 'COMPLETED' || a.case_status === 'CANCELLED';
-        const bClosed = b.case_status === 'COMPLETED' || b.case_status === 'CANCELLED';
+        const aClosed =
+          a.case_status === 'COMPLETED' || a.case_status === 'CANCELLED';
+        const bClosed =
+          b.case_status === 'COMPLETED' || b.case_status === 'CANCELLED';
         if (!aClosed && bClosed) return -1;
         if (aClosed && !bClosed) return 1;
         if (!aClosed && !bClosed) {
-          const aInfo = caseInfo.get(a.case_number) || { year: 0, creationDate: 0 };
-          const bInfo = caseInfo.get(b.case_number) || { year: 0, creationDate: 0 };
+          const aInfo = caseInfo.get(a.case_number) || {
+            year: 0,
+            creationDate: 0,
+          };
+          const bInfo = caseInfo.get(b.case_number) || {
+            year: 0,
+            creationDate: 0,
+          };
           const aCurrent = aInfo.year >= currentYear;
           const bCurrent = bInfo.year >= currentYear;
           if (aCurrent && !bCurrent) return -1;
@@ -1487,8 +2533,10 @@ const handleReactivateWip = async (wipId) => {
       });
     } else if (sortConfig.key) {
       sortableCases.sort((a, b) => {
-        if (a[sortConfig.key] < b[sortConfig.key]) return sortConfig.direction === 'ascending' ? -1 : 1;
-        if (a[sortConfig.key] > b[sortConfig.key]) return sortConfig.direction === 'ascending' ? 1 : -1;
+        if (a[sortConfig.key] < b[sortConfig.key])
+          return sortConfig.direction === 'ascending' ? -1 : 1;
+        if (a[sortConfig.key] > b[sortConfig.key])
+          return sortConfig.direction === 'ascending' ? 1 : -1;
         return 0;
       });
     }
@@ -1496,165 +2544,251 @@ const handleReactivateWip = async (wipId) => {
   }, [filteredCases, sortConfig]);
 
   const totalPages = Math.ceil(sortedCases.length / pageSize);
-  const currentCases = sortedCases.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const currentCases = sortedCases.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize
+  );
 
   const totalCases = cases.length;
-  const inProgress = cases.filter(c => c.case_status === 'IN PROGRESS').length;
-  const completed = cases.filter(c => c.case_status === 'COMPLETED').length;
-  const cancelled = cases.filter(c => c.case_status === 'CANCELLED').length;
+  const inProgress = cases.filter(
+    (c) => c.case_status === 'IN PROGRESS'
+  ).length;
+  const completed = cases.filter((c) => c.case_status === 'COMPLETED').length;
+  const cancelled = cases.filter((c) => c.case_status === 'CANCELLED').length;
   // PERF FIX: was recalculated on every render (including every keystroke anywhere
   // in the Dashboard). Now only recalculates when `cases` actually changes.
   const outOfSlaCases = React.useMemo(
-    () => cases.filter(c => calculateBusinessDays(c.sla_due_date) < 0 && c.case_status === 'IN PROGRESS'),
+    () =>
+      cases.filter(
+        (c) =>
+          calculateBusinessDays(c.sla_due_date) < 0 &&
+          c.case_status === 'IN PROGRESS'
+      ),
     [cases]
   );
 
   // ==== DA In Force: latest action determines if the DA is still active ====
-// Release or Termination = resolved, no longer in force
-const isDAResolving = (da) => {
-  const action = (da?.current_action || '').toLowerCase();
-  return action.includes('release') || action.includes('terminat');
-};
+  // Release or Termination = resolved, no longer in force
+  const isDAResolving = (da) => {
+    const action = (da?.current_action || '').toLowerCase();
+    return action.includes('release') || action.includes('terminat');
+  };
 
-const isDAInForce = (da) => {
-  if (!da) return false;
-  const action = (da.current_action || '').toLowerCase();
-  const prev = (da.previous_action || '').toLowerCase();
+  const isDAInForce = (da) => {
+    if (!da) return false;
+    const action = (da.current_action || '').toLowerCase();
+    const prev = (da.previous_action || '').toLowerCase();
 
-  if (isDAResolving(da)) {
-    // A release or termination only takes effect once confirmed.
-    if (da.da_confirmed === true) return false;
-    // Not yet approved — the earlier action still governs.
-    return prev.includes('suspend');
-  }
+    if (isDAResolving(da)) {
+      // A release or termination only takes effect once confirmed.
+      if (da.da_confirmed === true) return false;
+      // Not yet approved — the earlier action still governs.
+      return prev.includes('suspend');
+    }
 
-  // Only suspensions count. Other actions (SCO/SCN, warning letters, reinstatements)
-  // are tracked via WIP, not the DA count.
-  // Only suspensions count, and only once confirmed as approved and in force.
-  // Unapproved suspensions are tracked via WIP until the notice is issued.
-  if (!action.includes('suspend')) return false;
-  return da.da_confirmed === true;
-};
+    // Only suspensions count. Other actions (SCO/SCN, warning letters, reinstatements)
+    // are tracked via WIP, not the DA count.
+    // Only suspensions count, and only once confirmed as approved and in force.
+    // Unapproved suspensions are tracked via WIP until the notice is issued.
+    if (!action.includes('suspend')) return false;
+    return da.da_confirmed === true;
+  };
   const getActionColor = (action) => {
     if (!action) return { text: '#64748b', bg: '#f1f5f9' };
     const lower = action.toLowerCase();
     if (lower.includes('terminat')) return { text: '#dc2626', bg: '#fee2e2' };
     if (lower.includes('suspend')) return { text: '#d67706', bg: '#fef3c7' };
-    if (lower.includes('release') || lower.includes('issued warning')) return { text: '#059669', bg: '#d1fae5' };
+    if (lower.includes('release') || lower.includes('issued warning'))
+      return { text: '#059669', bg: '#d1fae5' };
     return { text: '#2563eb', bg: '#dbeafe' };
   };
 
   // ==== Complainant display: name + QNET ID# + country ====
-const renderComplainantLine = () => {
-  const da = daList.find(d => d.complainant_name || d.complainant_id || d.complainant_country);
-  if (!da) return <span style={{ color: '#94a3b8' }}>—</span>;
-  return (
-    <span className="complainant-line">
-      <span className="complainant-name">{da.complainant_name || '(unnamed)'}</span>
-      {da.complainant_id && <span className="badge badge-purple" style={{ marginLeft: '6px' }}>QNET ID#: {da.complainant_id}</span>}
-      {da.complainant_country && <span className="badge badge-grey" style={{ marginLeft: '6px' }}>{da.complainant_country}</span>}
-    </span>
-  );
-};
-// ==== Closure / reactivation dates display ====
-// ==== Last-modified display ====
-const renderModifiedInfo = (c) => {
-  if (!c.last_modified) return null;
-  return (
-    <div className="expanded-sub" style={{ color: '#94a3b8', fontSize: '11px' }}>
-      Modified: {formatDateTime(c.last_modified)}{c.modified_by_email ? ` (by ${c.modified_by_email.split('@')[0]})` : ''}
-    </div>
-  );
-};
-const renderClosureInfo = (c) => {
-  const isClosed = c.case_status === 'COMPLETED' || c.case_status === 'CANCELLED';
-  const label = c.case_status === 'CANCELLED' ? 'Closed (Cancelled): ' : 'Completed: ';
-  return (
-    <>
-      {isClosed && c.date_completed && <div className="expanded-sub">{label}{c.date_completed}</div>}
-      {c.reactivated_at && <div className="expanded-sub" style={{ color: '#64748b' }}>Reactivated: {formatDateTime(c.reactivated_at)}</div>}
-    </>
-  );
-};
+  const renderComplainantLine = () => {
+    const da = daList.find(
+      (d) => d.complainant_name || d.complainant_id || d.complainant_country
+    );
+    if (!da) return <span style={{ color: '#94a3b8' }}>—</span>;
+    return (
+      <span className="complainant-line">
+        <span className="complainant-name">
+          {da.complainant_name || '(unnamed)'}
+        </span>
+        {da.complainant_id && (
+          <span className="badge badge-purple" style={{ marginLeft: '6px' }}>
+            QNET ID#: {da.complainant_id}
+          </span>
+        )}
+        {da.complainant_country && (
+          <span className="badge badge-grey" style={{ marginLeft: '6px' }}>
+            {da.complainant_country}
+          </span>
+        )}
+      </span>
+    );
+  };
+  // ==== Closure / reactivation dates display ====
+  // ==== Last-modified display ====
+  const renderModifiedInfo = (c) => {
+    if (!c.last_modified) return null;
+    return (
+      <div
+        className="expanded-sub"
+        style={{ color: '#94a3b8', fontSize: '11px' }}
+      >
+        Modified: {formatDateTime(c.last_modified)}
+        {c.modified_by_email
+          ? ` (by ${c.modified_by_email.split('@')[0]})`
+          : ''}
+      </div>
+    );
+  };
+  const renderClosureInfo = (c) => {
+    const isClosed =
+      c.case_status === 'COMPLETED' || c.case_status === 'CANCELLED';
+    const label =
+      c.case_status === 'CANCELLED' ? 'Closed (Cancelled): ' : 'Completed: ';
+    return (
+      <>
+        {isClosed && c.date_completed && (
+          <div className="expanded-sub">
+            {label}
+            {c.date_completed}
+          </div>
+        )}
+        {c.reactivated_at && (
+          <div className="expanded-sub" style={{ color: '#64748b' }}>
+            Reactivated: {formatDateTime(c.reactivated_at)}
+          </div>
+        )}
+      </>
+    );
+  };
   // ==== INDIA STAGING: state, computations, handlers ====
   const [indiaSearch, setIndiaSearch] = useState('');
   const [indiaMatchFilter, setIndiaMatchFilter] = useState('');
   const [indiaPage, setIndiaPage] = useState(1);
 
-  const indiaStaging = cases.filter(c => (c.case_number || '').toUpperCase().startsWith('CVN') && !c.promoted);
-  const promotedCases = cases.filter(c => !(c.case_number || '').toUpperCase().startsWith('CVN') || c.promoted);
+  const indiaStaging = cases.filter(
+    (c) => (c.case_number || '').toUpperCase().startsWith('CVN') && !c.promoted
+  );
+  const promotedCases = cases.filter(
+    (c) => !(c.case_number || '').toUpperCase().startsWith('CVN') || c.promoted
+  );
 
   const indiaPromotedIdMap = new Map();
-  promotedCases.forEach(pc => {
-    (pc.disciplinary_actions || []).forEach(pda => {
-      if (pda.respondent_id) indiaPromotedIdMap.set(pda.respondent_id, pc.case_number);
+  promotedCases.forEach((pc) => {
+    (pc.disciplinary_actions || []).forEach((pda) => {
+      if (pda.respondent_id)
+        indiaPromotedIdMap.set(pda.respondent_id, pc.case_number);
     });
   });
 
   const indiaDuplicateMap = new Map();
-  indiaStaging.forEach(sc => {
-    const match = (sc.disciplinary_actions || []).find(da => da.respondent_id && indiaPromotedIdMap.has(da.respondent_id));
-    if (match) indiaDuplicateMap.set(sc.case_number, indiaPromotedIdMap.get(match.respondent_id));
+  indiaStaging.forEach((sc) => {
+    const match = (sc.disciplinary_actions || []).find(
+      (da) => da.respondent_id && indiaPromotedIdMap.has(da.respondent_id)
+    );
+    if (match)
+      indiaDuplicateMap.set(
+        sc.case_number,
+        indiaPromotedIdMap.get(match.respondent_id)
+      );
   });
 
-  const indiaNoIdCount = indiaStaging.filter(c => !(c.disciplinary_actions || []).some(da => da.respondent_id)).length;
+  const indiaNoIdCount = indiaStaging.filter(
+    (c) => !(c.disciplinary_actions || []).some((da) => da.respondent_id)
+  ).length;
 
-  const indiaFiltered = indiaStaging.filter(c => {
+  const indiaFiltered = indiaStaging.filter((c) => {
     if (indiaSearch) {
       const search = indiaSearch.toLowerCase();
       const matchCase = c.case_number?.toLowerCase().includes(search);
-      const matchPerson = (c.disciplinary_actions || []).some(da =>
-        (da.respondent_id || '').toLowerCase().includes(search) ||
-        (da.respondent_name || '').toLowerCase().includes(search)
+      const matchPerson = (c.disciplinary_actions || []).some(
+        (da) =>
+          (da.respondent_id || '').toLowerCase().includes(search) ||
+          (da.respondent_name || '').toLowerCase().includes(search)
       );
       if (!matchCase && !matchPerson) return false;
     }
-    if (indiaMatchFilter === 'matched' && !indiaDuplicateMap.has(c.case_number)) return false;
-    if (indiaMatchFilter === 'unmatched' && indiaDuplicateMap.has(c.case_number)) return false;
+    if (indiaMatchFilter === 'matched' && !indiaDuplicateMap.has(c.case_number))
+      return false;
+    if (
+      indiaMatchFilter === 'unmatched' &&
+      indiaDuplicateMap.has(c.case_number)
+    )
+      return false;
     return true;
   });
-// ==== ADMIN: permanently tidy PIC names in the database ====
-const [picFixBusy, setPicFixBusy] = useState(false);
-const handleFixPicNames = async () => {
-  setPicFixBusy(true);
-  const { data: rows } = await supabase.from('cases').select('case_number, pic').not('pic', 'is', null);
-  const toFix = (rows || [])
-    .map(r => ({ case_number: r.case_number, from: r.pic, to: tidyPic(r.pic) }))
-    .filter(r => r.to && r.to !== r.from);
-  if (toFix.length === 0) {
-    alert('Nothing to fix — all PIC names are already tidy.');
-    setPicFixBusy(false);
-    return;
-  }
-  const summary = {};
-  toFix.forEach(r => { summary[r.to] = (summary[r.to] || 0) + 1; });
-  const lines = Object.entries(summary).map(([name, n]) => `  ${name}: ${n} case(s)`).join('\n');
-  if (!window.confirm(`Permanently rename PIC on ${toFix.length} case(s)?\n\n${lines}\n\nThis cannot be undone.`)) {
-    setPicFixBusy(false);
-    return;
-  }
-  let done = 0;
-  for (let i = 0; i < toFix.length; i += 20) {
-    for (const r of toFix.slice(i, i + 20)) {
-      await supabase.from('cases').update({ pic: r.to, modified_by_email: userEmail, last_modified: new Date().toISOString() }).eq('case_number', r.case_number);
-      done++;
+  // ==== ADMIN: permanently tidy PIC names in the database ====
+  const [picFixBusy, setPicFixBusy] = useState(false);
+  const handleFixPicNames = async () => {
+    setPicFixBusy(true);
+    const { data: rows } = await supabase
+      .from('cases')
+      .select('case_number, pic')
+      .not('pic', 'is', null);
+    const toFix = (rows || [])
+      .map((r) => ({
+        case_number: r.case_number,
+        from: r.pic,
+        to: tidyPic(r.pic),
+      }))
+      .filter((r) => r.to && r.to !== r.from);
+    if (toFix.length === 0) {
+      alert('Nothing to fix — all PIC names are already tidy.');
+      setPicFixBusy(false);
+      return;
     }
-  }
-  setPicFixBusy(false);
-  alert(`✅ Updated ${done} case(s).`);
-  fetchCases(true);
-};
+    const summary = {};
+    toFix.forEach((r) => {
+      summary[r.to] = (summary[r.to] || 0) + 1;
+    });
+    const lines = Object.entries(summary)
+      .map(([name, n]) => `  ${name}: ${n} case(s)`)
+      .join('\n');
+    if (
+      !window.confirm(
+        `Permanently rename PIC on ${toFix.length} case(s)?\n\n${lines}\n\nThis cannot be undone.`
+      )
+    ) {
+      setPicFixBusy(false);
+      return;
+    }
+    let done = 0;
+    for (let i = 0; i < toFix.length; i += 20) {
+      for (const r of toFix.slice(i, i + 20)) {
+        await supabase
+          .from('cases')
+          .update({
+            pic: r.to,
+            modified_by_email: userEmail,
+            last_modified: new Date().toISOString(),
+          })
+          .eq('case_number', r.case_number);
+        done++;
+      }
+    }
+    setPicFixBusy(false);
+    alert(`✅ Updated ${done} case(s).`);
+    fetchCases(true);
+  };
   const handlePromoteCase = async (caseNum) => {
-    const { error } = await supabase.from('cases').update({
-      promoted: true, modified_by_email: userEmail, last_modified: new Date().toISOString()
-    }).eq('case_number', caseNum);
+    const { error } = await supabase
+      .from('cases')
+      .update({
+        promoted: true,
+        modified_by_email: userEmail,
+        last_modified: new Date().toISOString(),
+      })
+      .eq('case_number', caseNum);
     if (error) alert('Error promoting case: ' + error.message);
     else fetchCases(true);
   };
-// ==== INDIA: read-only duplicate scan. Reports only, changes nothing. ====
-const [indiaDupBusy, setIndiaDupBusy] = useState(false);
-const [indiaDupReport, setIndiaDupReport] = useState(null);
-// CLEANUP: compare India cases in the database against the case numbers in the
+  // ==== INDIA: read-only duplicate scan. Reports only, changes nothing. ====
+  const [indiaDupBusy, setIndiaDupBusy] = useState(false);
+  const [indiaDupReport, setIndiaDupReport] = useState(null);
+  // CLEANUP: compare India cases in the database against the case numbers in the
   // freshly uploaded Excel file. Anything in the DB that is NOT in the file is
   // stale (left over from an older upload). READ-ONLY - reports only.
   const [staleReport, setStaleReport] = useState(null);
@@ -1670,11 +2804,13 @@ const [indiaDupReport, setIndiaDupReport] = useState(null);
       .select('case_number, created_on, case_status, pic')
       .like('case_number', 'CVN-%');
     const all = dbCases || [];
-    const stale = all.filter(c => !fileSet.has(c.case_number));
-    const matched = all.filter(c => fileSet.has(c.case_number));
-    const missingFromDb = indiaFileCaseNumbers.filter(cn => !all.some(c => c.case_number === cn));
+    const stale = all.filter((c) => !fileSet.has(c.case_number));
+    const matched = all.filter((c) => fileSet.has(c.case_number));
+    const missingFromDb = indiaFileCaseNumbers.filter(
+      (cn) => !all.some((c) => c.case_number === cn)
+    );
     const byYear = {};
-    stale.forEach(c => {
+    stale.forEach((c) => {
       const y = (c.created_on || '').slice(0, 4) || 'no date';
       byYear[y] = (byYear[y] || 0) + 1;
     });
@@ -1686,49 +2822,82 @@ const [indiaDupReport, setIndiaDupReport] = useState(null);
       stale: stale.length,
       missingFromDb: missingFromDb.length,
       byYear,
-      sample: stale.slice(0, 20)
+      sample: stale.slice(0, 20),
     });
   };
-const handleScanIndiaDupes = async () => {
-  setIndiaDupBusy(true);
-  setIndiaDupReport(null);
-  let all = [];
-  let from = 0;
-  const size = 1000;
-  while (true) {
-    const { data, error } = await supabase
-      .from('disciplinary_actions')
-      .select('id, case_number, unique_key, respondent_name, respondent_id, complainant_name, complainant_id, last_modified')
-      .like('case_number', 'CVN-%')
-      .range(from, from + size - 1);
-    if (error || !data || data.length === 0) break;
-    all = all.concat(data);
-    if (data.length < size) break;
-    from += size;
-  }
-  const byCase = new Map();
-  all.forEach(r => {
-    if (!byCase.has(r.case_number)) byCase.set(r.case_number, []);
-    byCase.get(r.case_number).push(r);
-  });
-  const dupes = Array.from(byCase.entries()).filter(([, rows]) => rows.length > 1);
-  setIndiaDupReport({ totalRows: all.length, totalCases: byCase.size, dupeCases: dupes, sample: dupes.slice(0, 15) });
-  setIndiaDupBusy(false);
-};
+  const handleScanIndiaDupes = async () => {
+    setIndiaDupBusy(true);
+    setIndiaDupReport(null);
+    let all = [];
+    let from = 0;
+    const size = 1000;
+    while (true) {
+      const { data, error } = await supabase
+        .from('disciplinary_actions')
+        .select(
+          'id, case_number, unique_key, respondent_name, respondent_id, complainant_name, complainant_id, last_modified'
+        )
+        .like('case_number', 'CVN-%')
+        .range(from, from + size - 1);
+      if (error || !data || data.length === 0) break;
+      all = all.concat(data);
+      if (data.length < size) break;
+      from += size;
+    }
+    const byCase = new Map();
+    all.forEach((r) => {
+      if (!byCase.has(r.case_number)) byCase.set(r.case_number, []);
+      byCase.get(r.case_number).push(r);
+    });
+    const dupes = Array.from(byCase.entries()).filter(
+      ([, rows]) => rows.length > 1
+    );
+    setIndiaDupReport({
+      totalRows: all.length,
+      totalCases: byCase.size,
+      dupeCases: dupes,
+      sample: dupes.slice(0, 15),
+    });
+    setIndiaDupBusy(false);
+  };
   const handleDeleteStagingCase = async (caseNum) => {
-    if (!window.confirm(`Delete staging case ${caseNum}?\n\nThis removes the case and its respondent records permanently.`)) return;
-    await supabase.from('disciplinary_actions').delete().eq('case_number', caseNum);
+    if (
+      !window.confirm(
+        `Delete staging case ${caseNum}?\n\nThis removes the case and its respondent records permanently.`
+      )
+    )
+      return;
+    await supabase
+      .from('disciplinary_actions')
+      .delete()
+      .eq('case_number', caseNum);
     await supabase.from('wip_actions').delete().eq('case_number', caseNum);
-    const { error } = await supabase.from('cases').delete().eq('case_number', caseNum);
+    const { error } = await supabase
+      .from('cases')
+      .delete()
+      .eq('case_number', caseNum);
     if (error) alert('Error deleting: ' + error.message);
     else fetchCases(true);
   };
   const handleBulkDeleteNoId = async () => {
-    const noIdCases = indiaStaging.filter(c => !(c.disciplinary_actions || []).some(da => da.respondent_id));
-    if (noIdCases.length === 0) { alert('No cases without ID# to delete.'); return; }
-    if (!window.confirm(`Delete ${noIdCases.length} cases without ID#?\n\nThese cannot be matched to any person.`)) return;
+    const noIdCases = indiaStaging.filter(
+      (c) => !(c.disciplinary_actions || []).some((da) => da.respondent_id)
+    );
+    if (noIdCases.length === 0) {
+      alert('No cases without ID# to delete.');
+      return;
+    }
+    if (
+      !window.confirm(
+        `Delete ${noIdCases.length} cases without ID#?\n\nThese cannot be matched to any person.`
+      )
+    )
+      return;
     for (const c of noIdCases) {
-      await supabase.from('disciplinary_actions').delete().eq('case_number', c.case_number);
+      await supabase
+        .from('disciplinary_actions')
+        .delete()
+        .eq('case_number', c.case_number);
       await supabase.from('cases').delete().eq('case_number', c.case_number);
     }
     fetchCases(true);
@@ -1736,37 +2905,59 @@ const handleScanIndiaDupes = async () => {
   };
 
   const [indiaSelectedCases, setIndiaSelectedCases] = useState({});
-  const [indiaSortConfig, setIndiaSortConfig] = useState({ key: '', direction: 'ascending' });
+  const [indiaSortConfig, setIndiaSortConfig] = useState({
+    key: '',
+    direction: 'ascending',
+  });
 
   const requestIndiaSort = (key) => {
     let direction = 'ascending';
-    if (indiaSortConfig.key === key && indiaSortConfig.direction === 'ascending') direction = 'descending';
+    if (
+      indiaSortConfig.key === key &&
+      indiaSortConfig.direction === 'ascending'
+    )
+      direction = 'descending';
     setIndiaSortConfig({ key, direction });
   };
 
   const handleToggleIndiaCase = (caseNum) => {
-    setIndiaSelectedCases(prev => ({ ...prev, [caseNum]: !prev[caseNum] }));
+    setIndiaSelectedCases((prev) => ({ ...prev, [caseNum]: !prev[caseNum] }));
   };
 
   const handleSelectAllIndia = () => {
-    const allSelected = indiaFiltered.length > 0 && indiaFiltered.every(c => indiaSelectedCases[c.case_number]);
+    const allSelected =
+      indiaFiltered.length > 0 &&
+      indiaFiltered.every((c) => indiaSelectedCases[c.case_number]);
     if (allSelected) {
       setIndiaSelectedCases({});
     } else {
       const newSel = {};
-      indiaFiltered.forEach(c => { newSel[c.case_number] = true; });
+      indiaFiltered.forEach((c) => {
+        newSel[c.case_number] = true;
+      });
       setIndiaSelectedCases(newSel);
     }
   };
 
   const handleBatchPromote = async () => {
-    const selected = Object.keys(indiaSelectedCases).filter(k => indiaSelectedCases[k]);
-    if (selected.length === 0) { alert('No cases selected — tick the checkboxes first.'); return; }
-    if (!window.confirm(`Add ${selected.length} cases to the Cases tab?`)) return;
+    const selected = Object.keys(indiaSelectedCases).filter(
+      (k) => indiaSelectedCases[k]
+    );
+    if (selected.length === 0) {
+      alert('No cases selected — tick the checkboxes first.');
+      return;
+    }
+    if (!window.confirm(`Add ${selected.length} cases to the Cases tab?`))
+      return;
     for (const caseNum of selected) {
-      await supabase.from('cases').update({
-        promoted: true, modified_by_email: userEmail, last_modified: new Date().toISOString()
-      }).eq('case_number', caseNum);
+      await supabase
+        .from('cases')
+        .update({
+          promoted: true,
+          modified_by_email: userEmail,
+          last_modified: new Date().toISOString(),
+        })
+        .eq('case_number', caseNum);
     }
     setIndiaSelectedCases({});
     fetchCases(true);
@@ -1774,11 +2965,24 @@ const handleScanIndiaDupes = async () => {
   };
 
   const handleBatchDelete = async () => {
-    const selected = Object.keys(indiaSelectedCases).filter(k => indiaSelectedCases[k]);
-    if (selected.length === 0) { alert('No cases selected — tick the checkboxes first.'); return; }
-    if (!window.confirm(`Delete ${selected.length} staging cases permanently?\n\nThis cannot be undone.`)) return;
+    const selected = Object.keys(indiaSelectedCases).filter(
+      (k) => indiaSelectedCases[k]
+    );
+    if (selected.length === 0) {
+      alert('No cases selected — tick the checkboxes first.');
+      return;
+    }
+    if (
+      !window.confirm(
+        `Delete ${selected.length} staging cases permanently?\n\nThis cannot be undone.`
+      )
+    )
+      return;
     for (const caseNum of selected) {
-      await supabase.from('disciplinary_actions').delete().eq('case_number', caseNum);
+      await supabase
+        .from('disciplinary_actions')
+        .delete()
+        .eq('case_number', caseNum);
       await supabase.from('wip_actions').delete().eq('case_number', caseNum);
       await supabase.from('cases').delete().eq('case_number', caseNum);
     }
@@ -1787,7 +2991,9 @@ const handleScanIndiaDupes = async () => {
     alert(`🗑 Deleted ${selected.length} cases.`);
   };
 
-  const indiaSelectedCount = Object.keys(indiaSelectedCases).filter(k => indiaSelectedCases[k]).length;
+  const indiaSelectedCount = Object.keys(indiaSelectedCases).filter(
+    (k) => indiaSelectedCases[k]
+  ).length;
 
   const indiaSorted = [...indiaFiltered];
   if (indiaSortConfig.key) {
@@ -1812,32 +3018,45 @@ const handleScanIndiaDupes = async () => {
         aVal = a[indiaSortConfig.key] || '';
         bVal = b[indiaSortConfig.key] || '';
       }
-      if (String(aVal) < String(bVal)) return indiaSortConfig.direction === 'ascending' ? -1 : 1;
-      if (String(aVal) > String(bVal)) return indiaSortConfig.direction === 'ascending' ? 1 : -1;
+      if (String(aVal) < String(bVal))
+        return indiaSortConfig.direction === 'ascending' ? -1 : 1;
+      if (String(aVal) > String(bVal))
+        return indiaSortConfig.direction === 'ascending' ? 1 : -1;
       return 0;
     });
   }
 
   const indiaPageSize = 25;
   const indiaTotalPages = Math.ceil(indiaSorted.length / indiaPageSize);
-  const indiaCurrentPage = indiaSorted.slice((indiaPage - 1) * indiaPageSize, indiaPage * indiaPageSize);
+  const indiaCurrentPage = indiaSorted.slice(
+    (indiaPage - 1) * indiaPageSize,
+    indiaPage * indiaPageSize
+  );
   const parseComplainants = (raw) => {
-    if (!raw || typeof raw !== 'string') return [{ name: raw || null, id: null, cust: null }];
-    const looksLikeId = (s) => /^[A-Za-z]{1,3}[0-9]{3,12}$/.test(String(s).trim());
-    const chunks = raw.split(/\s*[\/&,]\s*(?=[^)]*(?:\(|$))/).map(c => c.trim()).filter(Boolean);
+    if (!raw || typeof raw !== 'string')
+      return [{ name: raw || null, id: null, cust: null }];
+    const looksLikeId = (s) =>
+      /^[A-Za-z]{1,3}[0-9]{3,12}$/.test(String(s).trim());
+    const chunks = raw
+      .split(/\s*[\/&,]\s*(?=[^)]*(?:\(|$))/)
+      .map((c) => c.trim())
+      .filter(Boolean);
     const useChunks = chunks.length > 1 ? chunks : [raw.trim()];
     const out = [];
-    useChunks.forEach(chunk => {
+    useChunks.forEach((chunk) => {
       let name = chunk;
       let mains = [];
       let custs = [];
       const br = chunk.match(/^(.*?)[\(\[]([^\)\]]*)[\)\]]\s*$/);
       if (br) {
         const inside = br[2].trim();
-        const parts = inside.split(/[\/,]/).map(p => p.trim()).filter(Boolean);
+        const parts = inside
+          .split(/[\/,]/)
+          .map((p) => p.trim())
+          .filter(Boolean);
         if (parts.length > 0 && parts.every(looksLikeId)) {
           name = br[1].trim() || chunk;
-          parts.forEach(p => {
+          parts.forEach((p) => {
             const up = p.toUpperCase();
             if (up.startsWith('CU') || up.startsWith('CE')) custs.push(up);
             else mains.push(up);
@@ -1855,7 +3074,7 @@ const handleScanIndiaDupes = async () => {
       out.push({
         name: name || null,
         id: mains.length ? mains.join('/') : null,
-        cust: custs.length ? custs.join('/') : null
+        cust: custs.length ? custs.join('/') : null,
       });
     });
     return out.length ? out : [{ name: raw, id: null, cust: null }];
@@ -1873,7 +3092,10 @@ const handleScanIndiaDupes = async () => {
   const [respDetail, setRespDetail] = React.useState(null);
 
   React.useEffect(() => {
-    const t = setTimeout(() => { setRespSearch(respSearchInput); setRespPage(1); }, 250);
+    const t = setTimeout(() => {
+      setRespSearch(respSearchInput);
+      setRespPage(1);
+    }, 250);
     return () => clearTimeout(t);
   }, [respSearchInput]);
 
@@ -1883,7 +3105,8 @@ const handleScanIndiaDupes = async () => {
     // including the whole action_history timeline blob, none of which the list shows.
     // Now fetches only the 17 fields the table + filters + repeat-offender check use.
     // The heavy fields are loaded per-row on double-click (see openRespDetail).
-    const LIST_FIELDS = 'id, case_number, complainant_name, complainant_id, ' +
+    const LIST_FIELDS =
+      'id, case_number, complainant_name, complainant_id, ' +
       'complainant_cust_id, respondent_name, respondent_id, respondent_country, ' +
       'violation_category, current_action, execution_date, team_name, upline_name, ' +
       'modified_by_email, last_modified, cases(pic, case_status, country)';
@@ -1919,15 +3142,18 @@ const handleScanIndiaDupes = async () => {
   };
 
   React.useEffect(() => {
-    if (activeTab === 'respondents' && respRows.length === 0 && !respLoading) fetchRespondents();
+    if (activeTab === 'respondents' && respRows.length === 0 && !respLoading)
+      fetchRespondents();
   }, [activeTab]);
 
   const respCaseCountById = React.useMemo(() => {
     const m = new Map();
-    respRows.forEach(r => {
+    respRows.forEach((r) => {
       const key = (r.respondent_id || '').trim().toUpperCase();
       if (!key || key === 'UNIDENTIFIED ID') return;
-      const hasViolation = (Array.isArray(r.violations) && r.violations.length > 0) || !!r.violation_category;
+      const hasViolation =
+        (Array.isArray(r.violations) && r.violations.length > 0) ||
+        !!r.violation_category;
       const hasAction = !!r.current_action;
       if (!hasViolation || !hasAction) return;
       if (!m.has(key)) m.set(key, new Set());
@@ -1944,41 +3170,73 @@ const handleScanIndiaDupes = async () => {
   };
 
   const respUniqueVals = React.useMemo(() => {
-    const c = new Set(), v = new Set(), a = new Set(), s = new Set();
-    respRows.forEach(r => {
+    const c = new Set(),
+      v = new Set(),
+      a = new Set(),
+      s = new Set();
+    respRows.forEach((r) => {
       if (r.respondent_country) c.add(r.respondent_country);
       if (r.violation_category) v.add(r.violation_category);
       if (r.current_action) a.add(r.current_action);
       if (r.cases && r.cases.case_status) s.add(r.cases.case_status);
     });
     const srt = (x) => Array.from(x).sort();
-    return { countries: srt(c), violations: srt(v), actions: srt(a), statuses: srt(s) };
+    return {
+      countries: srt(c),
+      violations: srt(v),
+      actions: srt(a),
+      statuses: srt(s),
+    };
   }, [respRows]);
 
   const respFiltered = React.useMemo(() => {
     const q = respSearch.trim().toLowerCase();
-    return respRows.filter(r => {
+    return respRows.filter((r) => {
       if (respCountry && r.respondent_country !== respCountry) return false;
       if (respViolation && r.violation_category !== respViolation) return false;
       if (respAction && r.current_action !== respAction) return false;
-      if (respStatus && (!r.cases || r.cases.case_status !== respStatus)) return false;
+      if (respStatus && (!r.cases || r.cases.case_status !== respStatus))
+        return false;
       if (respRepeatOnly && respRepeatCount(r) < 2) return false;
       if (!q) return true;
-      const hay = [r.case_number, r.complainant_name, r.complainant_id, r.complainant_cust_id,
-                   r.respondent_name, r.respondent_id].map(x => String(x || '').toLowerCase()).join(' | ');
+      const hay = [
+        r.case_number,
+        r.complainant_name,
+        r.complainant_id,
+        r.complainant_cust_id,
+        r.respondent_name,
+        r.respondent_id,
+      ]
+        .map((x) => String(x || '').toLowerCase())
+        .join(' | ');
       return hay.includes(q);
     });
-  }, [respRows, respSearch, respCountry, respViolation, respAction, respStatus, respRepeatOnly, respCaseCountById]);
+  }, [
+    respRows,
+    respSearch,
+    respCountry,
+    respViolation,
+    respAction,
+    respStatus,
+    respRepeatOnly,
+    respCaseCountById,
+  ]);
 
   const respPageSize = 25;
-  const respTotalPages = Math.max(1, Math.ceil(respFiltered.length / respPageSize));
-  const respCurrentPage = respFiltered.slice((respPage - 1) * respPageSize, respPage * respPageSize);
+  const respTotalPages = Math.max(
+    1,
+    Math.ceil(respFiltered.length / respPageSize)
+  );
+  const respCurrentPage = respFiltered.slice(
+    (respPage - 1) * respPageSize,
+    respPage * respPageSize
+  );
 
   const respOtherCases = (r) => {
     const key = (r.respondent_id || '').trim().toUpperCase();
     if (!key) return [];
     const seen = new Map();
-    respRows.forEach(x => {
+    respRows.forEach((x) => {
       if ((x.respondent_id || '').trim().toUpperCase() !== key) return;
       if (x.case_number === r.case_number) return;
       if (!seen.has(x.case_number)) seen.set(x.case_number, x);
@@ -1986,16 +3244,17 @@ const handleScanIndiaDupes = async () => {
     return Array.from(seen.values());
   };
 
-  const respMissingInfo = (r) => !r.respondent_name || !r.respondent_id || !r.complainant_name;
+  const respMissingInfo = (r) =>
+    !r.respondent_name || !r.respondent_id || !r.complainant_name;
   const [wipRows, setWipRows] = React.useState([]);
   const [wipImportRows, setWipImportRows] = useState([]);
-const [wipImportBusy, setWipImportBusy] = useState(false);
-const [wipImportMsg, setWipImportMsg] = useState('');
-const [wipShowImport, setWipShowImport] = useState(false);
-const [wipImportChecked, setWipImportChecked] = useState({});
-const [wipImportValidating, setWipImportValidating] = useState(false);
-const [wipImportSaving, setWipImportSaving] = useState(false);
-const [wipImportProgress, setWipImportProgress] = useState('');
+  const [wipImportBusy, setWipImportBusy] = useState(false);
+  const [wipImportMsg, setWipImportMsg] = useState('');
+  const [wipShowImport, setWipShowImport] = useState(false);
+  const [wipImportChecked, setWipImportChecked] = useState({});
+  const [wipImportValidating, setWipImportValidating] = useState(false);
+  const [wipImportSaving, setWipImportSaving] = useState(false);
+  const [wipImportProgress, setWipImportProgress] = useState('');
   const [wipTabLoading, setWipTabLoading] = React.useState(false);
   const [wipSearch, setWipSearch] = React.useState('');
   const [wipPicFilter, setWipPicFilter] = React.useState('');
@@ -2010,112 +3269,130 @@ const [wipImportProgress, setWipImportProgress] = useState('');
     setWipImportBusy(true);
     setWipImportMsg('Reading file...');
     setWipImportRows([]);
-  
+
     try {
       const buf = await file.arrayBuffer();
       const wb = XLSX.read(buf, { type: 'array', cellDates: false });
-  
-      const sheetName = wb.SheetNames.find(n => n.trim().toLowerCase() === 'wip_tracker');
+
+      const sheetName = wb.SheetNames.find(
+        (n) => n.trim().toLowerCase() === 'wip_tracker'
+      );
       if (!sheetName) {
         setWipImportMsg('❌ No sheet named "WIP_Tracker" found in this file.');
         setWipImportBusy(false);
         return;
       }
-  
+
       const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], {
-        header: 1, raw: true, defval: ''
+        header: 1,
+        raw: true,
+        defval: '',
       });
-  
+
       // Headers are on row 6 (index 5), data starts row 7 (index 6)
       const dataRows = rows.slice(6);
-  
+
       const parsed = [];
       dataRows.forEach((r, i) => {
-        const caseNo = String(r[1] || '').trim();   // B
-        const desc   = String(r[3] || '').trim();   // D
-        if (!caseNo || !desc) return;               // skip blank/filler rows
-  
+        const caseNo = String(r[1] || '').trim(); // B
+        const desc = String(r[3] || '').trim(); // D
+        if (!caseNo || !desc) return; // skip blank/filler rows
+
         parsed.push({
           excelRow: i + 7,
           case_number: caseNo,
-          action_type: String(r[2] || '').trim(),   // C
-          description: desc,                        // D
-          date_sent_raw: r[5],                      // F
-          sla_days: Number(r[6]) || 2,              // G
+          action_type: String(r[2] || '').trim(), // C
+          description: desc, // D
+          date_sent_raw: r[5], // F
+          sla_days: Number(r[6]) || 2, // G
           status: String(r[13] || '').trim() || 'Pending', // N
-          pic: String(r[14] || '').trim(),          // O
-          notes: String(r[16] || '').trim()         // Q
+          pic: String(r[14] || '').trim(), // O
+          notes: String(r[16] || '').trim(), // Q
         });
       });
-  
+
       setWipImportRows(parsed);
-      setWipImportMsg(`Found ${parsed.length} row(s). Checking against the app...`);
-    await validateWipImport(parsed);
-    } catch (err) {
-      
-    }
-  
+      setWipImportMsg(
+        `Found ${parsed.length} row(s). Checking against the app...`
+      );
+      await validateWipImport(parsed);
+    } catch (err) {}
+
     setWipImportBusy(false);
     e.target.value = '';
   };
   const validateWipImport = async (rows) => {
     setWipImportValidating(true);
-  
+
     // 1. Get every case number the app knows about
-    const caseNos = [...new Set(rows.map(r => r.case_number))];
+    const caseNos = [...new Set(rows.map((r) => r.case_number))];
     const { data: foundCases } = await supabase
       .from('cases')
       .select('case_number, case_status, pic')
       .in('case_number', caseNos);
-  
+
     const caseMap = {};
-    (foundCases || []).forEach(c => { caseMap[c.case_number] = c; });
-  
+    (foundCases || []).forEach((c) => {
+      caseMap[c.case_number] = c;
+    });
+
     // 2. Get existing WIP rows for those cases
     const { data: existingWip } = await supabase
       .from('wip_actions')
       .select('case_number, description')
       .in('case_number', caseNos);
-  
-    const norm = (s) => String(s || '')
-      .toLowerCase()
-      .replace(/[^a-z0-9]/g, '')
-      .slice(0, 60);
-  
+
+    const norm = (s) =>
+      String(s || '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, '')
+        .slice(0, 60);
+
     const existingKeys = new Set(
-      (existingWip || []).map(w => w.case_number + '||' + norm(w.description))
+      (existingWip || []).map((w) => w.case_number + '||' + norm(w.description))
     );
-  
+
     // 3. Give every row a verdict
     const checked = {};
     const verdicts = rows.map((r, i) => {
       const c = caseMap[r.case_number];
-      let verdict, canImport = true;
-  
+      let verdict,
+        canImport = true;
+
       if (!c) {
         verdict = '❌ Case not in app';
         canImport = false;
       } else if (existingKeys.has(r.case_number + '||' + norm(r.description))) {
         verdict = '⚠️ Already in app';
         canImport = false;
-      } else if (['COMPLETED', 'CANCELLED'].includes(String(c.case_status || '').toUpperCase())) {
+      } else if (
+        ['COMPLETED', 'CANCELLED'].includes(
+          String(c.case_status || '').toUpperCase()
+        )
+      ) {
         verdict = '⚠️ Case ' + c.case_status;
       } else {
         verdict = '✅ Ready';
       }
-  
+
       checked[i] = canImport;
       return { ...r, verdict, canImport, appPic: c ? c.pic : '' };
     });
-  
+
     setWipImportRows(verdicts);
     setWipImportChecked(checked);
     setWipImportValidating(false);
-  
-    const ready = verdicts.filter(v => v.verdict === '✅ Ready').length;
-    const dup = verdicts.filter(v => v.verdict === '⚠️ Already in app').length;
-    const missing = verdicts.filter(v => v.verdict === '❌ Case not in app').length;
-    const closed = verdicts.filter(v => v.verdict.startsWith('⚠️ Case ')).length;
+
+    const ready = verdicts.filter((v) => v.verdict === '✅ Ready').length;
+    const dup = verdicts.filter(
+      (v) => v.verdict === '⚠️ Already in app'
+    ).length;
+    const missing = verdicts.filter(
+      (v) => v.verdict === '❌ Case not in app'
+    ).length;
+    const closed = verdicts.filter((v) =>
+      v.verdict.startsWith('⚠️ Case ')
+    ).length;
     setWipImportMsg(
       `Found ${verdicts.length} rows — ✅ ${ready} ready · ⚠️ ${dup} already in app · ⚠️ ${closed} closed case · ❌ ${missing} case not found`
     );
@@ -2134,30 +3411,38 @@ const [wipImportProgress, setWipImportProgress] = useState('');
     const s = String(serial).trim();
     const parts = s.split(/[\/\-]/);
     if (parts.length === 3) {
-      let [a, b, c] = parts.map(x => x.trim());
+      let [a, b, c] = parts.map((x) => x.trim());
       if (c.length === 2) c = '20' + c;
-      if (a.length === 4) return `${a}-${b.padStart(2, '0')}-${c.padStart(2, '0')}`;
+      if (a.length === 4)
+        return `${a}-${b.padStart(2, '0')}-${c.padStart(2, '0')}`;
       return `${c}-${b.padStart(2, '0')}-${a.padStart(2, '0')}`;
     }
     return null;
   };
-  
+
   const runWipImport = async () => {
-    const chosen = wipImportRows.filter((r, i) => wipImportChecked[i] && r.canImport);
-    if (chosen.length === 0) { alert('Nothing selected.'); return; }
-    if (!window.confirm(`Import ${chosen.length} WIP row(s) into the app?`)) return;
-  
+    const chosen = wipImportRows.filter(
+      (r, i) => wipImportChecked[i] && r.canImport
+    );
+    if (chosen.length === 0) {
+      alert('Nothing selected.');
+      return;
+    }
+    if (!window.confirm(`Import ${chosen.length} WIP row(s) into the app?`))
+      return;
+
     setWipImportSaving(true);
     setWipImportProgress('Starting...');
-  
+
     const stamp = new Date().toISOString();
-    let done = 0, failed = 0;
+    let done = 0,
+      failed = 0;
     const errors = [];
-  
+
     for (let i = 0; i < chosen.length; i += 10) {
       const batch = chosen.slice(i, i + 10);
-  
-      const payload = batch.map(r => {
+
+      const payload = batch.map((r) => {
         const dateSent = excelSerialToDate(r.date_sent_raw);
         const sla = Number(r.sla_days) || 2;
         const expiry = dateSent ? addBusinessDays(dateSent, sla) : null;
@@ -2173,10 +3458,10 @@ const [wipImportProgress, setWipImportProgress] = useState('');
           pic: r.appPic || r.pic || '',
           notes: r.notes || '',
           modified_by_email: userEmail,
-          last_modified: stamp
+          last_modified: stamp,
         };
       });
-  
+
       const { error } = await supabase.from('wip_actions').insert(payload);
       if (error) {
         failed += batch.length;
@@ -2186,11 +3471,13 @@ const [wipImportProgress, setWipImportProgress] = useState('');
       }
       setWipImportProgress(`Imported ${done} of ${chosen.length}...`);
     }
-  
+
     setWipImportSaving(false);
-  
+
     if (failed > 0) {
-      setWipImportProgress(`⚠️ Imported ${done}, failed ${failed}. First error: ${errors[0]}`);
+      setWipImportProgress(
+        `⚠️ Imported ${done}, failed ${failed}. First error: ${errors[0]}`
+      );
     } else {
       setWipImportProgress(`✅ Imported ${done} row(s) successfully.`);
       setWipImportRows([]);
@@ -2202,13 +3489,13 @@ const [wipImportProgress, setWipImportProgress] = useState('');
   const fetchAllWip = React.useCallback(async () => {
     setWipTabLoading(true);
     const items = [];
-  
+
     // 1) Pending WIP actions — unchanged, this part was already fast
     const { data: wa } = await supabase
       .from('wip_actions')
       .select('*, cases(pic, case_status)')
       .eq('status', 'Pending');
-    (wa || []).forEach(w => {
+    (wa || []).forEach((w) => {
       items.push({
         kind: 'WIP',
         case_number: w.case_number,
@@ -2221,10 +3508,10 @@ const [wipImportProgress, setWipImportProgress] = useState('');
         case_status: w.cases ? w.cases.case_status : '',
         who: '',
         wip_id: w.id,
-        follow_ups: Array.isArray(w.follow_ups) ? w.follow_ups : []
+        follow_ups: Array.isArray(w.follow_ups) ? w.follow_ups : [],
       });
     });
-  
+
     // 2) Pending journal entries — now filtered by the database, not the browser.
     //    Previously this downloaded EVERY respondent row with its full history
     //    and threw nearly all of it away. Now the database only sends back rows
@@ -2234,17 +3521,23 @@ const [wipImportProgress, setWipImportProgress] = useState('');
     while (true) {
       const { data, error } = await supabase
         .from('disciplinary_actions')
-        .select('case_number, respondent_name, action_history, cases(pic, case_status)')
+        .select(
+          'id, case_number, respondent_name, action_history, cases(pic, case_status)'
+        )
         .not('action_history', 'is', null)
         .neq('action_history', '[]')
-        .filter('action_history', 'cs', '[{"sub_actions":[{"status":"Pending"}]}]')
+        .filter(
+          'action_history',
+          'cs',
+          '[{"sub_actions":[{"status":"Pending"}]}]'
+        )
         .range(from, from + size - 1);
-  
+
       if (error || !data || data.length === 0) break;
-  
-      data.forEach(r => {
-        (r.action_history || []).forEach(h => {
-          (h.sub_actions || []).forEach(sa => {
+
+      data.forEach((r) => {
+        (r.action_history || []).forEach((h, hi) => {
+          (h.sub_actions || []).forEach((sa, si) => {
             if (sa.status === 'Done') return;
             items.push({
               kind: 'Journal',
@@ -2256,22 +3549,27 @@ const [wipImportProgress, setWipImportProgress] = useState('');
               expiry_date: sa.expiry_date || null,
               pic: (r.cases && r.cases.pic) || '',
               case_status: r.cases ? r.cases.case_status : '',
-              who: r.respondent_name || ''
+              who: r.respondent_name || '',
+              da_id: r.id,
+              h_idx: hi,
+              sa_idx: si,
+              follow_ups: Array.isArray(sa.follow_ups) ? sa.follow_ups : [],
             });
           });
         });
       });
-  
+
       if (data.length < size) break;
       from += size;
     }
-  
+
     setWipRows(items);
     setWipTabLoading(false);
   }, []);
 
   React.useEffect(() => {
-    if (activeTab === 'wip' && wipRows.length === 0 && !wipTabLoading) fetchAllWip();
+    if (activeTab === 'wip' && wipRows.length === 0 && !wipTabLoading)
+      fetchAllWip();
   }, [activeTab]);
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: '📊' },
@@ -2283,8 +3581,13 @@ const [wipImportProgress, setWipImportProgress] = useState('');
   ];
 
   const SortIndicator = ({ column }) => {
-    if (sortConfig.key !== column) return <span style={{ color: '#cbd5e1', marginLeft: '4px' }}>↕</span>;
-    return sortConfig.direction === 'ascending' ? <span style={{ marginLeft: '4px' }}>▲</span> : <span style={{ marginLeft: '4px' }}>▼</span>;
+    if (sortConfig.key !== column)
+      return <span style={{ color: '#cbd5e1', marginLeft: '4px' }}>↕</span>;
+    return sortConfig.direction === 'ascending' ? (
+      <span style={{ marginLeft: '4px' }}>▲</span>
+    ) : (
+      <span style={{ marginLeft: '4px' }}>▼</span>
+    );
   };
 
   return (
@@ -2647,7 +3950,7 @@ const [wipImportProgress, setWipImportProgress] = useState('');
 }
       `}</style>
 
-<div className="app-container">
+      <div className="app-container">
         <header className="topbar">
           <div className="topbar-brand">
             <span className="topbar-logo">📋</span>
@@ -2655,11 +3958,13 @@ const [wipImportProgress, setWipImportProgress] = useState('');
           </div>
 
           <nav className="topnav">
-            {navItems.map(item => (
+            {navItems.map((item) => (
               <button
                 key={item.id}
                 onClick={() => setActiveTab(item.id)}
-                className={`topnav-item ${activeTab === item.id ? 'active' : ''}`}
+                className={`topnav-item ${
+                  activeTab === item.id ? 'active' : ''
+                }`}
                 title={item.label}
               >
                 <span className="icon">{item.icon}</span>
@@ -2674,13 +3979,23 @@ const [wipImportProgress, setWipImportProgress] = useState('');
             </div>
             <div className="user-details">
               <div className="email">{userEmail}</div>
-              <div className="role">{isAdmin ? 'Administrator' : 'Standard User'}</div>
+              <div className="role">
+                {isAdmin ? 'Administrator' : 'Standard User'}
+              </div>
             </div>
             {isRealAdmin && (
               <button
                 type="button"
                 className="btn-signout"
-                style={isAdmin ? {} : { background: '#f59e0b', color: '#ffffff', borderColor: '#f59e0b' }}
+                style={
+                  isAdmin
+                    ? {}
+                    : {
+                        background: '#f59e0b',
+                        color: '#ffffff',
+                        borderColor: '#f59e0b',
+                      }
+                }
                 onClick={() => {
                   if (isAdmin) {
                     window.localStorage.setItem('viewAsStandard', 'yes');
@@ -2689,56 +4004,166 @@ const [wipImportProgress, setWipImportProgress] = useState('');
                   }
                   window.location.reload();
                 }}
-                title={isAdmin ? 'Preview the app as a standard user' : 'Return to full admin access'}
+                title={
+                  isAdmin
+                    ? 'Preview the app as a standard user'
+                    : 'Return to full admin access'
+                }
               >
                 {isAdmin ? '👁️ View as Standard' : '🛡️ Back to Admin'}
               </button>
             )}
-            <button onClick={onSignOut} className="btn-signout">Sign Out</button>
+            <button onClick={onSignOut} className="btn-signout">
+              Sign Out
+            </button>
           </div>
         </header>
 
         <main className="main-content">
-
           {activeTab === 'dashboard' && (
             <>
               <div className="page-header">
                 <div className="page-header-text">
                   <h2>Dashboard Overview</h2>
-                  <p>Monitor all case statuses and SLA compliance in real-time.</p>
+                  <p>
+                    Monitor all case statuses and SLA compliance in real-time.
+                  </p>
                 </div>
               </div>
               <div className="stats-grid">
-                <div className="stat-card"><div className="stat-title">Total Cases</div><div className="stat-value"><span className="stat-number">{totalCases}</span><span className="stat-badge badge-grey">cases</span></div></div>
-                <div className="stat-card"><div className="stat-title">In Progress</div><div className="stat-value"><span className="stat-number" style={{color: '#d97706'}}>{inProgress}</span><span className="stat-badge badge-yellow">cases</span></div></div>
-                <div className="stat-card"><div className="stat-title">Completed</div><div className="stat-value"><span className="stat-number" style={{color: '#059669'}}>{completed}</span><span className="stat-badge badge-green">cases</span></div></div>
-                <div className="stat-card"><div className="stat-title">Cancelled</div><div className="stat-value"><span className="stat-number" style={{color: '#64748b'}}>{cancelled}</span><span className="stat-badge badge-grey">cases</span></div></div>
-                <div className="stat-card"><div className="stat-title">Out of SLA</div><div className="stat-value"><span className="stat-number" style={{color: '#dc2626'}}>{outOfSlaCases.length}</span><span className="stat-badge badge-red">cases</span></div></div>
+                <div className="stat-card">
+                  <div className="stat-title">Total Cases</div>
+                  <div className="stat-value">
+                    <span className="stat-number">{totalCases}</span>
+                    <span className="stat-badge badge-grey">cases</span>
+                  </div>
+                </div>
+                <div className="stat-card">
+                  <div className="stat-title">In Progress</div>
+                  <div className="stat-value">
+                    <span className="stat-number" style={{ color: '#d97706' }}>
+                      {inProgress}
+                    </span>
+                    <span className="stat-badge badge-yellow">cases</span>
+                  </div>
+                </div>
+                <div className="stat-card">
+                  <div className="stat-title">Completed</div>
+                  <div className="stat-value">
+                    <span className="stat-number" style={{ color: '#059669' }}>
+                      {completed}
+                    </span>
+                    <span className="stat-badge badge-green">cases</span>
+                  </div>
+                </div>
+                <div className="stat-card">
+                  <div className="stat-title">Cancelled</div>
+                  <div className="stat-value">
+                    <span className="stat-number" style={{ color: '#64748b' }}>
+                      {cancelled}
+                    </span>
+                    <span className="stat-badge badge-grey">cases</span>
+                  </div>
+                </div>
+                <div className="stat-card">
+                  <div className="stat-title">Out of SLA</div>
+                  <div className="stat-value">
+                    <span className="stat-number" style={{ color: '#dc2626' }}>
+                      {outOfSlaCases.length}
+                    </span>
+                    <span className="stat-badge badge-red">cases</span>
+                  </div>
+                </div>
               </div>
               <div className="card">
                 <h3 className="card-header">Data Synchronization</h3>
-                <p className="card-subtitle">Upload your Excel workbook (.xlsx) to sync data.</p>
+                <p className="card-subtitle">
+                  Upload your Excel workbook (.xlsx) to sync data.
+                </p>
                 <div className="upload-area">
-                  <label className="btn-upload">Upload Excel<input type="file" accept=".xlsx, .xls" onChange={handleMasterUpload} disabled={uploading} style={{ display: 'none' }} /></label>
-                  {uploadMessage && <span className="upload-msg" style={{ color: uploadMessage.includes('Error') ? '#dc2626' : '#059669' }}>{uploadMessage}</span>}
+                  <label className="btn-upload">
+                    Upload Excel
+                    <input
+                      type="file"
+                      accept=".xlsx, .xls"
+                      onChange={handleMasterUpload}
+                      disabled={uploading}
+                      style={{ display: 'none' }}
+                    />
+                  </label>
+                  {uploadMessage && (
+                    <span
+                      className="upload-msg"
+                      style={{
+                        color: uploadMessage.includes('Error')
+                          ? '#dc2626'
+                          : '#059669',
+                      }}
+                    >
+                      {uploadMessage}
+                    </span>
+                  )}
                 </div>
               </div>
               <div className="card" style={{ padding: 0 }}>
-                <div style={{ padding: '16px', borderBottom: '1px solid #e2e8f0' }}>
-                  <h3 className="card-header" style={{ margin: 0 }}>SLA Breaches Alert</h3>
-                  <p style={{ margin: '5px 0 0 0', color: '#64748b', fontSize: '13px' }}>Cases that have passed their due date.</p>
+                <div
+                  style={{ padding: '16px', borderBottom: '1px solid #e2e8f0' }}
+                >
+                  <h3 className="card-header" style={{ margin: 0 }}>
+                    SLA Breaches Alert
+                  </h3>
+                  <p
+                    style={{
+                      margin: '5px 0 0 0',
+                      color: '#64748b',
+                      fontSize: '13px',
+                    }}
+                  >
+                    Cases that have passed their due date.
+                  </p>
                 </div>
                 <div style={{ padding: '16px' }}>
                   {outOfSlaCases.length === 0 ? (
-                    <p style={{ color: '#94a3b8', fontSize: '14px' }}>No SLA breaches. All on track!</p>
+                    <p style={{ color: '#94a3b8', fontSize: '14px' }}>
+                      No SLA breaches. All on track!
+                    </p>
                   ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                      {outOfSlaCases.slice(0, 5).map(c => {
+                    <div
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '8px',
+                      }}
+                    >
+                      {outOfSlaCases.slice(0, 5).map((c) => {
                         const days = calculateBusinessDays(c.sla_due_date);
                         return (
-                          <div key={c.case_number} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', backgroundColor: '#f8fafc', borderRadius: '8px' }}>
-                            <div><div style={{ fontWeight: 600, fontSize: '14px' }}>{c.case_number}</div><div style={{ fontSize: '12px', color: '#64748b' }}>{c.pic} | {c.country}</div></div>
-                            <div className="badge badge-red">🔴 {Math.abs(days)} working days overdue</div>
+                          <div
+                            key={c.case_number}
+                            style={{
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                              padding: '12px',
+                              backgroundColor: '#f8fafc',
+                              borderRadius: '8px',
+                            }}
+                          >
+                            <div>
+                              <div
+                                style={{ fontWeight: 600, fontSize: '14px' }}
+                              >
+                                {c.case_number}
+                              </div>
+                              <div
+                                style={{ fontSize: '12px', color: '#64748b' }}
+                              >
+                                {c.pic} | {c.country}
+                              </div>
+                            </div>
+                            <div className="badge badge-red">
+                              🔴 {Math.abs(days)} working days overdue
+                            </div>
                           </div>
                         );
                       })}
@@ -2756,606 +4181,3958 @@ const [wipImportProgress, setWipImportProgress] = useState('');
                   <h2>Case Tracker</h2>
                   <p>Search, filter, and manage all disciplinary cases.</p>
                 </div>
-                <button onClick={() => setShowCaseForm(!showCaseForm)} className="btn-add-case">{showCaseForm ? 'Close Form' : '+ Add New Case'}</button>
+                <button
+                  onClick={() => setShowCaseForm(!showCaseForm)}
+                  className="btn-add-case"
+                >
+                  {showCaseForm ? 'Close Form' : '+ Add New Case'}
+                </button>
               </div>
 
               {showCaseForm && (
                 <form onSubmit={handleAddCase} className="add-case-form">
                   <div className="form-grid">
-                    <div className="wip-input-group"><label>Case Number</label><input type="text" value={newCaseNum} onChange={(e) => setNewCaseNum(e.target.value)} required /></div>
-                    <div className="wip-input-group"><label>PIC</label><input type="text" value={newPic} onChange={(e) => setNewPic(e.target.value)} /></div>
-                    <div className="wip-input-group"><label>Country</label><input type="text" value={newCountry} onChange={(e) => setNewCountry(e.target.value)} required /></div>
-                    <div className="wip-input-group"><label>SLA Days (auto-calculates due date)</label><input type="number" min="1" max="100" value={newSlaDays} onChange={(e) => setNewSlaDays(parseInt(e.target.value) || 30)} required /></div>
-                    <button type="submit" className="btn-log" style={{ backgroundColor: '#10b981' }}>Save Case</button>
+                    <div className="wip-input-group">
+                      <label>Case Number</label>
+                      <input
+                        type="text"
+                        value={newCaseNum}
+                        onChange={(e) => setNewCaseNum(e.target.value)}
+                        required
+                      />
+                    </div>
+                    <div className="wip-input-group">
+                      <label>PIC</label>
+                      <input
+                        type="text"
+                        value={newPic}
+                        onChange={(e) => setNewPic(e.target.value)}
+                      />
+                    </div>
+                    <div className="wip-input-group">
+                      <label>Country</label>
+                      <input
+                        type="text"
+                        value={newCountry}
+                        onChange={(e) => setNewCountry(e.target.value)}
+                        required
+                      />
+                    </div>
+                    <div className="wip-input-group">
+                      <label>SLA Days (auto-calculates due date)</label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="100"
+                        value={newSlaDays}
+                        onChange={(e) =>
+                          setNewSlaDays(parseInt(e.target.value) || 30)
+                        }
+                        required
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      className="btn-log"
+                      style={{ backgroundColor: '#10b981' }}
+                    >
+                      Save Case
+                    </button>
                   </div>
                 </form>
               )}
 
               <div className="table-container">
-                <div style={{ padding: '16px', borderBottom: '1px solid #e2e8f0', display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
-                  <input type="text" placeholder="Search cases, PICs, respondents, complainants..." value={searchInput} onChange={(e) => { setSearchInput(e.target.value); setCurrentPage(1); }} style={{ flex: 1, minWidth: '200px', padding: '10px 16px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '14px', outline: 'none' }} />
-                  <select value={filters.pic} onChange={(e) => setFilters(f => ({ ...f, pic: e.target.value }))} style={{ padding: '10px 16px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '14px' }}>
+                <div
+                  style={{
+                    padding: '16px',
+                    borderBottom: '1px solid #e2e8f0',
+                    display: 'flex',
+                    gap: '12px',
+                    flexWrap: 'wrap',
+                    alignItems: 'center',
+                  }}
+                >
+                  <input
+                    type="text"
+                    placeholder="Search cases, PICs, respondents, complainants..."
+                    value={searchInput}
+                    onChange={(e) => {
+                      setSearchInput(e.target.value);
+                      setCurrentPage(1);
+                    }}
+                    style={{
+                      flex: 1,
+                      minWidth: '200px',
+                      padding: '10px 16px',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: '8px',
+                      fontSize: '14px',
+                      outline: 'none',
+                    }}
+                  />
+                  <select
+                    value={filters.pic}
+                    onChange={(e) =>
+                      setFilters((f) => ({ ...f, pic: e.target.value }))
+                    }
+                    style={{
+                      padding: '10px 16px',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: '8px',
+                      fontSize: '14px',
+                    }}
+                  >
                     <option value="">All PICs</option>
-                    {[...new Set(cases.map(c => tidyPic(c.pic)).filter(Boolean))].sort().map(pic => <option key={pic} value={pic}>{pic}</option>)}
+                    {[
+                      ...new Set(
+                        cases.map((c) => tidyPic(c.pic)).filter(Boolean)
+                      ),
+                    ]
+                      .sort()
+                      .map((pic) => (
+                        <option key={pic} value={pic}>
+                          {pic}
+                        </option>
+                      ))}
                   </select>
-                  <select value={filters.status} onChange={(e) => setFilters(f => ({ ...f, status: e.target.value }))} style={{ padding: '10px 16px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '14px' }}>
+                  <select
+                    value={filters.status}
+                    onChange={(e) =>
+                      setFilters((f) => ({ ...f, status: e.target.value }))
+                    }
+                    style={{
+                      padding: '10px 16px',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: '8px',
+                      fontSize: '14px',
+                    }}
+                  >
                     <option value="">All Status</option>
                     <option value="IN PROGRESS">IN PROGRESS</option>
                     <option value="COMPLETED">COMPLETED</option>
                     <option value="CANCELLED">CANCELLED</option>
                   </select>
-                  <select value={filters.da_in_force} onChange={(e) => setFilters(f => ({ ...f, da_in_force: e.target.value }))} style={{ padding: '10px 16px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '14px' }}>
-  <option value="">All DA Status</option>
-  <option value="yes">DA In Force</option>
-  <option value="no">No DA In Force</option>
-</select>
-<button onClick={() => { setShowMyCases(!showMyCases); setCurrentPage(1); }} style={{ padding: '10px 16px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '14px', cursor: 'pointer', backgroundColor: showMyCases ? '#3b82f6' : 'white', color: showMyCases ? 'white' : '#334155', whiteSpace: 'nowrap' }}>
+                  <select
+                    value={filters.da_in_force}
+                    onChange={(e) =>
+                      setFilters((f) => ({ ...f, da_in_force: e.target.value }))
+                    }
+                    style={{
+                      padding: '10px 16px',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: '8px',
+                      fontSize: '14px',
+                    }}
+                  >
+                    <option value="">All DA Status</option>
+                    <option value="yes">DA In Force</option>
+                    <option value="no">No DA In Force</option>
+                  </select>
+                  <button
+                    onClick={() => {
+                      setShowMyCases(!showMyCases);
+                      setCurrentPage(1);
+                    }}
+                    style={{
+                      padding: '10px 16px',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: '8px',
+                      fontSize: '14px',
+                      cursor: 'pointer',
+                      backgroundColor: showMyCases ? '#3b82f6' : 'white',
+                      color: showMyCases ? 'white' : '#334155',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
                     👤 My Cases
                   </button>
-                  <button className="btn-secondary" style={{ padding: '10px 16px', fontSize: '14px' }} onClick={() => { setSearchInput(''); setSearchTerm(''); setFilters({ pic: '', status: '', da_in_force: '' }); setSortConfig({ key: 'sla_due_date', direction: 'ascending' }); setCurrentPage(1); setShowMyCases(false); }}>✕ Clear</button>
+                  <button
+                    className="btn-secondary"
+                    style={{ padding: '10px 16px', fontSize: '14px' }}
+                    onClick={() => {
+                      setSearchInput('');
+                      setSearchTerm('');
+                      setFilters({ pic: '', status: '', da_in_force: '' });
+                      setSortConfig({
+                        key: 'sla_due_date',
+                        direction: 'ascending',
+                      });
+                      setCurrentPage(1);
+                      setShowMyCases(false);
+                    }}
+                  >
+                    ✕ Clear
+                  </button>
                 </div>
 
                 {loading ? (
-                  <div style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>Loading data...</div>
+                  <div
+                    style={{
+                      padding: '40px',
+                      textAlign: 'center',
+                      color: '#64748b',
+                    }}
+                  >
+                    Loading data...
+                  </div>
                 ) : (
                   <>
                     <table className="table">
                       <thead>
                         <tr>
-                          <th onClick={() => requestSort('case_number')}>Case Number <SortIndicator column="case_number" /></th>
-                          <th onClick={() => requestSort('pic')}>PIC <SortIndicator column="pic" /></th>
-                          <th onClick={() => requestSort('case_status')}>Status <SortIndicator column="case_status" /></th>
-                          <th onClick={() => requestSort('sla_due_date')}>SLA Date <SortIndicator column="sla_due_date" /></th>
-                          <th onClick={() => requestSort('da_in_force')}>DA In Force <SortIndicator column="da_in_force" /></th>
+                          <th onClick={() => requestSort('case_number')}>
+                            Case Number <SortIndicator column="case_number" />
+                          </th>
+                          <th onClick={() => requestSort('pic')}>
+                            PIC <SortIndicator column="pic" />
+                          </th>
+                          <th onClick={() => requestSort('case_status')}>
+                            Status <SortIndicator column="case_status" />
+                          </th>
+                          <th onClick={() => requestSort('sla_due_date')}>
+                            SLA Date <SortIndicator column="sla_due_date" />
+                          </th>
+                          <th onClick={() => requestSort('da_in_force')}>
+                            DA In Force <SortIndicator column="da_in_force" />
+                          </th>
                           <th style={{ cursor: 'default' }}>SLA Status</th>
                           <th style={{ cursor: 'default' }}>Closure SLA</th>
-                          <th onClick={() => requestSort('active_wip')}>Active WIP <SortIndicator column="active_wip" /></th>
+                          <th onClick={() => requestSort('active_wip')}>
+                            Active WIP <SortIndicator column="active_wip" />
+                          </th>
                           <th style={{ width: '80px' }}>Actions</th>
                         </tr>
                       </thead>
                       <tbody>
                         {currentCases.map((c, index) => {
                           const slaDays = calculateBusinessDays(c.sla_due_date);
-                          const daInForce = c.disciplinary_actions?.filter(isDAInForce).length || 0;
-                          const activeWip = (c.wip_actions?.filter(w => w.status === 'Pending').length || 0) +
-                          (c.disciplinary_actions?.reduce((sum, da) =>
-                            sum + (da.action_history || []).reduce((s, h) =>
-                              s + (h.sub_actions || []).filter(sa => sa.status !== 'Done').length, 0), 0) || 0);
-                          const isBreached = slaDays < 0 && c.case_status === 'IN PROGRESS';
+                          const daInForce =
+                            c.disciplinary_actions?.filter(isDAInForce)
+                              .length || 0;
+                          const activeWip =
+                            (c.wip_actions?.filter(
+                              (w) => w.status === 'Pending'
+                            ).length || 0) +
+                            (c.disciplinary_actions?.reduce(
+                              (sum, da) =>
+                                sum +
+                                (da.action_history || []).reduce(
+                                  (s, h) =>
+                                    s +
+                                    (h.sub_actions || []).filter(
+                                      (sa) => sa.status !== 'Done'
+                                    ).length,
+                                  0
+                                ),
+                              0
+                            ) || 0);
+                          const isBreached =
+                            slaDays < 0 && c.case_status === 'IN PROGRESS';
                           return (
                             <React.Fragment key={index}>
-                              <tr className={selectedCase === c.case_number ? 'selected' : ''}>
-                              <td style={{ fontWeight: 600, color: '#0f172a', cursor: 'pointer' }} onClick={() => handleCaseClick(c.case_number)} title="Click to open case details">{c.case_number}</td>
-  <td>{c.pic || '—'}</td>
-  <td><span className={`badge ${c.case_status === 'IN PROGRESS' ? 'badge-blue' : c.case_status === 'CANCELLED' ? 'badge-grey' : 'badge-green'}`}>{c.case_status}</span></td>
-  <td style={{ color: isBreached ? '#dc2626' : '#059669', fontWeight: 600 }}>{c.sla_due_date || '—'}</td>
-  <td style={{ textAlign: 'center', fontWeight: 600, color: daInForce > 0 ? '#dc2626' : '#94a3b8' }}>{daInForce}</td>
-  <td>{c.case_status !== 'IN PROGRESS' ? <span style={{ color: '#94a3b8' }}>—</span> : (slaDays < 0 ? <span style={{ color: '#dc2626', fontWeight: 600, whiteSpace: 'nowrap' }}>🔴 {Math.abs(slaDays)}d lapsed</span> : <span style={{ color: '#059669', fontWeight: 600, whiteSpace: 'nowrap' }}>🟢 {slaDays}d left</span>)}</td>
-  <td>
-                                  {c.case_status !== 'IN PROGRESS' && c.date_completed && c.sla_due_date ? (
-                                    new Date(c.date_completed) <= new Date(c.sla_due_date) ? (
-                                      <span className="badge badge-green" style={{ whiteSpace: 'nowrap' }}>✓ Within SLA</span>
+                              <tr
+                                className={
+                                  selectedCase === c.case_number
+                                    ? 'selected'
+                                    : ''
+                                }
+                              >
+                                <td
+                                  style={{
+                                    fontWeight: 600,
+                                    color: '#0f172a',
+                                    cursor: 'pointer',
+                                  }}
+                                  onClick={() => handleCaseClick(c.case_number)}
+                                  title="Click to open case details"
+                                >
+                                  {c.case_number}
+                                </td>
+                                <td>{c.pic || '—'}</td>
+                                <td>
+                                  <span
+                                    className={`badge ${
+                                      c.case_status === 'IN PROGRESS'
+                                        ? 'badge-blue'
+                                        : c.case_status === 'CANCELLED'
+                                        ? 'badge-grey'
+                                        : 'badge-green'
+                                    }`}
+                                  >
+                                    {c.case_status}
+                                  </span>
+                                </td>
+                                <td
+                                  style={{
+                                    color: isBreached ? '#dc2626' : '#059669',
+                                    fontWeight: 600,
+                                  }}
+                                >
+                                  {c.sla_due_date || '—'}
+                                </td>
+                                <td
+                                  style={{
+                                    textAlign: 'center',
+                                    fontWeight: 600,
+                                    color:
+                                      daInForce > 0 ? '#dc2626' : '#94a3b8',
+                                  }}
+                                >
+                                  {daInForce}
+                                </td>
+                                <td>
+                                  {c.case_status !== 'IN PROGRESS' ? (
+                                    <span style={{ color: '#94a3b8' }}>—</span>
+                                  ) : slaDays < 0 ? (
+                                    <span
+                                      style={{
+                                        color: '#dc2626',
+                                        fontWeight: 600,
+                                        whiteSpace: 'nowrap',
+                                      }}
+                                    >
+                                      🔴 {Math.abs(slaDays)}d lapsed
+                                    </span>
+                                  ) : (
+                                    <span
+                                      style={{
+                                        color: '#059669',
+                                        fontWeight: 600,
+                                        whiteSpace: 'nowrap',
+                                      }}
+                                    >
+                                      🟢 {slaDays}d left
+                                    </span>
+                                  )}
+                                </td>
+                                <td>
+                                  {c.case_status !== 'IN PROGRESS' &&
+                                  c.date_completed &&
+                                  c.sla_due_date ? (
+                                    new Date(c.date_completed) <=
+                                    new Date(c.sla_due_date) ? (
+                                      <span
+                                        className="badge badge-green"
+                                        style={{ whiteSpace: 'nowrap' }}
+                                      >
+                                        ✓ Within SLA
+                                      </span>
                                     ) : (
-                                      <span className="badge badge-red" style={{ whiteSpace: 'nowrap' }}>✗ Out of SLA</span>
+                                      <span
+                                        className="badge badge-red"
+                                        style={{ whiteSpace: 'nowrap' }}
+                                      >
+                                        ✗ Out of SLA
+                                      </span>
                                     )
                                   ) : (
                                     <span style={{ color: '#94a3b8' }}>—</span>
                                   )}
                                 </td>
-  <td style={{ textAlign: 'center', fontWeight: 600, color: activeWip > 0 ? '#8b5cf6' : '#94a3b8' }}>{activeWip}</td>
-  <td><button onClick={() => handleCaseClick(c.case_number)} className="btn-action">{selectedCase === c.case_number ? 'Back' : 'View'}</button></td>
-</tr>
+                                <td
+                                  style={{
+                                    textAlign: 'center',
+                                    fontWeight: 600,
+                                    color:
+                                      activeWip > 0 ? '#8b5cf6' : '#94a3b8',
+                                  }}
+                                >
+                                  {activeWip}
+                                </td>
+                                <td>
+                                  <button
+                                    onClick={() =>
+                                      handleCaseClick(c.case_number)
+                                    }
+                                    className="btn-action"
+                                  >
+                                    {selectedCase === c.case_number
+                                      ? 'Back'
+                                      : 'View'}
+                                  </button>
+                                </td>
+                              </tr>
 
-{selectedCase === c.case_number && (
+                              {selectedCase === c.case_number && (
                                 <tr className="drawer-host">
-                                  <td colSpan="9" style={{ padding: 0, border: 'none' }}>
-                                    <div className="drawer-overlay" onClick={() => handleCaseClick(c.case_number)} />
-                                    <div className="drawer-panel" onClick={(e) => e.stopPropagation()}>
+                                  <td
+                                    colSpan="9"
+                                    style={{ padding: 0, border: 'none' }}
+                                  >
+                                    <div
+                                      className="drawer-overlay"
+                                      onClick={() =>
+                                        handleCaseClick(c.case_number)
+                                      }
+                                    />
+                                    <div
+                                      className="drawer-panel"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
                                       <div className="drawer-topbar">
                                         <div className="drawer-topbar-title">
                                           📁 {c.case_number}
                                         </div>
                                         <button
                                           className="drawer-close"
-                                          onClick={() => handleCaseClick(c.case_number)}
+                                          onClick={() =>
+                                            handleCaseClick(c.case_number)
+                                          }
                                           title="Close (Esc)"
-                                        >✕</button>
+                                        >
+                                          ✕
+                                        </button>
                                       </div>
                                       <div className="drawer-body">
-                                    <div className="expanded-card">
-                                      <div className="expanded-header">
-                                        <div>
-                                          <span className="expanded-label">CASE DETAILS</span>
-                                          <div className="expanded-value">{c.case_number}</div>
-                                          {(() => {
-  const fromTable = (caseComplainants || []).map(x => ({
-    complainant_name: x.complainant_name,
-    complainant_id: x.complainant_id,
-    complainant_country: x.complainant_country,
-    is_anchor: x.is_anchor
-  }));
-  const fromRows = [...new Map(c.disciplinary_actions?.filter(da => da.complainant_name).map(da => [da.complainant_name, da])).values()];
-  const complainants = fromTable.length > 0 ? fromTable : fromRows;
-  if (complainants.length > 0) {
-    return (
-      <div className="expanded-sub" style={{ marginTop: '4px', fontWeight: '600', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '4px' }}>
-        Complainant(s):
-        {complainants.map((comp, i) => (
-          <span key={i} className="complainant-line">
-          <span className="complainant-name">{comp.complainant_name}</span>
-          {comp.complainant_id && <span style={{ marginLeft: '6px', color: '#475569' }}>· {comp.complainant_id}</span>}
-          {comp.complainant_country && <span style={{ marginLeft: '6px', color: '#475569' }}>· {comp.complainant_country}</span>}
-        </span>
-        ))}
-      </div>
-    );
-  }
-  return null;
-})()}
-                                          <div className="expanded-sub">Priority: {c.priority || '—'} | Stage: {c.stage || '—'} | Case Folder: {c.case_folder_no || '—'}</div>
-                                        </div>
-                                        <div style={{ textAlign: 'right' }}>
-                                          <span className="expanded-label">SLA DUE DATE</span>
-                                          <div className="expanded-value">{c.sla_due_date || '—'}</div>
-                                          <div className="expanded-sub">Created: {c.created_on || '—'}{!c.reactivated_at && (() => { const d = businessDaysFromStart(c.created_on, c.sla_due_date); return d != null ? ` · ${d} working days` : ''; })()}</div>
-{c.reactivated_at && <div className="expanded-sub">SLA restarted: {slaStartDate(c)}{(() => { const d = businessDaysFromStart(slaStartDate(c), c.sla_due_date); return d != null ? ` · ${d} working days` : ''; })()}</div>}
-{renderClosureInfo(c)}
-{renderModifiedInfo(c)}
-                                        </div>
-                                      </div>
-
-                                      <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
-                                      {c.case_status === 'IN PROGRESS' && !showCloseOptions && <button onClick={() => setShowCloseOptions(true)} className="btn-action btn-success">Complete Case</button>}
-{(c.case_status === 'COMPLETED' || c.case_status === 'CANCELLED') && <button onClick={() => handleReactivateCase(c.case_number)} className="btn-action btn-warning">Reactivate Case</button>}
-{showCloseOptions && c.case_status === 'IN PROGRESS' && (
-  <div className="close-case-panel">
-    <span className="close-case-label">Close this case as:</span>
-    <button onClick={() => handleCompleteCase(c.case_number, 'COMPLETED')} className="btn-action btn-success">✅ Completed</button>
-    <button onClick={() => handleCompleteCase(c.case_number, 'CANCELLED')} className="btn-action btn-cancel-status">🚫 Cancelled</button>
-    <button onClick={() => setShowCloseOptions(false)} className="btn-action">↩ Back</button>
-  </div>
-)}
-{c.findings_url ? (
-  <button className="btn-action" style={{ backgroundColor: '#2563eb', color: 'white', border: 'none' }}
-    onClick={() => window.open(c.findings_url, '_blank', 'noopener,noreferrer')}
-    title="Open the case findings notes in D365">
-    🔗 Case Findings
-  </button>
-) : (
-  <button className="btn-action" disabled
-    style={{ opacity: 0.45, cursor: 'not-allowed' }}
-    title="No findings link saved — add one via ✏️ Edit Case">
-    🔗 Case Findings
-  </button>
-)}
-<CaseSummaryButton supabase={supabase} caseRow={c} userEmail={userEmail} isAdmin={isAdmin} />
-{!editingCase && (
-  <button className="btn-admin" onClick={openCaseEdit}>✏️ Edit Case</button>
-)}
-{editingCase && (
-  <form className="admin-edit-form" onSubmit={handleUpdateCase}>
-    <p className="form-title">✏️ Edit Case — {selectedCase}</p>
-    <p className="form-sub">
-      {isAdmin
-        ? 'Admin access — all fields editable. Changing the case number moves all respondents & WIP actions to the new number.'
-        : 'Standard access — you can edit Priority, Stage, Case Folder No., Case Findings Link, Case Status and Remarks. 🔒 fields are admin only.'}
-    </p>
-    <div className="admin-form-grid">
-      <div className="wip-input-group"><label>{!isAdmin && '🔒 '}Case Number *</label><input type="text" value={caseForm.case_number} disabled={!isAdmin} onChange={(e) => setCaseForm({ ...caseForm, case_number: e.target.value })} required /></div>
-      <div className="wip-input-group"><label>{!isAdmin && '🔒 '}PIC</label><input type="text" value={caseForm.pic} disabled={!isAdmin} onChange={(e) => setCaseForm({ ...caseForm, pic: e.target.value })} /></div>
-      <div className="wip-input-group"><label>{!isAdmin && '🔒 '}Case Country</label><input type="text" value={caseForm.country} disabled={!isAdmin} onChange={(e) => setCaseForm({ ...caseForm, country: e.target.value })} /></div>
-      <div className="wip-input-group"><label>{!isAdmin && '🔒 '}SLA Days (working days)</label><input type="number" placeholder="auto from Created On" value={caseForm.sla_days} disabled={!isAdmin} onChange={(e) => { const days = parseInt(e.target.value, 10); const base = caseForm.sla_base || caseForm.created_on || (cases.find(x => x.case_number === selectedCase) || {}).created_on; if (!isNaN(days) && days > 0 && base) { setCaseForm({ ...caseForm, sla_days: days, sla_due_date: addBusinessDays(base, days) }); } else { setCaseForm({ ...caseForm, sla_days: e.target.value }); } }} /></div>
-      <div className="wip-input-group"><label>{!isAdmin && '🔒 '}SLA Due Date</label><input type="date" value={caseForm.sla_due_date} disabled={!isAdmin} onChange={(e) => setCaseForm({ ...caseForm, sla_due_date: e.target.value })} /></div>
-      <div className="wip-input-group"><label>{!isAdmin && '🔒 '}Created On</label><input type="date" value={caseForm.created_on} disabled={!isAdmin} onChange={(e) => setCaseForm({ ...caseForm, created_on: e.target.value })} /></div>
-      <div className="wip-input-group"><label>Priority</label>
-        <select value={caseForm.priority} onChange={(e) => setCaseForm({ ...caseForm, priority: e.target.value })}>
-          <option>High</option><option>Medium</option><option>Low</option>
-        </select>
-      </div>
-      <div className="wip-input-group"><label>Stage</label><input type="text" placeholder="e.g. Stage 3" value={caseForm.stage} onChange={(e) => setCaseForm({ ...caseForm, stage: e.target.value })} /></div>
-      <div className="wip-input-group"><label>Case Folder No.</label><input type="text" placeholder="e.g. ABC-123" value={caseForm.case_folder_no} onChange={(e) => setCaseForm({ ...caseForm, case_folder_no: e.target.value })} /></div>
-      <div className="wip-input-group full-width"><label>Case Findings Link (D365)</label><input type="text" placeholder="Paste the full D365 link here" value={caseForm.findings_url} onChange={(e) => setCaseForm({ ...caseForm, findings_url: e.target.value })} /></div>
-      <div className="wip-input-group"><label>Case Status</label>
-        <select value={caseForm.case_status} onChange={(e) => setCaseForm({ ...caseForm, case_status: e.target.value })}>
-          <option>IN PROGRESS</option><option>COMPLETED</option><option>CANCELLED</option>
-        </select>
-      </div>
-      {(caseForm.case_status === 'COMPLETED' || caseForm.case_status === 'CANCELLED') && (
-        <div className="wip-input-group">
-          <label>{!isAdmin && '🔒 '}{caseForm.case_status === 'CANCELLED' ? 'Closed (Cancelled) Date' : 'Completed Date'}</label>
-          <input type="date" value={caseForm.date_completed} disabled={!isAdmin} placeholder={!isAdmin ? 'auto: today' : ''} onChange={(e) => setCaseForm({ ...caseForm, date_completed: e.target.value })} />
-        </div>
-      )}
-      <div className="wip-input-group full-width"><label>Remarks</label><textarea value={caseForm.remarks} onChange={(e) => setCaseForm({ ...caseForm, remarks: e.target.value })} /></div>
-    </div>
-    {isAdmin && (
-      <>
-        <p className="form-title" style={{ marginTop: '16px' }}>👤 Complainant Details</p>
-        <p className="form-sub">Applies to this case (saved on all respondent rows).</p>
-        <div className="admin-form-grid">
-          <div className="wip-input-group"><label>Complainant Name</label><input type="text" value={caseForm.complainant_name} onChange={(e) => setCaseForm({ ...caseForm, complainant_name: e.target.value })} /></div>
-          <div className="wip-input-group"><label>Complainant ID</label><input type="text" value={caseForm.complainant_id} onChange={(e) => setCaseForm({ ...caseForm, complainant_id: e.target.value })} /></div>
-          <div className="wip-input-group"><label>Complainant Country</label><input type="text" value={caseForm.complainant_country} onChange={(e) => setCaseForm({ ...caseForm, complainant_country: e.target.value })} /></div>
-        </div>
-      </>
-    )}
-    <div className="admin-form-actions">
-      <button type="submit" className="btn-save-admin">💾 Save Changes</button>
-      <button type="button" className="btn-cancel-admin" onClick={() => setEditingCase(false)}>Cancel</button>
-    </div>
-  </form>
-)}
-                                        {!showAddPersonForm && <button onClick={() => setShowAddPersonForm('complainant')} className="btn-action">+ Add Complainant</button>}
-                                        {!showAddPersonForm && <button onClick={() => setShowAddPersonForm('respondent')} className="btn-action">+ Add Respondent</button>}
-                                      </div>
-
-                                      {showAddPersonForm && (
-                                        <form onSubmit={handleAddPerson} className="person-form">
-                                          <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', width: '100%', marginBottom: '6px' }}>
-                                            <input type="checkbox" checked={bulkMode} onChange={(e) => { setBulkMode(e.target.checked); setBulkPreview(null); }} />
-                                            Add multiple — paste a list
-                                          </label>
-                                          {!bulkMode && <div className="wip-input-group"><label>{showAddPersonForm === 'complainant' ? 'Complainant Name' : 'Respondent Name'}</label><input type="text" value={newPersonName} onChange={(e) => setNewPersonName(e.target.value)} required /></div>}
-                                          {!bulkMode && <div className="wip-input-group"><label>Qnet ID#</label><input type="text" value={newPersonId} onChange={(e) => setNewPersonId(e.target.value)} /></div>}
-                                          {bulkMode && (
-                                            <div className="wip-input-group" style={{ width: '100%' }}>
-                                              <label>Paste list — one per line: Name (ID) or Name (ID/CU...) or ID Name</label>
-                                              <textarea value={bulkText} maxLength={8000} rows={6} onChange={(e) => { setBulkText(e.target.value); setBulkPreview(null); }} style={{ width: '100%', padding: '6px', border: '1px solid #e2e8f0', borderRadius: '6px', fontFamily: 'monospace', fontSize: '12px' }} />
-                                              <div style={{ fontSize: '10px', color: '#94a3b8' }}>{bulkText.length} / 8000 characters</div>
-                                            </div>
-                                          )}
-                                          <div className="wip-input-group"><label>Country</label><input type="text" value={newPersonCountry} onChange={(e) => setNewPersonCountry(e.target.value)} /></div>
-                                          {bulkMode && bulkPreview && (
-                                            <div style={{ width: '100%', marginTop: '6px', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '6px' }}>
-                                              <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '4px' }}>Preview — untick any row you don't want to add:</div>
-                                              {bulkPreview.map((p, pi) => {
-                                                const dupName = daList.some(d => (showAddPersonForm === 'complainant' ? d.complainant_name : d.respondent_name)?.toUpperCase().trim() === p.name.toUpperCase().trim());
-                                                const dupId = p.id && daList.some(d => (showAddPersonForm === 'complainant' ? d.complainant_id : d.respondent_id)?.toUpperCase().trim() === p.id.toUpperCase().trim());
-                                                const dupInList = bulkPreview.some((q, qi) => qi !== pi && (q.name.toUpperCase().trim() === p.name.toUpperCase().trim() || (p.id && q.id.toUpperCase().trim() === p.id.toUpperCase().trim())));
-                                                const warn = dupName || dupId ? 'already on this case' : (dupInList ? 'appears twice in your list' : (!p.id ? 'no ID found' : ''));
-                                                return (
-                                                  <div key={pi} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', padding: '2px 0' }}>
-                                                    <input type="checkbox" checked={p.include} onChange={(e) => setBulkPreview(prev => prev.map((q, qi) => qi === pi ? { ...q, include: e.target.checked } : q))} />
-                                                    <span style={{ color: '#94a3b8', minWidth: '16px' }}>{p.row}</span>
-                                                    <span style={{ flex: 1 }}>{p.name || <em style={{ color: '#dc2626' }}>no name</em>}</span>
-                                                    <span style={{ minWidth: '90px', color: p.id ? '#0f172a' : '#dc2626' }}>{p.id || '—'}</span>
-                                                    <span style={{ minWidth: '110px', color: '#64748b' }}>{p.cust || ''}</span>
-                                                    {warn && <span className="badge badge-yellow" style={{ fontSize: '10px' }}>⚠ {warn}</span>}
-                                                  </div>
-                                                );
-                                              })}
-                                              <div style={{ fontSize: '11px', color: '#64748b', marginTop: '4px' }}>{bulkPreview.filter(p => p.include).length} will be added{!newPersonCountry ? ' — country is blank, remember to fill it in later' : ''}</div>
-                                            </div>
-                                          )}
-                                          <div style={{ display: 'flex', gap: '4px', alignItems: 'end' }}>
-                                            {bulkMode && !bulkPreview && <button type="button" onClick={() => setBulkPreview(parseBulkPeople(bulkText))} className="btn-log" style={{ backgroundColor: '#6366f1' }}>Preview</button>}
-                                            {(!bulkMode || bulkPreview) && <button type="submit" className="btn-log" style={{ backgroundColor: '#10b981' }}>Add</button>}
-                                            <button type="button" onClick={() => { setShowAddPersonForm(null); setNewPersonName(''); setNewPersonId(''); setNewPersonCountry(''); }} className="btn-action">Cancel</button>
-                                          </div>
-                                        </form>
-                                      )}
-
-                                      <div className="section-divider">
-                                        <div className="section-title">
-                                        <span>⏳ WIP Tracker</span>
-                                          {!showWipForm && <button onClick={() => { setEditingWipId(null); setShowWipForm(true); }} className="btn-action btn-purple" style={{ color: 'white' }}>+ Log Action</button>}
-                                        </div>
-
-                                        {showWipForm && (
-                                          <form onSubmit={handleAddWIP} className="wip-form">
-                                            <div className="wip-input-group"><label>Action Type</label><select value={wipActionType} onChange={(e) => setWipActionType(e.target.value)} required><option value="">Select...</option>{mappingRules.map(rule => <option key={rule.id} value={rule.action_type}>{rule.action_type}</option>)}</select></div>
-                                            
-                                            <div className="wip-input-group"><label>Date Sent</label><input type="date" value={wipDateSent} onChange={(e) => setWipDateSent(e.target.value)} required /></div>
-                                            <div className="wip-input-group"><label>SLA Days (1-100)</label><input type="number" min="1" max="100" value={wipSlaDays} onChange={(e) => setWipSlaDays(Math.max(1, Math.min(100, parseInt(e.target.value) || 2)))} required /></div>
-                                            <div style={{ display: 'flex', gap: '4px' }}>
-                                              <button type="submit" className="btn-log">{editingWipId ? 'Update' : 'Log'}</button>
-                                              <button type="button" onClick={resetWipForm} className="btn-action">Cancel</button>
-                                            </div>
-                                            <div className="wip-input-group wip-notes-row" style={{ gridColumn: '1 / -1' }}>
-                                              <label>Description</label>
-                                              <textarea value={wipDesc} onChange={(e) => setWipDesc(e.target.value)} rows="3" required placeholder="What was sent / done..."></textarea>
-                                            </div>
-                                            <div className="wip-input-group wip-notes-row" style={{ gridColumn: '1 / -1' }}>
-                                              <label>Notes / Replies</label>
-                                              <textarea value={wipNotes} onChange={(e) => setWipNotes(e.target.value)} rows="3" placeholder="e.g., Reply 1 (Date)..."></textarea>
-                                            </div>
-                                          </form>
-                                        )}
-
-                                        {wipList.length === 0 ? (
-                                          <div style={{ padding: '12px', textAlign: 'center', backgroundColor: '#f8fafc', borderRadius: '8px', color: '#94a3b8', fontSize: '13px' }}>No WIP actions logged yet.</div>
-                                        ) : (
-                                          <div>
-                                            {wipList.map((w, i) => {
-                                              const wipSlaDays = calculateBusinessDays(w.expiry_date);
-                                              return (
-                                                <div key={w.id} className={`list-item ${w.status === 'Done' ? 'done' : ''}`}>
-                                                  <div className="step-circle">{wipList.length - i}</div>
-                                                  <div className="item-content">
-                                                    <div className="item-title">{w.action_type} {w.status === 'Done' && <span className="badge badge-green" style={{ marginLeft: '4px' }}>Done</span>}</div>
-                                                    <div className="item-sub">{w.description}</div>
-                                                    {w.notes && <div className="item-sub" style={{ marginTop: '4px', color: '#475569', fontStyle: 'italic' }}>Notes: {w.notes}</div>}
-                                                    <div className="item-sub" style={{ marginTop: '4px' }}>By: {w.pic?.split('@')[0] || '—'} | Sent: {w.date_sent} | Modified: {formatDateTime(w.last_modified)}</div>
-                                                  </div>
-                                                  <div className="item-meta"><div className="expanded-label">Stage</div><span className="badge badge-blue">{w.stage_auto || '—'}</span></div>
-                                                  <div className="item-meta"><div className="expanded-label">SLA Timer</div><span style={{ fontWeight: 600, color: wipSlaDays < 0 ? '#dc2626' : '#059669' }}>{wipSlaDays < 0 ? `🔴 ${Math.abs(wipSlaDays)}wd` : `🟢 ${wipSlaDays}wd`}</span></div>
-                                                  {(wipSlaDays < 0 || (Array.isArray(w.follow_ups) && w.follow_ups.length > 0)) && w.status !== 'Done' && (() => {
-  const fu = Array.isArray(w.follow_ups) ? w.follow_ups : [];
-  const prev = fu.length > 1 ? fu[fu.length - 2] : null;
-  const latest = fu.length > 0 ? fu[fu.length - 1] : null;
-  return (
-    <div style={{ width: '100%', marginTop: '8px', paddingTop: '8px', borderTop: '1px dashed #e2e8f0', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-      <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 600 }}>📅 Follow-up:</span>
-      <input type="date"
-        value={followUpDates[w.id] || new Date().toISOString().split('T')[0]}
-        onChange={(e) => setFollowUpDates(prev2 => ({ ...prev2, [w.id]: e.target.value }))}
-        style={{ padding: '4px 6px', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '12px' }} />
-      <button onClick={() => handleAddFollowUp(w.id)} disabled={followUpBusy === w.id} className="btn-action btn-purple" style={{ color: 'white' }}>
-        {followUpBusy === w.id ? 'Saving...' : 'Update'}
-      </button>
-      {fu.length > 0 && (
-        <span style={{ fontSize: '11px', color: '#475569', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-          Follow-ups: <b>{fu.length}</b>
-          <span style={{ color: '#94a3b8' }}>· last {latest.date}</span>
-          <span title={prev ? `Previous follow-up: ${prev.date}` : 'No earlier follow-up'}
-            style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '15px', height: '15px', borderRadius: '50%', border: '1px solid #94a3b8', color: '#64748b', fontSize: '10px', fontWeight: 700, cursor: 'help' }}>i</span>
-        </span>
-      )}
-      <div style={{ marginLeft: 'auto', display: 'flex', gap: '6px' }}>
-        <button onClick={() => handleEditWip(w)} className="btn-action">Edit</button>
-        <button onClick={() => handleCompleteWip(w.id)} className="btn-action btn-success">Complete</button>
-      </div>
-    </div>
-  );
-})()}
-{!(wipSlaDays < 0 || (Array.isArray(w.follow_ups) && w.follow_ups.length > 0)) && w.status !== 'Done' && (<div className="item-actions"><button onClick={() => handleEditWip(w)} className="btn-action">Edit</button><button onClick={() => handleCompleteWip(w.id)} className="btn-action btn-success">Complete</button></div>)}
-{isAdmin && w.status === 'Done' && (<div className="item-actions"><button onClick={() => handleReactivateWip(w.id)} className="btn-action" style={{ color: '#7c3aed', borderColor: '#c4b5fd' }}>↩️ Reactivate</button></div>)}
-                                                </div>
-                                              );
-                                            })}
-                                          </div>
-                                        )}
-                                      </div>
-
-                                      <div className="section-divider">
-                                        <div className="section-title" style={{ cursor: 'pointer' }} onClick={() => setHideRespondents(!hideRespondents)}>
-                                          <span>⚖️ Disciplinary Actions (Respondents) {daList.length > 3 && (hideRespondents ? '▼ Show' : '▲ Hide')}</span>
-                                        </div>
-                                        {daList.length === 0 ? (
-                                          <div style={{ padding: '16px', textAlign: 'center', backgroundColor: '#f8fafc', borderRadius: '8px', color: '#94a3b8' }}>No respondents linked to this case. Use "+ Add Respondent" above.</div>
-                                        ) : (
-                                          <div>
-                                            {isAdmin && daList.length > 0 && (
-  <div className="respondent-admin-strip">
-    <p className="respondent-admin-label">Admin — Respondent Details</p>
-    {daList.map(da => (
-      editingRespondentId === da.id ? (
-        <form key={da.id} className="respondent-admin-form" onSubmit={(e) => handleUpdateRespondent(e, da.id)}>
-          <div className="admin-form-grid">
-            <div className="wip-input-group"><label>Respondent Name</label><input type="text" value={(respondentEdits[da.id] || {}).name || ''} onChange={(e) => setRespondentEdits(prev => ({ ...prev, [da.id]: { ...(prev[da.id] || {}), name: e.target.value } }))} /></div>
-            <div className="wip-input-group"><label>Respondent ID</label><input type="text" value={(respondentEdits[da.id] || {}).id || ''} onChange={(e) => setRespondentEdits(prev => ({ ...prev, [da.id]: { ...(prev[da.id] || {}), id: e.target.value } }))} /></div>
-            <div className="wip-input-group"><label>Respondent Country</label><input type="text" value={(respondentEdits[da.id] || {}).country || ''} onChange={(e) => setRespondentEdits(prev => ({ ...prev, [da.id]: { ...(prev[da.id] || {}), country: e.target.value } }))} /></div>
-          </div>
-          <div className="admin-form-actions">
-            <button type="submit" className="btn-save-admin">💾 Save Respondent</button>
-            <button type="button" className="btn-cancel-admin" onClick={() => setEditingRespondentId(null)}>Cancel</button>
-          </div>
-        </form>
-      ) : (
-        <div key={da.id} className="respondent-admin-row">
-        <span className="respondent-admin-name">{da.respondent_name || '(unnamed)'}{da.respondent_id ? ` · ${da.respondent_id}` : ''}{da.respondent_country ? ` · ${da.respondent_country}` : ''}</span>
-        <div style={{ display: 'flex', gap: '4px' }}>
-          <button type="button" className="btn-admin" onClick={() => startRespondentEdit(da)}>✏️ Edit</button>
-          <button type="button" className="btn-admin-danger" onClick={() => handleDeleteRespondent(da.id)}>🗑 Delete</button>
-        </div>
-        {(da.action_history || []).length > 0 && (
-          <div style={{ width: '100%', marginTop: '6px', paddingTop: '6px', borderTop: '1px dashed #e2e8f0' }}>
-            <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '4px' }}>Timeline steps — delete a wrongly recorded action:</div>
-            {(da.action_history || []).map((h, hIdx) => (
-              <div key={hIdx} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', padding: '2px 0' }}>
-                <span style={{ color: '#94a3b8', minWidth: '16px' }}>{hIdx + 1}</span>
-                <span style={{ flex: 1 }}>{h.action || '—'}<span style={{ color: '#94a3b8', marginLeft: '6px' }}>{h.date || 'no date'}</span>{h.confirmed_by ? <span style={{ color: '#059669', marginLeft: '6px' }}>✓</span> : null}</span>
-                <button type="button" className="btn-admin-danger" onClick={() => handleDeleteDaStep(da.id, hIdx)}>🗑</button>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-      )
-    ))}
-  </div>
-)}
-                                            {(hideRespondents && daList.length > 3 ? daList.slice(0, 3) : daList).map((da, i) => {
-                                              const colors = getActionColor(da.current_action);
-                                              const isExpanded = expandedDAs[da.id];
-                                              return (
-                                                <div key={da.id} style={{ border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px', marginBottom: '12px' }}>
-                                                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
-                                                    <div><span className="expanded-label">Respondent: </span><span className="item-title">{da.respondent_name || '—'}</span><span className="item-sub" style={{ marginLeft: '8px' }}>({da.respondent_id || '—'})</span>{da.respondent_country && <span className="badge badge-grey" style={{ marginLeft: '6px' }}>{da.respondent_country}</span>}</div>
-                                                  </div> <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '6px' }}>
-                                                      <span className="expanded-label" style={{ margin: 0 }}>Linked complainant:</span>
-                                                      <select
-                                                        value=""
-                                                        onChange={(ev) => handleRelinkComplainant(da.id, ev.target.value)}
-                                                        style={{ padding: '4px 8px', border: '1px solid #dde3ea', borderRadius: '6px', fontSize: '12px' }}
-                                                      >
-                                                        <option value="">
-                                                          {da.complainant_name ? `${da.complainant_name}${da.complainant_id ? ' · ' + da.complainant_id : ''}` : '(none linked)'}
-                                                        </option>
-                                                        {caseComplainants.map(c => (
-                                                          <option key={c.id} value={c.id}>
-                                                            {c.complainant_name}{c.complainant_id ? ' · ' + c.complainant_id : ''}{c.is_anchor ? ' (anchor)' : ''}
-                                                          </option>
-                                                        ))}
-                                                      </select>
-                                                    </div>
-
-                                                  <div style={{ marginBottom: '12px', padding: '8px', backgroundColor: '#f8fafc', borderRadius: '6px' }}>
-                                                    <div className="expanded-label">Violations</div>
-                                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '4px' }}>
-                                                      {(da.violations || []).map((v, vIdx) => (
-                                                        <span key={vIdx} className="badge badge-red" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                                          {v}
-                                                          <button onClick={() => handleDeleteViolation(da.id, vIdx)} style={{ background: 'none', border: 'none', color: '#dc2626', cursor: 'pointer', fontWeight: 'bold', padding: 0 }}>×</button>
-                                                        </span>
-                                                      ))}
-                                                    </div>
-                                                    <div style={{ display: 'flex', gap: '4px', marginTop: '8px' }}>
-                                                      <input type="text" placeholder="Add violation..." value={newViolation[da.id] || ''} onChange={(e) => setNewViolation(prev => ({ ...prev, [da.id]: e.target.value }))} style={{ flex: 1, padding: '6px', border: '1px solid #e2e8f0', borderRadius: '6px' }} />
-                                                      <button onClick={() => handleAddViolation(da.id)} className="btn-action">Add</button>
-                                                    </div>
-                                                  </div>
-
-                                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', padding: '8px', backgroundColor: '#f8fafc', borderRadius: '6px' }} onClick={() => toggleExpandDA(da.id)}>
-                                                    <span className="expanded-label" style={{ margin: 0 }}>Action Timeline ({da.action_history?.length || 0})</span>
-                                                    <span style={{ fontSize: '12px', color: '#64748b' }}>{isExpanded ? '▲ Hide' : '▼ Show'}</span>
-                                                  </div>
-
-                                                  {isExpanded && (
-                                                    <div style={{ marginTop: '8px' }}>
-                                                      {da.action_history && da.action_history.map((h, idx) => {
-                                                        const hColors = getActionColor(h.action);
-                                                        return (
-                                                          <div key={idx} className="list-item" style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
-                                                            <div style={{ display: 'flex', gap: '10px', width: '100%' }}>
-                                                              <div className="step-circle">{h.step}</div>
-                                                              <div className="item-content">
-                                                                <span className="badge" style={{ backgroundColor: hColors.bg, color: hColors.text }}>{h.action || '—'}</span>
-                                                                <div className="item-sub" style={{ marginTop: '4px' }}>Date DA in force: {h.date || 'No date'}</div>
-                                                                {h.added_by && <div className="item-sub" style={{ fontSize: '10px' }}>Added by: {h.added_by?.split('@')[0]} on {formatDateTime(h.added_at)}</div>}                                                            {h.modified_by && <div className="item-sub" style={{ fontSize: '10px', color: '#94a3b8' }}>Modified by: {h.modified_by?.split('@')[0]} on {formatDateTime(h.modified_at)}</div>}
-                                                                {h.cleared_by && <div className="item-sub" style={{ fontSize: '10px', color: '#b45309' }}>✗ Cleared by {h.cleared_by.split('@')[0]} on {formatDateTime(h.cleared_at)}{h.was_in_force_from ? ` — was in force from ${h.was_in_force_from}` : ''}</div>}
-                                                              </div>
-                                                              <button onClick={() => { setEditingDaAction({ daId: da.id, step: idx }); setEditDaActionName(h.action); setEditDaActionDate(h.date); }} className="btn-action">Edit</button>
-                                                              {idx === da.action_history.length - 1 ? (
-                                                                <>
-                                                                  {da.da_confirmed !== true && <button onClick={() => handleConfirmDA(da.id, h.action)} className="btn-action btn-success" style={{ marginTop: '4px' }}>✓ Confirm DA</button>}
-                                                                  {da.da_confirmed === true && <div style={{ marginTop: '4px' }}><span className="badge badge-green">✓ DA Confirmed</span>{da.da_confirmed_by && <span style={{ fontSize: '10px', color: '#059669', marginLeft: '4px' }}>by {da.da_confirmed_by.split('@')[0]} on {formatDateTime(da.da_confirmed_at)}</span>}</div>}
-                                                                                                                                    {isAdmin && (da.da_confirmed === true || (da.da_confirmed == null && (da.current_action?.toLowerCase().includes('suspend') || da.current_action?.toLowerCase().includes('terminat')))) && <button onClick={() => handleClearDA(da.id)} className="btn-action btn-danger" style={{ marginTop: '4px', marginLeft: '4px' }}>✗ Clear DA Count</button>}
-                                                                  {da.da_confirmed === false && <div style={{ marginTop: '4px' }}><span className="badge badge-grey">✗ Not In Force — cleared by admin</span></div>}
-                                                                  {da.da_confirmed !== true && da.da_confirmed !== false && (h.action?.toLowerCase().includes('release') || h.action?.toLowerCase().includes('terminat')) && <div style={{ marginTop: '4px' }}><span className="badge badge-yellow">⏳ Awaiting approval — previous action still in force</span></div>}
-                                                                </>
-                                                              ) : (
-                                                                h.confirmed_by ? <div style={{ marginTop: '4px' }}><span className="badge badge-green">✓ Confirmed</span><span style={{ fontSize: '10px', color: '#059669', marginLeft: '4px' }}>by {h.confirmed_by.split('@')[0]} on {formatDateTime(h.confirmed_at)}</span></div> : null
-                                                              )}
-                                                                                                                    </div>
-
-                                                            {editingDaAction && editingDaAction.daId === da.id && editingDaAction.step === idx && (
-                                                              <form onSubmit={(e) => handleEditDaAction(e, da.id, idx)} style={{ width: '100%', display: 'flex', gap: '8px', marginTop: '8px', flexWrap: 'wrap' }}>
-                                                                <input type="text" value={editDaActionName} onChange={(e) => setEditDaActionName(e.target.value)} required style={{ flex: 1, minWidth: '150px', padding: '6px', border: '1px solid #e2e8f0', borderRadius: '6px' }} />
-                                                                <input type="date" value={editDaActionDate} onChange={(e) => setEditDaActionDate(e.target.value)} style={{ padding: '6px', border: '1px solid #e2e8f0', borderRadius: '6px' }} />
-                                                                <button type="submit" className="btn-log" style={{ backgroundColor: '#10b981' }}>Update</button>
-                                                                <button type="button" onClick={() => setEditingDaAction(null)} className="btn-action">Cancel</button>
-                                                              </form>
+                                        <div className="expanded-card">
+                                          <div className="expanded-header">
+                                            <div>
+                                              <span className="expanded-label">
+                                                CASE DETAILS
+                                              </span>
+                                              <div className="expanded-value">
+                                                {c.case_number}
+                                              </div>
+                                              {(() => {
+                                                const fromTable = (
+                                                  caseComplainants || []
+                                                ).map((x) => ({
+                                                  complainant_name:
+                                                    x.complainant_name,
+                                                  complainant_id:
+                                                    x.complainant_id,
+                                                  complainant_country:
+                                                    x.complainant_country,
+                                                  is_anchor: x.is_anchor,
+                                                }));
+                                                const fromRows = [
+                                                  ...new Map(
+                                                    c.disciplinary_actions
+                                                      ?.filter(
+                                                        (da) =>
+                                                          da.complainant_name
+                                                      )
+                                                      .map((da) => [
+                                                        da.complainant_name,
+                                                        da,
+                                                      ])
+                                                  ).values(),
+                                                ];
+                                                const complainants =
+                                                  fromTable.length > 0
+                                                    ? fromTable
+                                                    : fromRows;
+                                                if (complainants.length > 0) {
+                                                  return (
+                                                    <div
+                                                      className="expanded-sub"
+                                                      style={{
+                                                        marginTop: '4px',
+                                                        fontWeight: '600',
+                                                        display: 'flex',
+                                                        flexWrap: 'wrap',
+                                                        alignItems: 'center',
+                                                        gap: '4px',
+                                                      }}
+                                                    >
+                                                      Complainant(s):
+                                                      {complainants.map(
+                                                        (comp, i) => (
+                                                          <span
+                                                            key={i}
+                                                            className="complainant-line"
+                                                          >
+                                                            <span className="complainant-name">
+                                                              {
+                                                                comp.complainant_name
+                                                              }
+                                                            </span>
+                                                            {comp.complainant_id && (
+                                                              <span
+                                                                style={{
+                                                                  marginLeft:
+                                                                    '6px',
+                                                                  color:
+                                                                    '#475569',
+                                                                }}
+                                                              >
+                                                                ·{' '}
+                                                                {
+                                                                  comp.complainant_id
+                                                                }
+                                                              </span>
                                                             )}
-
-                                                            <div style={{ width: '100%', marginTop: '8px', paddingLeft: '32px', borderLeft: '2px solid #e2e8f0' }}>
-                                                              <div className="expanded-label">Journal / Sub-Actions</div>
-                                                              {h.sub_actions && h.sub_actions.map((sa, saIdx) => (
-                                                                <div key={saIdx} style={{ fontSize: '12px', color: '#475569', marginBottom: '4px', display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-                                                                  <span>{sa.date}</span> - <span>{sa.desc}</span>
-                                                                  <span style={{ fontSize: '10px', color: '#94a3b8' }}>(by {sa.added_by?.split('@')[0]})</span>
-                                                                  {sa.status === 'Done' ? (
-                                                                    <span className="badge badge-green" style={{ fontSize: '10px' }}>✓ Done</span>
-                                                                  ) : (
-                                                                    <>
-                                                                      <span className="badge badge-yellow" style={{ fontSize: '10px' }}>⏳ Pending</span>
-                                                                      {sa.expiry_date && (() => {
-                                                                        const d = calculateBusinessDays(sa.expiry_date);
-                                                                        return d < 0
-                                                                          ? <span className="badge badge-red" style={{ fontSize: '10px' }}>🔴 Breached by {Math.abs(d)}d</span>
-                                                                          : <span className="badge badge-yellow" style={{ fontSize: '10px' }}>🟡 Due in {d}d</span>;
-                                                                      })()}
-                                                                      {sa.expiry_date && <span style={{ fontSize: '10px', color: '#94a3b8' }}>due {sa.expiry_date}</span>}
-                                                                    </>
-                                                                  )}
-                                                                  {sa.status !== 'Done' && <button onClick={() => handleCompleteSubAction(da.id, idx, saIdx)} className="btn-action btn-success" style={{ fontSize: '10px', padding: '2px 6px' }}>✓ Complete</button>}
-                                                                  {sa.completed_by && <span style={{ fontSize: '10px', color: '#94a3b8' }}>✓ by {sa.completed_by?.split('@')[0]}</span>}
-                                                                  <button onClick={() => { setEditingSubActionEntry({ daId: da.id, step: idx, saIdx }); setEditSubActionDesc(sa.desc); setEditSubActionDate(sa.date); setEditSubActionSla(sa.sla_days || 2); }} className="btn-action" style={{ fontSize: '10px', padding: '2px 6px' }}>✏️</button>
-                                                                  {sa.modified_by && <span style={{ fontSize: '10px', color: '#94a3b8' }}>modified by {sa.modified_by?.split('@')[0]} on {formatDateTime(sa.modified_at)}</span>}
-                                                                  {editingSubActionEntry && editingSubActionEntry.daId === da.id && editingSubActionEntry.step === idx && editingSubActionEntry.saIdx === saIdx && (
-                                                                    <form onSubmit={(e) => handleEditSubAction(e, da.id, idx, saIdx)} style={{ width: '100%', display: 'flex', gap: '8px', marginTop: '4px', flexWrap: 'wrap' }}>
-                                                                      <input type="text" value={editSubActionDesc} onChange={(e) => setEditSubActionDesc(e.target.value)} required style={{ flex: 1, minWidth: '200px', padding: '4px', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '12px' }} />
-                                                                      <input type="date" value={editSubActionDate} onChange={(e) => setEditSubActionDate(e.target.value)} style={{ padding: '4px', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '12px' }} />
-                                                                      <input type="number" min="1" max="100" value={editSubActionSla} onChange={(e) => setEditSubActionSla(parseInt(e.target.value, 10) || 1)} title="SLA in working days" style={{ width: '56px', padding: '4px', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '12px' }} />
-                                                                      <button type="submit" className="btn-log" style={{ backgroundColor: '#10b981', fontSize: '11px', padding: '4px 8px' }}>Update</button>
-                                                                      <button type="button" onClick={() => setEditingSubActionEntry(null)} className="btn-action" style={{ fontSize: '11px', padding: '4px 8px' }}>Cancel</button>
-                                                                    </form>
-                                                                  )}
-                                                                </div>
-                                                              ))}
-
-                                                              {addingSubAction && addingSubAction.daId === da.id && addingSubAction.step === idx ? (
-                                                                <form onSubmit={(e) => handleAddSubAction(e, da.id, idx)} className="sub-action-form">
-                                                                  <input type="text" placeholder="Journal entry (e.g., Sent for approval)" value={newSubActionDesc} onChange={(e) => setNewSubActionDesc(e.target.value)} required style={{ flex: 1, minWidth: '150px', padding: '6px', border: '1px solid #e2e8f0', borderRadius: '6px' }} />
-                                                                  <input type="date" value={newSubActionDate} onChange={(e) => setNewSubActionDate(e.target.value)} style={{ padding: '6px', border: '1px solid #e2e8f0', borderRadius: '6px' }} />
-                                                                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }} title="SLA in working days">
-                                                                    <span style={{ fontSize: '11px', color: '#64748b' }}>SLA</span>
-                                                                    <input type="number" min="1" max="100" value={newSubActionSla} onChange={(e) => setNewSubActionSla(parseInt(e.target.value, 10) || 1)} style={{ width: '56px', padding: '6px', border: '1px solid #e2e8f0', borderRadius: '6px' }} />
-                                                                  </div>
-                                                                  <button type="submit" className="btn-log" style={{ backgroundColor: '#10b981' }}>Add</button>
-                                                                  <button type="button" onClick={() => setAddingSubAction(null)} className="btn-action">Cancel</button>
-                                                                </form>
-                                                              ) : (
-                                                                <button onClick={() => setAddingSubAction({ daId: da.id, step: idx })} className="btn-action" style={{ marginTop: '4px', fontSize: '10px' }}>+ Add Journal Entry</button>
-                                                              )}
-                                                            </div>
-                                                          </div>
-                                                        );
-                                                      })}
-
-                                                      {addingDaFor === da.id ? (
-                                                        <form onSubmit={(e) => handleAddDaAction(e, da.id)} style={{ marginTop: '8px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                                                          <input type="text" placeholder="Action Name" value={newDaAction} onChange={(e) => setNewDaAction(e.target.value)} required style={{ flex: 1, minWidth: '150px', padding: '6px', border: '1px solid #e2e8f0', borderRadius: '6px' }} />
-                                                          {daList.length > 1 && (
-                                                            <div style={{ width: '100%', marginTop: '6px' }}>
-                                                              <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px' }}>
-                                                                <input type="checkbox" checked={bulkActionMode} onChange={(e) => { setBulkActionMode(e.target.checked); setBulkActionTargets({}); setBulkJournalText(''); }} />
-                                                                Apply to other respondents
-                                                              </label>
-                                                              {bulkActionMode && (
-                                                                <div style={{ marginTop: '6px', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '6px' }}>
-                                                                  <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '4px' }}>Tick the respondents who should also get "{newDaAction || '(action name)'}":</div>
-                                                                  {daList.filter(d => d.id !== da.id).map(d => {
-                                                                    const hist = d.action_history || [];
-                                                                    const lastAct = hist.length ? (hist[hist.length - 1].action || '') : '';
-                                                                    const same = newDaAction && lastAct.toLowerCase().trim() === newDaAction.toLowerCase().trim();
-                                                                    return (
-                                                                      <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', padding: '2px 0' }}>
-                                                                        <input type="checkbox" checked={!!bulkActionTargets[d.id]} onChange={(e) => setBulkActionTargets(prev => ({ ...prev, [d.id]: e.target.checked }))} />
-                                                                        <span style={{ flex: 1 }}>{d.respondent_name || '(unnamed)'}</span>
-                                                                        <span style={{ minWidth: '90px', color: '#64748b' }}>{d.respondent_id || '—'}</span>
-                                                                        {same && <span className="badge badge-yellow" style={{ fontSize: '10px' }}>⚠ already at "{lastAct}"</span>}
-                                                                      </div>
-                                                                    );
-                                                                  })}
-                                                                  <div className="wip-input-group" style={{ width: '100%', marginTop: '6px' }}>
-                                                                    <label style={{ fontSize: '11px' }}>Journal entry (optional) — copied to everyone selected, and to this respondent</label>
-                                                                    <textarea value={bulkJournalText} rows={3} onChange={(e) => setBulkJournalText(e.target.value)} style={{ width: '100%', padding: '6px', border: '1px solid #e2e8f0', borderRadius: '6px', fontSize: '12px' }} />
-                                                                  </div>
-                                                                </div>
-                                                              )}
-                                                            </div>
-                                                          )}
-                                                                                                        <button type="submit" className="btn-log" style={{ backgroundColor: '#10b981' }}>Add</button>
-                                                          <button type="button" onClick={() => setAddingDaFor(null)} className="btn-action">Cancel</button>
-                                                        </form>
-                                                      ) : (
-                                                        <button onClick={() => setAddingDaFor(da.id)} className="btn-action" style={{ marginTop: '8px' }}>+ Add Action</button>
+                                                            {comp.complainant_country && (
+                                                              <span
+                                                                style={{
+                                                                  marginLeft:
+                                                                    '6px',
+                                                                  color:
+                                                                    '#475569',
+                                                                }}
+                                                              >
+                                                                ·{' '}
+                                                                {
+                                                                  comp.complainant_country
+                                                                }
+                                                              </span>
+                                                            )}
+                                                          </span>
+                                                        )
                                                       )}
                                                     </div>
-                                                  )}
+                                                  );
+                                                }
+                                                return null;
+                                              })()}
+                                              <div className="expanded-sub">
+                                                Priority: {c.priority || '—'} |
+                                                Stage: {c.stage || '—'} | Case
+                                                Folder:{' '}
+                                                {c.case_folder_no || '—'}
+                                              </div>
+                                            </div>
+                                            <div style={{ textAlign: 'right' }}>
+                                              <span className="expanded-label">
+                                                SLA DUE DATE
+                                              </span>
+                                              <div className="expanded-value">
+                                                {c.sla_due_date || '—'}
+                                              </div>
+                                              <div className="expanded-sub">
+                                                Created: {c.created_on || '—'}
+                                                {!c.reactivated_at &&
+                                                  (() => {
+                                                    const d =
+                                                      businessDaysFromStart(
+                                                        c.created_on,
+                                                        c.sla_due_date
+                                                      );
+                                                    return d != null
+                                                      ? ` · ${d} working days`
+                                                      : '';
+                                                  })()}
+                                              </div>
+                                              {c.reactivated_at && (
+                                                <div className="expanded-sub">
+                                                  SLA restarted:{' '}
+                                                  {slaStartDate(c)}
+                                                  {(() => {
+                                                    const d =
+                                                      businessDaysFromStart(
+                                                        slaStartDate(c),
+                                                        c.sla_due_date
+                                                      );
+                                                    return d != null
+                                                      ? ` · ${d} working days`
+                                                      : '';
+                                                  })()}
                                                 </div>
-                                              );
-                                            })}
-                                            {hideRespondents && daList.length > 3 && (
-                                              <div style={{ textAlign: 'center', padding: '8px', color: '#3b82f6', cursor: 'pointer', fontSize: '13px' }} onClick={() => setHideRespondents(false)}>
-                                                Show {daList.length - 3} more respondents...
+                                              )}
+                                              {renderClosureInfo(c)}
+                                              {renderModifiedInfo(c)}
+                                            </div>
+                                          </div>
+
+                                          <div
+                                            style={{
+                                              display: 'flex',
+                                              gap: '8px',
+                                              marginBottom: '16px',
+                                              flexWrap: 'wrap',
+                                            }}
+                                          >
+                                            {c.case_status === 'IN PROGRESS' &&
+                                              !showCloseOptions && (
+                                                <button
+                                                  onClick={() =>
+                                                    setShowCloseOptions(true)
+                                                  }
+                                                  className="btn-action btn-success"
+                                                >
+                                                  Complete Case
+                                                </button>
+                                              )}
+                                            {(c.case_status === 'COMPLETED' ||
+                                              c.case_status ===
+                                                'CANCELLED') && (
+                                              <button
+                                                onClick={() =>
+                                                  handleReactivateCase(
+                                                    c.case_number
+                                                  )
+                                                }
+                                                className="btn-action btn-warning"
+                                              >
+                                                Reactivate Case
+                                              </button>
+                                            )}
+                                            {showCloseOptions &&
+                                              c.case_status ===
+                                                'IN PROGRESS' && (
+                                                <div className="close-case-panel">
+                                                  <span className="close-case-label">
+                                                    Close this case as:
+                                                  </span>
+                                                  <button
+                                                    onClick={() =>
+                                                      handleCompleteCase(
+                                                        c.case_number,
+                                                        'COMPLETED'
+                                                      )
+                                                    }
+                                                    className="btn-action btn-success"
+                                                  >
+                                                    ✅ Completed
+                                                  </button>
+                                                  <button
+                                                    onClick={() =>
+                                                      handleCompleteCase(
+                                                        c.case_number,
+                                                        'CANCELLED'
+                                                      )
+                                                    }
+                                                    className="btn-action btn-cancel-status"
+                                                  >
+                                                    🚫 Cancelled
+                                                  </button>
+                                                  <button
+                                                    onClick={() =>
+                                                      setShowCloseOptions(false)
+                                                    }
+                                                    className="btn-action"
+                                                  >
+                                                    ↩ Back
+                                                  </button>
+                                                </div>
+                                              )}
+                                            {c.findings_url ? (
+                                              <button
+                                                className="btn-action"
+                                                style={{
+                                                  backgroundColor: '#2563eb',
+                                                  color: 'white',
+                                                  border: 'none',
+                                                }}
+                                                onClick={() =>
+                                                  window.open(
+                                                    c.findings_url,
+                                                    '_blank',
+                                                    'noopener,noreferrer'
+                                                  )
+                                                }
+                                                title="Open the case findings notes in D365"
+                                              >
+                                                🔗 Case Findings
+                                              </button>
+                                            ) : (
+                                              <button
+                                                className="btn-action"
+                                                disabled
+                                                style={{
+                                                  opacity: 0.45,
+                                                  cursor: 'not-allowed',
+                                                }}
+                                                title="No findings link saved — add one via ✏️ Edit Case"
+                                              >
+                                                🔗 Case Findings
+                                              </button>
+                                            )}
+                                            <CaseSummaryButton
+                                              supabase={supabase}
+                                              caseRow={c}
+                                              userEmail={userEmail}
+                                              isAdmin={isAdmin}
+                                            />
+                                            {!editingCase && (
+                                              <button
+                                                className="btn-admin"
+                                                onClick={openCaseEdit}
+                                              >
+                                                ✏️ Edit Case
+                                              </button>
+                                            )}
+                                            {editingCase && (
+                                              <form
+                                                className="admin-edit-form"
+                                                onSubmit={handleUpdateCase}
+                                              >
+                                                <p className="form-title">
+                                                  ✏️ Edit Case — {selectedCase}
+                                                </p>
+                                                <p className="form-sub">
+                                                  {isAdmin
+                                                    ? 'Admin access — all fields editable. Changing the case number moves all respondents & WIP actions to the new number.'
+                                                    : 'Standard access — you can edit Priority, Stage, Case Folder No., Case Findings Link, Case Status and Remarks. 🔒 fields are admin only.'}
+                                                </p>
+                                                <div className="admin-form-grid">
+                                                  <div className="wip-input-group">
+                                                    <label>
+                                                      {!isAdmin && '🔒 '}Case
+                                                      Number *
+                                                    </label>
+                                                    <input
+                                                      type="text"
+                                                      value={
+                                                        caseForm.case_number
+                                                      }
+                                                      disabled={!isAdmin}
+                                                      onChange={(e) =>
+                                                        setCaseForm({
+                                                          ...caseForm,
+                                                          case_number:
+                                                            e.target.value,
+                                                        })
+                                                      }
+                                                      required
+                                                    />
+                                                  </div>
+                                                  <div className="wip-input-group">
+                                                    <label>
+                                                      {!isAdmin && '🔒 '}PIC
+                                                    </label>
+                                                    <input
+                                                      type="text"
+                                                      value={caseForm.pic}
+                                                      disabled={!isAdmin}
+                                                      onChange={(e) =>
+                                                        setCaseForm({
+                                                          ...caseForm,
+                                                          pic: e.target.value,
+                                                        })
+                                                      }
+                                                    />
+                                                  </div>
+                                                  <div className="wip-input-group">
+                                                    <label>
+                                                      {!isAdmin && '🔒 '}Case
+                                                      Country
+                                                    </label>
+                                                    <input
+                                                      type="text"
+                                                      value={caseForm.country}
+                                                      disabled={!isAdmin}
+                                                      onChange={(e) =>
+                                                        setCaseForm({
+                                                          ...caseForm,
+                                                          country:
+                                                            e.target.value,
+                                                        })
+                                                      }
+                                                    />
+                                                  </div>
+                                                  <div className="wip-input-group">
+                                                    <label>
+                                                      {!isAdmin && '🔒 '}SLA
+                                                      Days (working days)
+                                                    </label>
+                                                    <input
+                                                      type="number"
+                                                      placeholder="auto from Created On"
+                                                      value={caseForm.sla_days}
+                                                      disabled={!isAdmin}
+                                                      onChange={(e) => {
+                                                        const days = parseInt(
+                                                          e.target.value,
+                                                          10
+                                                        );
+                                                        const base =
+                                                          caseForm.sla_base ||
+                                                          caseForm.created_on ||
+                                                          (
+                                                            cases.find(
+                                                              (x) =>
+                                                                x.case_number ===
+                                                                selectedCase
+                                                            ) || {}
+                                                          ).created_on;
+                                                        if (
+                                                          !isNaN(days) &&
+                                                          days > 0 &&
+                                                          base
+                                                        ) {
+                                                          setCaseForm({
+                                                            ...caseForm,
+                                                            sla_days: days,
+                                                            sla_due_date:
+                                                              addBusinessDays(
+                                                                base,
+                                                                days
+                                                              ),
+                                                          });
+                                                        } else {
+                                                          setCaseForm({
+                                                            ...caseForm,
+                                                            sla_days:
+                                                              e.target.value,
+                                                          });
+                                                        }
+                                                      }}
+                                                    />
+                                                  </div>
+                                                  <div className="wip-input-group">
+                                                    <label>
+                                                      {!isAdmin && '🔒 '}SLA Due
+                                                      Date
+                                                    </label>
+                                                    <input
+                                                      type="date"
+                                                      value={
+                                                        caseForm.sla_due_date
+                                                      }
+                                                      disabled={!isAdmin}
+                                                      onChange={(e) =>
+                                                        setCaseForm({
+                                                          ...caseForm,
+                                                          sla_due_date:
+                                                            e.target.value,
+                                                        })
+                                                      }
+                                                    />
+                                                  </div>
+                                                  <div className="wip-input-group">
+                                                    <label>
+                                                      {!isAdmin && '🔒 '}Created
+                                                      On
+                                                    </label>
+                                                    <input
+                                                      type="date"
+                                                      value={
+                                                        caseForm.created_on
+                                                      }
+                                                      disabled={!isAdmin}
+                                                      onChange={(e) =>
+                                                        setCaseForm({
+                                                          ...caseForm,
+                                                          created_on:
+                                                            e.target.value,
+                                                        })
+                                                      }
+                                                    />
+                                                  </div>
+                                                  <div className="wip-input-group">
+                                                    <label>Priority</label>
+                                                    <select
+                                                      value={caseForm.priority}
+                                                      onChange={(e) =>
+                                                        setCaseForm({
+                                                          ...caseForm,
+                                                          priority:
+                                                            e.target.value,
+                                                        })
+                                                      }
+                                                    >
+                                                      <option>High</option>
+                                                      <option>Medium</option>
+                                                      <option>Low</option>
+                                                    </select>
+                                                  </div>
+                                                  <div className="wip-input-group">
+                                                    <label>Stage</label>
+                                                    <input
+                                                      type="text"
+                                                      placeholder="e.g. Stage 3"
+                                                      value={caseForm.stage}
+                                                      onChange={(e) =>
+                                                        setCaseForm({
+                                                          ...caseForm,
+                                                          stage: e.target.value,
+                                                        })
+                                                      }
+                                                    />
+                                                  </div>
+                                                  <div className="wip-input-group">
+                                                    <label>
+                                                      Case Folder No.
+                                                    </label>
+                                                    <input
+                                                      type="text"
+                                                      placeholder="e.g. ABC-123"
+                                                      value={
+                                                        caseForm.case_folder_no
+                                                      }
+                                                      onChange={(e) =>
+                                                        setCaseForm({
+                                                          ...caseForm,
+                                                          case_folder_no:
+                                                            e.target.value,
+                                                        })
+                                                      }
+                                                    />
+                                                  </div>
+                                                  <div className="wip-input-group full-width">
+                                                    <label>
+                                                      Case Findings Link (D365)
+                                                    </label>
+                                                    <input
+                                                      type="text"
+                                                      placeholder="Paste the full D365 link here"
+                                                      value={
+                                                        caseForm.findings_url
+                                                      }
+                                                      onChange={(e) =>
+                                                        setCaseForm({
+                                                          ...caseForm,
+                                                          findings_url:
+                                                            e.target.value,
+                                                        })
+                                                      }
+                                                    />
+                                                  </div>
+                                                  <div className="wip-input-group">
+                                                    <label>Case Status</label>
+                                                    <select
+                                                      value={
+                                                        caseForm.case_status
+                                                      }
+                                                      onChange={(e) =>
+                                                        setCaseForm({
+                                                          ...caseForm,
+                                                          case_status:
+                                                            e.target.value,
+                                                        })
+                                                      }
+                                                    >
+                                                      <option>
+                                                        IN PROGRESS
+                                                      </option>
+                                                      <option>COMPLETED</option>
+                                                      <option>CANCELLED</option>
+                                                    </select>
+                                                  </div>
+                                                  {(caseForm.case_status ===
+                                                    'COMPLETED' ||
+                                                    caseForm.case_status ===
+                                                      'CANCELLED') && (
+                                                    <div className="wip-input-group">
+                                                      <label>
+                                                        {!isAdmin && '🔒 '}
+                                                        {caseForm.case_status ===
+                                                        'CANCELLED'
+                                                          ? 'Closed (Cancelled) Date'
+                                                          : 'Completed Date'}
+                                                      </label>
+                                                      <input
+                                                        type="date"
+                                                        value={
+                                                          caseForm.date_completed
+                                                        }
+                                                        disabled={!isAdmin}
+                                                        placeholder={
+                                                          !isAdmin
+                                                            ? 'auto: today'
+                                                            : ''
+                                                        }
+                                                        onChange={(e) =>
+                                                          setCaseForm({
+                                                            ...caseForm,
+                                                            date_completed:
+                                                              e.target.value,
+                                                          })
+                                                        }
+                                                      />
+                                                    </div>
+                                                  )}
+                                                  <div className="wip-input-group full-width">
+                                                    <label>Remarks</label>
+                                                    <textarea
+                                                      value={caseForm.remarks}
+                                                      onChange={(e) =>
+                                                        setCaseForm({
+                                                          ...caseForm,
+                                                          remarks:
+                                                            e.target.value,
+                                                        })
+                                                      }
+                                                    />
+                                                  </div>
+                                                </div>
+                                                {isAdmin && (
+                                                  <>
+                                                    <p
+                                                      className="form-title"
+                                                      style={{
+                                                        marginTop: '16px',
+                                                      }}
+                                                    >
+                                                      👤 Complainant Details
+                                                    </p>
+                                                    <p className="form-sub">
+                                                      Applies to this case
+                                                      (saved on all respondent
+                                                      rows).
+                                                    </p>
+                                                    <div className="admin-form-grid">
+                                                      <div className="wip-input-group">
+                                                        <label>
+                                                          Complainant Name
+                                                        </label>
+                                                        <input
+                                                          type="text"
+                                                          value={
+                                                            caseForm.complainant_name
+                                                          }
+                                                          onChange={(e) =>
+                                                            setCaseForm({
+                                                              ...caseForm,
+                                                              complainant_name:
+                                                                e.target.value,
+                                                            })
+                                                          }
+                                                        />
+                                                      </div>
+                                                      <div className="wip-input-group">
+                                                        <label>
+                                                          Complainant ID
+                                                        </label>
+                                                        <input
+                                                          type="text"
+                                                          value={
+                                                            caseForm.complainant_id
+                                                          }
+                                                          onChange={(e) =>
+                                                            setCaseForm({
+                                                              ...caseForm,
+                                                              complainant_id:
+                                                                e.target.value,
+                                                            })
+                                                          }
+                                                        />
+                                                      </div>
+                                                      <div className="wip-input-group">
+                                                        <label>
+                                                          Complainant Country
+                                                        </label>
+                                                        <input
+                                                          type="text"
+                                                          value={
+                                                            caseForm.complainant_country
+                                                          }
+                                                          onChange={(e) =>
+                                                            setCaseForm({
+                                                              ...caseForm,
+                                                              complainant_country:
+                                                                e.target.value,
+                                                            })
+                                                          }
+                                                        />
+                                                      </div>
+                                                    </div>
+                                                  </>
+                                                )}
+                                                <div className="admin-form-actions">
+                                                  <button
+                                                    type="submit"
+                                                    className="btn-save-admin"
+                                                  >
+                                                    💾 Save Changes
+                                                  </button>
+                                                  <button
+                                                    type="button"
+                                                    className="btn-cancel-admin"
+                                                    onClick={() =>
+                                                      setEditingCase(false)
+                                                    }
+                                                  >
+                                                    Cancel
+                                                  </button>
+                                                </div>
+                                              </form>
+                                            )}
+                                            {!showAddPersonForm && (
+                                              <button
+                                                onClick={() =>
+                                                  setShowAddPersonForm(
+                                                    'complainant'
+                                                  )
+                                                }
+                                                className="btn-action"
+                                              >
+                                                + Add Complainant
+                                              </button>
+                                            )}
+                                            {!showAddPersonForm && (
+                                              <button
+                                                onClick={() =>
+                                                  setShowAddPersonForm(
+                                                    'respondent'
+                                                  )
+                                                }
+                                                className="btn-action"
+                                              >
+                                                + Add Respondent
+                                              </button>
+                                            )}
+                                          </div>
+
+                                          {showAddPersonForm && (
+                                            <form
+                                              onSubmit={handleAddPerson}
+                                              className="person-form"
+                                            >
+                                              <label
+                                                style={{
+                                                  display: 'flex',
+                                                  alignItems: 'center',
+                                                  gap: '6px',
+                                                  fontSize: '12px',
+                                                  width: '100%',
+                                                  marginBottom: '6px',
+                                                }}
+                                              >
+                                                <input
+                                                  type="checkbox"
+                                                  checked={bulkMode}
+                                                  onChange={(e) => {
+                                                    setBulkMode(
+                                                      e.target.checked
+                                                    );
+                                                    setBulkPreview(null);
+                                                  }}
+                                                />
+                                                Add multiple — paste a list
+                                              </label>
+                                              {!bulkMode && (
+                                                <div className="wip-input-group">
+                                                  <label>
+                                                    {showAddPersonForm ===
+                                                    'complainant'
+                                                      ? 'Complainant Name'
+                                                      : 'Respondent Name'}
+                                                  </label>
+                                                  <input
+                                                    type="text"
+                                                    value={newPersonName}
+                                                    onChange={(e) =>
+                                                      setNewPersonName(
+                                                        e.target.value
+                                                      )
+                                                    }
+                                                    required
+                                                  />
+                                                </div>
+                                              )}
+                                              {!bulkMode && (
+                                                <div className="wip-input-group">
+                                                  <label>Qnet ID#</label>
+                                                  <input
+                                                    type="text"
+                                                    value={newPersonId}
+                                                    onChange={(e) =>
+                                                      setNewPersonId(
+                                                        e.target.value
+                                                      )
+                                                    }
+                                                  />
+                                                </div>
+                                              )}
+                                              {bulkMode && (
+                                                <div
+                                                  className="wip-input-group"
+                                                  style={{ width: '100%' }}
+                                                >
+                                                  <label>
+                                                    Paste list — one per line:
+                                                    Name (ID) or Name (ID/CU...)
+                                                    or ID Name
+                                                  </label>
+                                                  <textarea
+                                                    value={bulkText}
+                                                    maxLength={8000}
+                                                    rows={6}
+                                                    onChange={(e) => {
+                                                      setBulkText(
+                                                        e.target.value
+                                                      );
+                                                      setBulkPreview(null);
+                                                    }}
+                                                    style={{
+                                                      width: '100%',
+                                                      padding: '6px',
+                                                      border:
+                                                        '1px solid #e2e8f0',
+                                                      borderRadius: '6px',
+                                                      fontFamily: 'monospace',
+                                                      fontSize: '12px',
+                                                    }}
+                                                  />
+                                                  <div
+                                                    style={{
+                                                      fontSize: '10px',
+                                                      color: '#94a3b8',
+                                                    }}
+                                                  >
+                                                    {bulkText.length} / 8000
+                                                    characters
+                                                  </div>
+                                                </div>
+                                              )}
+                                              <div className="wip-input-group">
+                                                <label>Country</label>
+                                                <input
+                                                  type="text"
+                                                  value={newPersonCountry}
+                                                  onChange={(e) =>
+                                                    setNewPersonCountry(
+                                                      e.target.value
+                                                    )
+                                                  }
+                                                />
+                                              </div>
+                                              {bulkMode && bulkPreview && (
+                                                <div
+                                                  style={{
+                                                    width: '100%',
+                                                    marginTop: '6px',
+                                                    border: '1px solid #e2e8f0',
+                                                    borderRadius: '6px',
+                                                    padding: '6px',
+                                                  }}
+                                                >
+                                                  <div
+                                                    style={{
+                                                      fontSize: '11px',
+                                                      color: '#64748b',
+                                                      marginBottom: '4px',
+                                                    }}
+                                                  >
+                                                    Preview — untick any row you
+                                                    don't want to add:
+                                                  </div>
+                                                  {bulkPreview.map((p, pi) => {
+                                                    const dupName = daList.some(
+                                                      (d) =>
+                                                        (showAddPersonForm ===
+                                                        'complainant'
+                                                          ? d.complainant_name
+                                                          : d.respondent_name
+                                                        )
+                                                          ?.toUpperCase()
+                                                          .trim() ===
+                                                        p.name
+                                                          .toUpperCase()
+                                                          .trim()
+                                                    );
+                                                    const dupId =
+                                                      p.id &&
+                                                      daList.some(
+                                                        (d) =>
+                                                          (showAddPersonForm ===
+                                                          'complainant'
+                                                            ? d.complainant_id
+                                                            : d.respondent_id
+                                                          )
+                                                            ?.toUpperCase()
+                                                            .trim() ===
+                                                          p.id
+                                                            .toUpperCase()
+                                                            .trim()
+                                                      );
+                                                    const dupInList =
+                                                      bulkPreview.some(
+                                                        (q, qi) =>
+                                                          qi !== pi &&
+                                                          (q.name
+                                                            .toUpperCase()
+                                                            .trim() ===
+                                                            p.name
+                                                              .toUpperCase()
+                                                              .trim() ||
+                                                            (p.id &&
+                                                              q.id
+                                                                .toUpperCase()
+                                                                .trim() ===
+                                                                p.id
+                                                                  .toUpperCase()
+                                                                  .trim()))
+                                                      );
+                                                    const warn =
+                                                      dupName || dupId
+                                                        ? 'already on this case'
+                                                        : dupInList
+                                                        ? 'appears twice in your list'
+                                                        : !p.id
+                                                        ? 'no ID found'
+                                                        : '';
+                                                    return (
+                                                      <div
+                                                        key={pi}
+                                                        style={{
+                                                          display: 'flex',
+                                                          alignItems: 'center',
+                                                          gap: '8px',
+                                                          fontSize: '12px',
+                                                          padding: '2px 0',
+                                                        }}
+                                                      >
+                                                        <input
+                                                          type="checkbox"
+                                                          checked={p.include}
+                                                          onChange={(e) =>
+                                                            setBulkPreview(
+                                                              (prev) =>
+                                                                prev.map(
+                                                                  (q, qi) =>
+                                                                    qi === pi
+                                                                      ? {
+                                                                          ...q,
+                                                                          include:
+                                                                            e
+                                                                              .target
+                                                                              .checked,
+                                                                        }
+                                                                      : q
+                                                                )
+                                                            )
+                                                          }
+                                                        />
+                                                        <span
+                                                          style={{
+                                                            color: '#94a3b8',
+                                                            minWidth: '16px',
+                                                          }}
+                                                        >
+                                                          {p.row}
+                                                        </span>
+                                                        <span
+                                                          style={{ flex: 1 }}
+                                                        >
+                                                          {p.name || (
+                                                            <em
+                                                              style={{
+                                                                color:
+                                                                  '#dc2626',
+                                                              }}
+                                                            >
+                                                              no name
+                                                            </em>
+                                                          )}
+                                                        </span>
+                                                        <span
+                                                          style={{
+                                                            minWidth: '90px',
+                                                            color: p.id
+                                                              ? '#0f172a'
+                                                              : '#dc2626',
+                                                          }}
+                                                        >
+                                                          {p.id || '—'}
+                                                        </span>
+                                                        <span
+                                                          style={{
+                                                            minWidth: '110px',
+                                                            color: '#64748b',
+                                                          }}
+                                                        >
+                                                          {p.cust || ''}
+                                                        </span>
+                                                        {warn && (
+                                                          <span
+                                                            className="badge badge-yellow"
+                                                            style={{
+                                                              fontSize: '10px',
+                                                            }}
+                                                          >
+                                                            ⚠ {warn}
+                                                          </span>
+                                                        )}
+                                                      </div>
+                                                    );
+                                                  })}
+                                                  <div
+                                                    style={{
+                                                      fontSize: '11px',
+                                                      color: '#64748b',
+                                                      marginTop: '4px',
+                                                    }}
+                                                  >
+                                                    {
+                                                      bulkPreview.filter(
+                                                        (p) => p.include
+                                                      ).length
+                                                    }{' '}
+                                                    will be added
+                                                    {!newPersonCountry
+                                                      ? ' — country is blank, remember to fill it in later'
+                                                      : ''}
+                                                  </div>
+                                                </div>
+                                              )}
+                                              <div
+                                                style={{
+                                                  display: 'flex',
+                                                  gap: '4px',
+                                                  alignItems: 'end',
+                                                }}
+                                              >
+                                                {bulkMode && !bulkPreview && (
+                                                  <button
+                                                    type="button"
+                                                    onClick={() =>
+                                                      setBulkPreview(
+                                                        parseBulkPeople(
+                                                          bulkText
+                                                        )
+                                                      )
+                                                    }
+                                                    className="btn-log"
+                                                    style={{
+                                                      backgroundColor:
+                                                        '#6366f1',
+                                                    }}
+                                                  >
+                                                    Preview
+                                                  </button>
+                                                )}
+                                                {(!bulkMode || bulkPreview) && (
+                                                  <button
+                                                    type="submit"
+                                                    className="btn-log"
+                                                    style={{
+                                                      backgroundColor:
+                                                        '#10b981',
+                                                    }}
+                                                  >
+                                                    Add
+                                                  </button>
+                                                )}
+                                                <button
+                                                  type="button"
+                                                  onClick={() => {
+                                                    setShowAddPersonForm(null);
+                                                    setNewPersonName('');
+                                                    setNewPersonId('');
+                                                    setNewPersonCountry('');
+                                                  }}
+                                                  className="btn-action"
+                                                >
+                                                  Cancel
+                                                </button>
+                                              </div>
+                                            </form>
+                                          )}
+
+                                          <div className="section-divider">
+                                            <div className="section-title">
+                                              <span>⏳ WIP Tracker</span>
+                                              {!showWipForm && (
+                                                <button
+                                                  onClick={() => {
+                                                    setEditingWipId(null);
+                                                    setShowWipForm(true);
+                                                  }}
+                                                  className="btn-action btn-purple"
+                                                  style={{ color: 'white' }}
+                                                >
+                                                  + Log Action
+                                                </button>
+                                              )}
+                                            </div>
+
+                                            {showWipForm && (
+                                              <form
+                                                onSubmit={handleAddWIP}
+                                                className="wip-form"
+                                              >
+                                                <div className="wip-input-group">
+                                                  <label>Action Type</label>
+                                                  <select
+                                                    value={wipActionType}
+                                                    onChange={(e) =>
+                                                      setWipActionType(
+                                                        e.target.value
+                                                      )
+                                                    }
+                                                    required
+                                                  >
+                                                    <option value="">
+                                                      Select...
+                                                    </option>
+                                                    {mappingRules.map(
+                                                      (rule) => (
+                                                        <option
+                                                          key={rule.id}
+                                                          value={
+                                                            rule.action_type
+                                                          }
+                                                        >
+                                                          {rule.action_type}
+                                                        </option>
+                                                      )
+                                                    )}
+                                                  </select>
+                                                </div>
+
+                                                <div className="wip-input-group">
+                                                  <label>Date Sent</label>
+                                                  <input
+                                                    type="date"
+                                                    value={wipDateSent}
+                                                    onChange={(e) =>
+                                                      setWipDateSent(
+                                                        e.target.value
+                                                      )
+                                                    }
+                                                    required
+                                                  />
+                                                </div>
+                                                <div className="wip-input-group">
+                                                  <label>
+                                                    SLA Days (1-100)
+                                                  </label>
+                                                  <input
+                                                    type="number"
+                                                    min="1"
+                                                    max="100"
+                                                    value={wipSlaDays}
+                                                    onChange={(e) =>
+                                                      setWipSlaDays(
+                                                        Math.max(
+                                                          1,
+                                                          Math.min(
+                                                            100,
+                                                            parseInt(
+                                                              e.target.value
+                                                            ) || 2
+                                                          )
+                                                        )
+                                                      )
+                                                    }
+                                                    required
+                                                  />
+                                                </div>
+                                                <div
+                                                  style={{
+                                                    display: 'flex',
+                                                    gap: '4px',
+                                                  }}
+                                                >
+                                                  <button
+                                                    type="submit"
+                                                    className="btn-log"
+                                                  >
+                                                    {editingWipId
+                                                      ? 'Update'
+                                                      : 'Log'}
+                                                  </button>
+                                                  <button
+                                                    type="button"
+                                                    onClick={resetWipForm}
+                                                    className="btn-action"
+                                                  >
+                                                    Cancel
+                                                  </button>
+                                                </div>
+                                                <div
+                                                  className="wip-input-group wip-notes-row"
+                                                  style={{
+                                                    gridColumn: '1 / -1',
+                                                  }}
+                                                >
+                                                  <label>Description</label>
+                                                  <textarea
+                                                    value={wipDesc}
+                                                    onChange={(e) =>
+                                                      setWipDesc(e.target.value)
+                                                    }
+                                                    rows="3"
+                                                    required
+                                                    placeholder="What was sent / done..."
+                                                  ></textarea>
+                                                </div>
+                                                <div
+                                                  className="wip-input-group wip-notes-row"
+                                                  style={{
+                                                    gridColumn: '1 / -1',
+                                                  }}
+                                                >
+                                                  <label>Notes / Replies</label>
+                                                  <textarea
+                                                    value={wipNotes}
+                                                    onChange={(e) =>
+                                                      setWipNotes(
+                                                        e.target.value
+                                                      )
+                                                    }
+                                                    rows="3"
+                                                    placeholder="e.g., Reply 1 (Date)..."
+                                                  ></textarea>
+                                                </div>
+                                              </form>
+                                            )}
+
+                                            {wipList.length === 0 ? (
+                                              <div
+                                                style={{
+                                                  padding: '12px',
+                                                  textAlign: 'center',
+                                                  backgroundColor: '#f8fafc',
+                                                  borderRadius: '8px',
+                                                  color: '#94a3b8',
+                                                  fontSize: '13px',
+                                                }}
+                                              >
+                                                No WIP actions logged yet.
+                                              </div>
+                                            ) : (
+                                              <div>
+                                                {wipList.map((w, i) => {
+                                                  const wipSlaDays =
+                                                    calculateBusinessDays(
+                                                      w.expiry_date
+                                                    );
+                                                  return (
+                                                    <div
+                                                      key={w.id}
+                                                      className={`list-item ${
+                                                        w.status === 'Done'
+                                                          ? 'done'
+                                                          : ''
+                                                      }`}
+                                                    >
+                                                      <div className="step-circle">
+                                                        {wipList.length - i}
+                                                      </div>
+                                                      <div className="item-content">
+                                                        <div className="item-title">
+                                                          {w.action_type}{' '}
+                                                          {w.status ===
+                                                            'Done' && (
+                                                            <span
+                                                              className="badge badge-green"
+                                                              style={{
+                                                                marginLeft:
+                                                                  '4px',
+                                                              }}
+                                                            >
+                                                              Done
+                                                            </span>
+                                                          )}
+                                                        </div>
+                                                        <div className="item-sub">
+                                                          {w.description}
+                                                        </div>
+                                                        {w.notes && (
+                                                          <div
+                                                            className="item-sub"
+                                                            style={{
+                                                              marginTop: '4px',
+                                                              color: '#475569',
+                                                              fontStyle:
+                                                                'italic',
+                                                            }}
+                                                          >
+                                                            Notes: {w.notes}
+                                                          </div>
+                                                        )}
+                                                        <div
+                                                          className="item-sub"
+                                                          style={{
+                                                            marginTop: '4px',
+                                                          }}
+                                                        >
+                                                          By:{' '}
+                                                          {w.pic?.split(
+                                                            '@'
+                                                          )[0] || '—'}{' '}
+                                                          | Sent: {w.date_sent}{' '}
+                                                          | Modified:{' '}
+                                                          {formatDateTime(
+                                                            w.last_modified
+                                                          )}
+                                                        </div>
+                                                      </div>
+                                                      <div className="item-meta">
+                                                        <div className="expanded-label">
+                                                          Stage
+                                                        </div>
+                                                        <span className="badge badge-blue">
+                                                          {w.stage_auto || '—'}
+                                                        </span>
+                                                      </div>
+                                                      <div className="item-meta">
+                                                        <div className="expanded-label">
+                                                          SLA Timer
+                                                        </div>
+                                                        <span
+                                                          style={{
+                                                            fontWeight: 600,
+                                                            color:
+                                                              wipSlaDays < 0
+                                                                ? '#dc2626'
+                                                                : '#059669',
+                                                          }}
+                                                        >
+                                                          {wipSlaDays < 0
+                                                            ? `🔴 ${Math.abs(
+                                                                wipSlaDays
+                                                              )}wd`
+                                                            : `🟢 ${wipSlaDays}wd`}
+                                                        </span>
+                                                      </div>
+                                                      {(wipSlaDays < 0 ||
+                                                        (Array.isArray(
+                                                          w.follow_ups
+                                                        ) &&
+                                                          w.follow_ups.length >
+                                                            0)) &&
+                                                        w.status !== 'Done' &&
+                                                        (() => {
+                                                          const fu =
+                                                            Array.isArray(
+                                                              w.follow_ups
+                                                            )
+                                                              ? w.follow_ups
+                                                              : [];
+                                                          const prev =
+                                                            fu.length > 1
+                                                              ? fu[
+                                                                  fu.length - 2
+                                                                ]
+                                                              : null;
+                                                          const latest =
+                                                            fu.length > 0
+                                                              ? fu[
+                                                                  fu.length - 1
+                                                                ]
+                                                              : null;
+                                                          return (
+                                                            <div
+                                                              style={{
+                                                                width: '100%',
+                                                                marginTop:
+                                                                  '8px',
+                                                                paddingTop:
+                                                                  '8px',
+                                                                borderTop:
+                                                                  '1px dashed #e2e8f0',
+                                                                display: 'flex',
+                                                                alignItems:
+                                                                  'center',
+                                                                gap: '8px',
+                                                                flexWrap:
+                                                                  'wrap',
+                                                              }}
+                                                            >
+                                                              <span
+                                                                style={{
+                                                                  fontSize:
+                                                                    '11px',
+                                                                  color:
+                                                                    '#64748b',
+                                                                  fontWeight: 600,
+                                                                }}
+                                                              >
+                                                                📅 Follow-up:
+                                                              </span>
+                                                              <input
+                                                                type="date"
+                                                                value={
+                                                                  followUpDates[
+                                                                    w.id
+                                                                  ] ||
+                                                                  new Date()
+                                                                    .toISOString()
+                                                                    .split(
+                                                                      'T'
+                                                                    )[0]
+                                                                }
+                                                                onChange={(e) =>
+                                                                  setFollowUpDates(
+                                                                    (
+                                                                      prev2
+                                                                    ) => ({
+                                                                      ...prev2,
+                                                                      [w.id]:
+                                                                        e.target
+                                                                          .value,
+                                                                    })
+                                                                  )
+                                                                }
+                                                                style={{
+                                                                  padding:
+                                                                    '4px 6px',
+                                                                  border:
+                                                                    '1px solid #e2e8f0',
+                                                                  borderRadius:
+                                                                    '6px',
+                                                                  fontSize:
+                                                                    '12px',
+                                                                }}
+                                                              />
+                                                              <button
+                                                                onClick={() =>
+                                                                  handleAddFollowUp(
+                                                                    w.id
+                                                                  )
+                                                                }
+                                                                disabled={
+                                                                  followUpBusy ===
+                                                                  w.id
+                                                                }
+                                                                className="btn-action btn-purple"
+                                                                style={{
+                                                                  color:
+                                                                    'white',
+                                                                }}
+                                                              >
+                                                                {followUpBusy ===
+                                                                w.id
+                                                                  ? 'Saving...'
+                                                                  : 'Update'}
+                                                              </button>
+                                                              {fu.length >
+                                                                0 && (
+                                                                <span
+                                                                  style={{
+                                                                    fontSize:
+                                                                      '11px',
+                                                                    color:
+                                                                      '#475569',
+                                                                    display:
+                                                                      'inline-flex',
+                                                                    alignItems:
+                                                                      'center',
+                                                                    gap: '4px',
+                                                                  }}
+                                                                >
+                                                                  Follow-ups:{' '}
+                                                                  <b>
+                                                                    {fu.length}
+                                                                  </b>
+                                                                  <span
+                                                                    style={{
+                                                                      color:
+                                                                        '#94a3b8',
+                                                                    }}
+                                                                  >
+                                                                    · last{' '}
+                                                                    {
+                                                                      latest.date
+                                                                    }
+                                                                  </span>
+                                                                  <span
+                                                                    title={
+                                                                      prev
+                                                                        ? `Previous follow-up: ${prev.date}`
+                                                                        : 'No earlier follow-up'
+                                                                    }
+                                                                    style={{
+                                                                      display:
+                                                                        'inline-flex',
+                                                                      alignItems:
+                                                                        'center',
+                                                                      justifyContent:
+                                                                        'center',
+                                                                      width:
+                                                                        '15px',
+                                                                      height:
+                                                                        '15px',
+                                                                      borderRadius:
+                                                                        '50%',
+                                                                      border:
+                                                                        '1px solid #94a3b8',
+                                                                      color:
+                                                                        '#64748b',
+                                                                      fontSize:
+                                                                        '10px',
+                                                                      fontWeight: 700,
+                                                                      cursor:
+                                                                        'help',
+                                                                    }}
+                                                                  >
+                                                                    i
+                                                                  </span>
+                                                                </span>
+                                                              )}
+                                                              <div
+                                                                style={{
+                                                                  marginLeft:
+                                                                    'auto',
+                                                                  display:
+                                                                    'flex',
+                                                                  gap: '6px',
+                                                                }}
+                                                              >
+                                                                <button
+                                                                  onClick={() =>
+                                                                    handleEditWip(
+                                                                      w
+                                                                    )
+                                                                  }
+                                                                  className="btn-action"
+                                                                >
+                                                                  Edit
+                                                                </button>
+                                                                <button
+                                                                  onClick={() =>
+                                                                    handleCompleteWip(
+                                                                      w.id
+                                                                    )
+                                                                  }
+                                                                  className="btn-action btn-success"
+                                                                >
+                                                                  Complete
+                                                                </button>
+                                                              </div>
+                                                            </div>
+                                                          );
+                                                        })()}
+                                                      {!(
+                                                        wipSlaDays < 0 ||
+                                                        (Array.isArray(
+                                                          w.follow_ups
+                                                        ) &&
+                                                          w.follow_ups.length >
+                                                            0)
+                                                      ) &&
+                                                        w.status !== 'Done' && (
+                                                          <div className="item-actions">
+                                                            <button
+                                                              onClick={() =>
+                                                                handleEditWip(w)
+                                                              }
+                                                              className="btn-action"
+                                                            >
+                                                              Edit
+                                                            </button>
+                                                            <button
+                                                              onClick={() =>
+                                                                handleCompleteWip(
+                                                                  w.id
+                                                                )
+                                                              }
+                                                              className="btn-action btn-success"
+                                                            >
+                                                              Complete
+                                                            </button>
+                                                          </div>
+                                                        )}
+                                                      {isAdmin &&
+                                                        w.status === 'Done' && (
+                                                          <div className="item-actions">
+                                                            <button
+                                                              onClick={() =>
+                                                                handleReactivateWip(
+                                                                  w.id
+                                                                )
+                                                              }
+                                                              className="btn-action"
+                                                              style={{
+                                                                color:
+                                                                  '#7c3aed',
+                                                                borderColor:
+                                                                  '#c4b5fd',
+                                                              }}
+                                                            >
+                                                              ↩️ Reactivate
+                                                            </button>
+                                                          </div>
+                                                        )}
+                                                    </div>
+                                                  );
+                                                })}
                                               </div>
                                             )}
                                           </div>
-                                        )}
-                                      </div>
-                                      </div>
+
+                                          <div className="section-divider">
+                                            <div
+                                              className="section-title"
+                                              style={{ cursor: 'pointer' }}
+                                              onClick={() =>
+                                                setHideRespondents(
+                                                  !hideRespondents
+                                                )
+                                              }
+                                            >
+                                              <span>
+                                                ⚖️ Disciplinary Actions
+                                                (Respondents){' '}
+                                                {daList.length > 3 &&
+                                                  (hideRespondents
+                                                    ? '▼ Show'
+                                                    : '▲ Hide')}
+                                              </span>
+                                            </div>
+                                            {daList.length === 0 ? (
+                                              <div
+                                                style={{
+                                                  padding: '16px',
+                                                  textAlign: 'center',
+                                                  backgroundColor: '#f8fafc',
+                                                  borderRadius: '8px',
+                                                  color: '#94a3b8',
+                                                }}
+                                              >
+                                                No respondents linked to this
+                                                case. Use "+ Add Respondent"
+                                                above.
+                                              </div>
+                                            ) : (
+                                              <div>
+                                                {isAdmin &&
+                                                  daList.length > 0 && (
+                                                    <div className="respondent-admin-strip">
+                                                      <p className="respondent-admin-label">
+                                                        Admin — Respondent
+                                                        Details
+                                                      </p>
+                                                      {daList.map((da) =>
+                                                        editingRespondentId ===
+                                                        da.id ? (
+                                                          <form
+                                                            key={da.id}
+                                                            className="respondent-admin-form"
+                                                            onSubmit={(e) =>
+                                                              handleUpdateRespondent(
+                                                                e,
+                                                                da.id
+                                                              )
+                                                            }
+                                                          >
+                                                            <div className="admin-form-grid">
+                                                              <div className="wip-input-group">
+                                                                <label>
+                                                                  Respondent
+                                                                  Name
+                                                                </label>
+                                                                <input
+                                                                  type="text"
+                                                                  value={
+                                                                    (
+                                                                      respondentEdits[
+                                                                        da.id
+                                                                      ] || {}
+                                                                    ).name || ''
+                                                                  }
+                                                                  onChange={(
+                                                                    e
+                                                                  ) =>
+                                                                    setRespondentEdits(
+                                                                      (
+                                                                        prev
+                                                                      ) => ({
+                                                                        ...prev,
+                                                                        [da.id]:
+                                                                          {
+                                                                            ...(prev[
+                                                                              da
+                                                                                .id
+                                                                            ] ||
+                                                                              {}),
+                                                                            name: e
+                                                                              .target
+                                                                              .value,
+                                                                          },
+                                                                      })
+                                                                    )
+                                                                  }
+                                                                />
+                                                              </div>
+                                                              <div className="wip-input-group">
+                                                                <label>
+                                                                  Respondent ID
+                                                                </label>
+                                                                <input
+                                                                  type="text"
+                                                                  value={
+                                                                    (
+                                                                      respondentEdits[
+                                                                        da.id
+                                                                      ] || {}
+                                                                    ).id || ''
+                                                                  }
+                                                                  onChange={(
+                                                                    e
+                                                                  ) =>
+                                                                    setRespondentEdits(
+                                                                      (
+                                                                        prev
+                                                                      ) => ({
+                                                                        ...prev,
+                                                                        [da.id]:
+                                                                          {
+                                                                            ...(prev[
+                                                                              da
+                                                                                .id
+                                                                            ] ||
+                                                                              {}),
+                                                                            id: e
+                                                                              .target
+                                                                              .value,
+                                                                          },
+                                                                      })
+                                                                    )
+                                                                  }
+                                                                />
+                                                              </div>
+                                                              <div className="wip-input-group">
+                                                                <label>
+                                                                  Respondent
+                                                                  Country
+                                                                </label>
+                                                                <input
+                                                                  type="text"
+                                                                  value={
+                                                                    (
+                                                                      respondentEdits[
+                                                                        da.id
+                                                                      ] || {}
+                                                                    ).country ||
+                                                                    ''
+                                                                  }
+                                                                  onChange={(
+                                                                    e
+                                                                  ) =>
+                                                                    setRespondentEdits(
+                                                                      (
+                                                                        prev
+                                                                      ) => ({
+                                                                        ...prev,
+                                                                        [da.id]:
+                                                                          {
+                                                                            ...(prev[
+                                                                              da
+                                                                                .id
+                                                                            ] ||
+                                                                              {}),
+                                                                            country:
+                                                                              e
+                                                                                .target
+                                                                                .value,
+                                                                          },
+                                                                      })
+                                                                    )
+                                                                  }
+                                                                />
+                                                              </div>
+                                                            </div>
+                                                            <div className="admin-form-actions">
+                                                              <button
+                                                                type="submit"
+                                                                className="btn-save-admin"
+                                                              >
+                                                                💾 Save
+                                                                Respondent
+                                                              </button>
+                                                              <button
+                                                                type="button"
+                                                                className="btn-cancel-admin"
+                                                                onClick={() =>
+                                                                  setEditingRespondentId(
+                                                                    null
+                                                                  )
+                                                                }
+                                                              >
+                                                                Cancel
+                                                              </button>
+                                                            </div>
+                                                          </form>
+                                                        ) : (
+                                                          <div
+                                                            key={da.id}
+                                                            className="respondent-admin-row"
+                                                          >
+                                                            <span className="respondent-admin-name">
+                                                              {da.respondent_name ||
+                                                                '(unnamed)'}
+                                                              {da.respondent_id
+                                                                ? ` · ${da.respondent_id}`
+                                                                : ''}
+                                                              {da.respondent_country
+                                                                ? ` · ${da.respondent_country}`
+                                                                : ''}
+                                                            </span>
+                                                            <div
+                                                              style={{
+                                                                display: 'flex',
+                                                                gap: '4px',
+                                                              }}
+                                                            >
+                                                              <button
+                                                                type="button"
+                                                                className="btn-admin"
+                                                                onClick={() =>
+                                                                  startRespondentEdit(
+                                                                    da
+                                                                  )
+                                                                }
+                                                              >
+                                                                ✏️ Edit
+                                                              </button>
+                                                              <button
+                                                                type="button"
+                                                                className="btn-admin-danger"
+                                                                onClick={() =>
+                                                                  handleDeleteRespondent(
+                                                                    da.id
+                                                                  )
+                                                                }
+                                                              >
+                                                                🗑 Delete
+                                                              </button>
+                                                            </div>
+                                                            {(
+                                                              da.action_history ||
+                                                              []
+                                                            ).length > 0 && (
+                                                              <div
+                                                                style={{
+                                                                  width: '100%',
+                                                                  marginTop:
+                                                                    '6px',
+                                                                  paddingTop:
+                                                                    '6px',
+                                                                  borderTop:
+                                                                    '1px dashed #e2e8f0',
+                                                                }}
+                                                              >
+                                                                <div
+                                                                  style={{
+                                                                    fontSize:
+                                                                      '11px',
+                                                                    color:
+                                                                      '#64748b',
+                                                                    marginBottom:
+                                                                      '4px',
+                                                                  }}
+                                                                >
+                                                                  Timeline steps
+                                                                  — delete a
+                                                                  wrongly
+                                                                  recorded
+                                                                  action:
+                                                                </div>
+                                                                {(
+                                                                  da.action_history ||
+                                                                  []
+                                                                ).map(
+                                                                  (h, hIdx) => (
+                                                                    <div
+                                                                      key={hIdx}
+                                                                      style={{
+                                                                        display:
+                                                                          'flex',
+                                                                        alignItems:
+                                                                          'center',
+                                                                        gap: '8px',
+                                                                        fontSize:
+                                                                          '12px',
+                                                                        padding:
+                                                                          '2px 0',
+                                                                      }}
+                                                                    >
+                                                                      <span
+                                                                        style={{
+                                                                          color:
+                                                                            '#94a3b8',
+                                                                          minWidth:
+                                                                            '16px',
+                                                                        }}
+                                                                      >
+                                                                        {hIdx +
+                                                                          1}
+                                                                      </span>
+                                                                      <span
+                                                                        style={{
+                                                                          flex: 1,
+                                                                        }}
+                                                                      >
+                                                                        {h.action ||
+                                                                          '—'}
+                                                                        <span
+                                                                          style={{
+                                                                            color:
+                                                                              '#94a3b8',
+                                                                            marginLeft:
+                                                                              '6px',
+                                                                          }}
+                                                                        >
+                                                                          {h.date ||
+                                                                            'no date'}
+                                                                        </span>
+                                                                        {h.confirmed_by ? (
+                                                                          <span
+                                                                            style={{
+                                                                              color:
+                                                                                '#059669',
+                                                                              marginLeft:
+                                                                                '6px',
+                                                                            }}
+                                                                          >
+                                                                            ✓
+                                                                          </span>
+                                                                        ) : null}
+                                                                      </span>
+                                                                      <button
+                                                                        type="button"
+                                                                        className="btn-admin-danger"
+                                                                        onClick={() =>
+                                                                          handleDeleteDaStep(
+                                                                            da.id,
+                                                                            hIdx
+                                                                          )
+                                                                        }
+                                                                      >
+                                                                        🗑
+                                                                      </button>
+                                                                    </div>
+                                                                  )
+                                                                )}
+                                                              </div>
+                                                            )}
+                                                          </div>
+                                                        )
+                                                      )}
+                                                    </div>
+                                                  )}
+                                                {(hideRespondents &&
+                                                daList.length > 3
+                                                  ? daList.slice(0, 3)
+                                                  : daList
+                                                ).map((da, i) => {
+                                                  const colors = getActionColor(
+                                                    da.current_action
+                                                  );
+                                                  const isExpanded =
+                                                    expandedDAs[da.id];
+                                                  return (
+                                                    <div
+                                                      key={da.id}
+                                                      style={{
+                                                        border:
+                                                          '1px solid #e2e8f0',
+                                                        borderRadius: '8px',
+                                                        padding: '12px',
+                                                        marginBottom: '12px',
+                                                      }}
+                                                    >
+                                                      <div
+                                                        style={{
+                                                          display: 'flex',
+                                                          justifyContent:
+                                                            'space-between',
+                                                          marginBottom: '8px',
+                                                          flexWrap: 'wrap',
+                                                          gap: '8px',
+                                                        }}
+                                                      >
+                                                        <div>
+                                                          <span className="expanded-label">
+                                                            Respondent:{' '}
+                                                          </span>
+                                                          <span className="item-title">
+                                                            {da.respondent_name ||
+                                                              '—'}
+                                                          </span>
+                                                          <span
+                                                            className="item-sub"
+                                                            style={{
+                                                              marginLeft: '8px',
+                                                            }}
+                                                          >
+                                                            (
+                                                            {da.respondent_id ||
+                                                              '—'}
+                                                            )
+                                                          </span>
+                                                          {da.respondent_country && (
+                                                            <span
+                                                              className="badge badge-grey"
+                                                              style={{
+                                                                marginLeft:
+                                                                  '6px',
+                                                              }}
+                                                            >
+                                                              {
+                                                                da.respondent_country
+                                                              }
+                                                            </span>
+                                                          )}
+                                                        </div>
+                                                      </div>{' '}
+                                                      <div
+                                                        style={{
+                                                          display: 'flex',
+                                                          alignItems: 'center',
+                                                          gap: '6px',
+                                                          marginTop: '6px',
+                                                        }}
+                                                      >
+                                                        <span
+                                                          className="expanded-label"
+                                                          style={{ margin: 0 }}
+                                                        >
+                                                          Linked complainant:
+                                                        </span>
+                                                        <select
+                                                          value=""
+                                                          onChange={(ev) =>
+                                                            handleRelinkComplainant(
+                                                              da.id,
+                                                              ev.target.value
+                                                            )
+                                                          }
+                                                          style={{
+                                                            padding: '4px 8px',
+                                                            border:
+                                                              '1px solid #dde3ea',
+                                                            borderRadius: '6px',
+                                                            fontSize: '12px',
+                                                          }}
+                                                        >
+                                                          <option value="">
+                                                            {da.complainant_name
+                                                              ? `${
+                                                                  da.complainant_name
+                                                                }${
+                                                                  da.complainant_id
+                                                                    ? ' · ' +
+                                                                      da.complainant_id
+                                                                    : ''
+                                                                }`
+                                                              : '(none linked)'}
+                                                          </option>
+                                                          {caseComplainants.map(
+                                                            (c) => (
+                                                              <option
+                                                                key={c.id}
+                                                                value={c.id}
+                                                              >
+                                                                {
+                                                                  c.complainant_name
+                                                                }
+                                                                {c.complainant_id
+                                                                  ? ' · ' +
+                                                                    c.complainant_id
+                                                                  : ''}
+                                                                {c.is_anchor
+                                                                  ? ' (anchor)'
+                                                                  : ''}
+                                                              </option>
+                                                            )
+                                                          )}
+                                                        </select>
+                                                      </div>
+                                                      <div
+                                                        style={{
+                                                          marginBottom: '12px',
+                                                          padding: '8px',
+                                                          backgroundColor:
+                                                            '#f8fafc',
+                                                          borderRadius: '6px',
+                                                        }}
+                                                      >
+                                                        <div className="expanded-label">
+                                                          Violations
+                                                        </div>
+                                                        <div
+                                                          style={{
+                                                            display: 'flex',
+                                                            flexWrap: 'wrap',
+                                                            gap: '6px',
+                                                            marginTop: '4px',
+                                                          }}
+                                                        >
+                                                          {(
+                                                            da.violations || []
+                                                          ).map((v, vIdx) => (
+                                                            <span
+                                                              key={vIdx}
+                                                              className="badge badge-red"
+                                                              style={{
+                                                                display: 'flex',
+                                                                alignItems:
+                                                                  'center',
+                                                                gap: '4px',
+                                                              }}
+                                                            >
+                                                              {v}
+                                                              <button
+                                                                onClick={() =>
+                                                                  handleDeleteViolation(
+                                                                    da.id,
+                                                                    vIdx
+                                                                  )
+                                                                }
+                                                                style={{
+                                                                  background:
+                                                                    'none',
+                                                                  border:
+                                                                    'none',
+                                                                  color:
+                                                                    '#dc2626',
+                                                                  cursor:
+                                                                    'pointer',
+                                                                  fontWeight:
+                                                                    'bold',
+                                                                  padding: 0,
+                                                                }}
+                                                              >
+                                                                ×
+                                                              </button>
+                                                            </span>
+                                                          ))}
+                                                        </div>
+                                                        <div
+                                                          style={{
+                                                            display: 'flex',
+                                                            gap: '4px',
+                                                            marginTop: '8px',
+                                                          }}
+                                                        >
+                                                          <input
+                                                            type="text"
+                                                            placeholder="Add violation..."
+                                                            value={
+                                                              newViolation[
+                                                                da.id
+                                                              ] || ''
+                                                            }
+                                                            onChange={(e) =>
+                                                              setNewViolation(
+                                                                (prev) => ({
+                                                                  ...prev,
+                                                                  [da.id]:
+                                                                    e.target
+                                                                      .value,
+                                                                })
+                                                              )
+                                                            }
+                                                            style={{
+                                                              flex: 1,
+                                                              padding: '6px',
+                                                              border:
+                                                                '1px solid #e2e8f0',
+                                                              borderRadius:
+                                                                '6px',
+                                                            }}
+                                                          />
+                                                          <button
+                                                            onClick={() =>
+                                                              handleAddViolation(
+                                                                da.id
+                                                              )
+                                                            }
+                                                            className="btn-action"
+                                                          >
+                                                            Add
+                                                          </button>
+                                                        </div>
+                                                      </div>
+                                                      <div
+                                                        style={{
+                                                          display: 'flex',
+                                                          justifyContent:
+                                                            'space-between',
+                                                          alignItems: 'center',
+                                                          cursor: 'pointer',
+                                                          padding: '8px',
+                                                          backgroundColor:
+                                                            '#f8fafc',
+                                                          borderRadius: '6px',
+                                                        }}
+                                                        onClick={() =>
+                                                          toggleExpandDA(da.id)
+                                                        }
+                                                      >
+                                                        <span
+                                                          className="expanded-label"
+                                                          style={{ margin: 0 }}
+                                                        >
+                                                          Action Timeline (
+                                                          {da.action_history
+                                                            ?.length || 0}
+                                                          )
+                                                        </span>
+                                                        <span
+                                                          style={{
+                                                            fontSize: '12px',
+                                                            color: '#64748b',
+                                                          }}
+                                                        >
+                                                          {isExpanded
+                                                            ? '▲ Hide'
+                                                            : '▼ Show'}
+                                                        </span>
+                                                      </div>
+                                                      {isExpanded && (
+                                                        <div
+                                                          style={{
+                                                            marginTop: '8px',
+                                                          }}
+                                                        >
+                                                          {da.action_history &&
+                                                            da.action_history.map(
+                                                              (h, idx) => {
+                                                                const hColors =
+                                                                  getActionColor(
+                                                                    h.action
+                                                                  );
+                                                                return (
+                                                                  <div
+                                                                    key={idx}
+                                                                    className="list-item"
+                                                                    style={{
+                                                                      flexDirection:
+                                                                        'column',
+                                                                      alignItems:
+                                                                        'flex-start',
+                                                                    }}
+                                                                  >
+                                                                    <div
+                                                                      style={{
+                                                                        display:
+                                                                          'flex',
+                                                                        gap: '10px',
+                                                                        width:
+                                                                          '100%',
+                                                                      }}
+                                                                    >
+                                                                      <div className="step-circle">
+                                                                        {h.step}
+                                                                      </div>
+                                                                      <div className="item-content">
+                                                                        <span
+                                                                          className="badge"
+                                                                          style={{
+                                                                            backgroundColor:
+                                                                              hColors.bg,
+                                                                            color:
+                                                                              hColors.text,
+                                                                          }}
+                                                                        >
+                                                                          {h.action ||
+                                                                            '—'}
+                                                                        </span>
+                                                                        <div
+                                                                          className="item-sub"
+                                                                          style={{
+                                                                            marginTop:
+                                                                              '4px',
+                                                                          }}
+                                                                        >
+                                                                          Date
+                                                                          DA in
+                                                                          force:{' '}
+                                                                          {h.date ||
+                                                                            'No date'}
+                                                                        </div>
+                                                                        {h.added_by && (
+                                                                          <div
+                                                                            className="item-sub"
+                                                                            style={{
+                                                                              fontSize:
+                                                                                '10px',
+                                                                            }}
+                                                                          >
+                                                                            Added
+                                                                            by:{' '}
+                                                                            {
+                                                                              h.added_by?.split(
+                                                                                '@'
+                                                                              )[0]
+                                                                            }{' '}
+                                                                            on{' '}
+                                                                            {formatDateTime(
+                                                                              h.added_at
+                                                                            )}
+                                                                          </div>
+                                                                        )}{' '}
+                                                                        {h.modified_by && (
+                                                                          <div
+                                                                            className="item-sub"
+                                                                            style={{
+                                                                              fontSize:
+                                                                                '10px',
+                                                                              color:
+                                                                                '#94a3b8',
+                                                                            }}
+                                                                          >
+                                                                            Modified
+                                                                            by:{' '}
+                                                                            {
+                                                                              h.modified_by?.split(
+                                                                                '@'
+                                                                              )[0]
+                                                                            }{' '}
+                                                                            on{' '}
+                                                                            {formatDateTime(
+                                                                              h.modified_at
+                                                                            )}
+                                                                          </div>
+                                                                        )}
+                                                                        {h.cleared_by && (
+                                                                          <div
+                                                                            className="item-sub"
+                                                                            style={{
+                                                                              fontSize:
+                                                                                '10px',
+                                                                              color:
+                                                                                '#b45309',
+                                                                            }}
+                                                                          >
+                                                                            ✗
+                                                                            Cleared
+                                                                            by{' '}
+                                                                            {
+                                                                              h.cleared_by.split(
+                                                                                '@'
+                                                                              )[0]
+                                                                            }{' '}
+                                                                            on{' '}
+                                                                            {formatDateTime(
+                                                                              h.cleared_at
+                                                                            )}
+                                                                            {h.was_in_force_from
+                                                                              ? ` — was in force from ${h.was_in_force_from}`
+                                                                              : ''}
+                                                                          </div>
+                                                                        )}
+                                                                      </div>
+                                                                      <button
+                                                                        onClick={() => {
+                                                                          setEditingDaAction(
+                                                                            {
+                                                                              daId: da.id,
+                                                                              step: idx,
+                                                                            }
+                                                                          );
+                                                                          setEditDaActionName(
+                                                                            h.action
+                                                                          );
+                                                                          setEditDaActionDate(
+                                                                            h.date
+                                                                          );
+                                                                        }}
+                                                                        className="btn-action"
+                                                                      >
+                                                                        Edit
+                                                                      </button>
+                                                                      {idx ===
+                                                                      da
+                                                                        .action_history
+                                                                        .length -
+                                                                        1 ? (
+                                                                        <>
+                                                                          {da.da_confirmed !==
+                                                                            true && (
+                                                                            <button
+                                                                              onClick={() =>
+                                                                                handleConfirmDA(
+                                                                                  da.id,
+                                                                                  h.action
+                                                                                )
+                                                                              }
+                                                                              className="btn-action btn-success"
+                                                                              style={{
+                                                                                marginTop:
+                                                                                  '4px',
+                                                                              }}
+                                                                            >
+                                                                              ✓
+                                                                              Confirm
+                                                                              DA
+                                                                            </button>
+                                                                          )}
+                                                                          {da.da_confirmed ===
+                                                                            true && (
+                                                                            <div
+                                                                              style={{
+                                                                                marginTop:
+                                                                                  '4px',
+                                                                              }}
+                                                                            >
+                                                                              <span className="badge badge-green">
+                                                                                ✓
+                                                                                DA
+                                                                                Confirmed
+                                                                              </span>
+                                                                              {da.da_confirmed_by && (
+                                                                                <span
+                                                                                  style={{
+                                                                                    fontSize:
+                                                                                      '10px',
+                                                                                    color:
+                                                                                      '#059669',
+                                                                                    marginLeft:
+                                                                                      '4px',
+                                                                                  }}
+                                                                                >
+                                                                                  by{' '}
+                                                                                  {
+                                                                                    da.da_confirmed_by.split(
+                                                                                      '@'
+                                                                                    )[0]
+                                                                                  }{' '}
+                                                                                  on{' '}
+                                                                                  {formatDateTime(
+                                                                                    da.da_confirmed_at
+                                                                                  )}
+                                                                                </span>
+                                                                              )}
+                                                                            </div>
+                                                                          )}
+                                                                          {isAdmin &&
+                                                                            (da.da_confirmed ===
+                                                                              true ||
+                                                                              (da.da_confirmed ==
+                                                                                null &&
+                                                                                (da.current_action
+                                                                                  ?.toLowerCase()
+                                                                                  .includes(
+                                                                                    'suspend'
+                                                                                  ) ||
+                                                                                  da.current_action
+                                                                                    ?.toLowerCase()
+                                                                                    .includes(
+                                                                                      'terminat'
+                                                                                    )))) && (
+                                                                              <button
+                                                                                onClick={() =>
+                                                                                  handleClearDA(
+                                                                                    da.id
+                                                                                  )
+                                                                                }
+                                                                                className="btn-action btn-danger"
+                                                                                style={{
+                                                                                  marginTop:
+                                                                                    '4px',
+                                                                                  marginLeft:
+                                                                                    '4px',
+                                                                                }}
+                                                                              >
+                                                                                ✗
+                                                                                Clear
+                                                                                DA
+                                                                                Count
+                                                                              </button>
+                                                                            )}
+                                                                          {da.da_confirmed ===
+                                                                            false && (
+                                                                            <div
+                                                                              style={{
+                                                                                marginTop:
+                                                                                  '4px',
+                                                                              }}
+                                                                            >
+                                                                              <span className="badge badge-grey">
+                                                                                ✗
+                                                                                Not
+                                                                                In
+                                                                                Force
+                                                                                —
+                                                                                cleared
+                                                                                by
+                                                                                admin
+                                                                              </span>
+                                                                            </div>
+                                                                          )}
+                                                                          {da.da_confirmed !==
+                                                                            true &&
+                                                                            da.da_confirmed !==
+                                                                              false &&
+                                                                            (h.action
+                                                                              ?.toLowerCase()
+                                                                              .includes(
+                                                                                'release'
+                                                                              ) ||
+                                                                              h.action
+                                                                                ?.toLowerCase()
+                                                                                .includes(
+                                                                                  'terminat'
+                                                                                )) && (
+                                                                              <div
+                                                                                style={{
+                                                                                  marginTop:
+                                                                                    '4px',
+                                                                                }}
+                                                                              >
+                                                                                <span className="badge badge-yellow">
+                                                                                  ⏳
+                                                                                  Awaiting
+                                                                                  approval
+                                                                                  —
+                                                                                  previous
+                                                                                  action
+                                                                                  still
+                                                                                  in
+                                                                                  force
+                                                                                </span>
+                                                                              </div>
+                                                                            )}
+                                                                        </>
+                                                                      ) : h.confirmed_by ? (
+                                                                        <div
+                                                                          style={{
+                                                                            marginTop:
+                                                                              '4px',
+                                                                          }}
+                                                                        >
+                                                                          <span className="badge badge-green">
+                                                                            ✓
+                                                                            Confirmed
+                                                                          </span>
+                                                                          <span
+                                                                            style={{
+                                                                              fontSize:
+                                                                                '10px',
+                                                                              color:
+                                                                                '#059669',
+                                                                              marginLeft:
+                                                                                '4px',
+                                                                            }}
+                                                                          >
+                                                                            by{' '}
+                                                                            {
+                                                                              h.confirmed_by.split(
+                                                                                '@'
+                                                                              )[0]
+                                                                            }{' '}
+                                                                            on{' '}
+                                                                            {formatDateTime(
+                                                                              h.confirmed_at
+                                                                            )}
+                                                                          </span>
+                                                                        </div>
+                                                                      ) : null}
+                                                                    </div>
+
+                                                                    {editingDaAction &&
+                                                                      editingDaAction.daId ===
+                                                                        da.id &&
+                                                                      editingDaAction.step ===
+                                                                        idx && (
+                                                                        <form
+                                                                          onSubmit={(
+                                                                            e
+                                                                          ) =>
+                                                                            handleEditDaAction(
+                                                                              e,
+                                                                              da.id,
+                                                                              idx
+                                                                            )
+                                                                          }
+                                                                          style={{
+                                                                            width:
+                                                                              '100%',
+                                                                            display:
+                                                                              'flex',
+                                                                            gap: '8px',
+                                                                            marginTop:
+                                                                              '8px',
+                                                                            flexWrap:
+                                                                              'wrap',
+                                                                          }}
+                                                                        >
+                                                                          <input
+                                                                            type="text"
+                                                                            value={
+                                                                              editDaActionName
+                                                                            }
+                                                                            onChange={(
+                                                                              e
+                                                                            ) =>
+                                                                              setEditDaActionName(
+                                                                                e
+                                                                                  .target
+                                                                                  .value
+                                                                              )
+                                                                            }
+                                                                            required
+                                                                            style={{
+                                                                              flex: 1,
+                                                                              minWidth:
+                                                                                '150px',
+                                                                              padding:
+                                                                                '6px',
+                                                                              border:
+                                                                                '1px solid #e2e8f0',
+                                                                              borderRadius:
+                                                                                '6px',
+                                                                            }}
+                                                                          />
+                                                                          <input
+                                                                            type="date"
+                                                                            value={
+                                                                              editDaActionDate
+                                                                            }
+                                                                            onChange={(
+                                                                              e
+                                                                            ) =>
+                                                                              setEditDaActionDate(
+                                                                                e
+                                                                                  .target
+                                                                                  .value
+                                                                              )
+                                                                            }
+                                                                            style={{
+                                                                              padding:
+                                                                                '6px',
+                                                                              border:
+                                                                                '1px solid #e2e8f0',
+                                                                              borderRadius:
+                                                                                '6px',
+                                                                            }}
+                                                                          />
+                                                                          <button
+                                                                            type="submit"
+                                                                            className="btn-log"
+                                                                            style={{
+                                                                              backgroundColor:
+                                                                                '#10b981',
+                                                                            }}
+                                                                          >
+                                                                            Update
+                                                                          </button>
+                                                                          <button
+                                                                            type="button"
+                                                                            onClick={() =>
+                                                                              setEditingDaAction(
+                                                                                null
+                                                                              )
+                                                                            }
+                                                                            className="btn-action"
+                                                                          >
+                                                                            Cancel
+                                                                          </button>
+                                                                        </form>
+                                                                      )}
+
+                                                                    <div
+                                                                      style={{
+                                                                        width:
+                                                                          '100%',
+                                                                        marginTop:
+                                                                          '8px',
+                                                                        paddingLeft:
+                                                                          '32px',
+                                                                        borderLeft:
+                                                                          '2px solid #e2e8f0',
+                                                                      }}
+                                                                    >
+                                                                      <div className="expanded-label">
+                                                                        Journal
+                                                                        /
+                                                                        Sub-Actions
+                                                                      </div>
+                                                                      {h.sub_actions &&
+                                                                        h.sub_actions.map(
+                                                                          (
+                                                                            sa,
+                                                                            saIdx
+                                                                          ) => (
+                                                                            <div
+                                                                              key={
+                                                                                saIdx
+                                                                              }
+                                                                              style={{
+                                                                                fontSize:
+                                                                                  '12px',
+                                                                                color:
+                                                                                  '#475569',
+                                                                                marginBottom:
+                                                                                  '4px',
+                                                                                display:
+                                                                                  'flex',
+                                                                                gap: '8px',
+                                                                                alignItems:
+                                                                                  'center',
+                                                                                flexWrap:
+                                                                                  'wrap',
+                                                                              }}
+                                                                            >
+                                                                              <span>
+                                                                                {
+                                                                                  sa.date
+                                                                                }
+                                                                              </span>{' '}
+                                                                              -{' '}
+                                                                              <span>
+                                                                                {
+                                                                                  sa.desc
+                                                                                }
+                                                                              </span>
+                                                                              <span
+                                                                                style={{
+                                                                                  fontSize:
+                                                                                    '10px',
+                                                                                  color:
+                                                                                    '#94a3b8',
+                                                                                }}
+                                                                              >
+                                                                                (by{' '}
+                                                                                {
+                                                                                  sa.added_by?.split(
+                                                                                    '@'
+                                                                                  )[0]
+                                                                                }
+                                                                                )
+                                                                              </span>
+                                                                              {sa.status ===
+                                                                              'Done' ? (
+                                                                                <span
+                                                                                  className="badge badge-green"
+                                                                                  style={{
+                                                                                    fontSize:
+                                                                                      '10px',
+                                                                                  }}
+                                                                                >
+                                                                                  ✓
+                                                                                  Done
+                                                                                </span>
+                                                                              ) : (
+                                                                                <>
+                                                                                  <span
+                                                                                    className="badge badge-yellow"
+                                                                                    style={{
+                                                                                      fontSize:
+                                                                                        '10px',
+                                                                                    }}
+                                                                                  >
+                                                                                    ⏳
+                                                                                    Pending
+                                                                                  </span>
+                                                                                  {sa.expiry_date &&
+                                                                                    (() => {
+                                                                                      const d =
+                                                                                        calculateBusinessDays(
+                                                                                          sa.expiry_date
+                                                                                        );
+                                                                                      return d <
+                                                                                        0 ? (
+                                                                                        <span
+                                                                                          className="badge badge-red"
+                                                                                          style={{
+                                                                                            fontSize:
+                                                                                              '10px',
+                                                                                          }}
+                                                                                        >
+                                                                                          🔴
+                                                                                          Breached
+                                                                                          by{' '}
+                                                                                          {Math.abs(
+                                                                                            d
+                                                                                          )}
+                                                                                          d
+                                                                                        </span>
+                                                                                      ) : (
+                                                                                        <span
+                                                                                          className="badge badge-yellow"
+                                                                                          style={{
+                                                                                            fontSize:
+                                                                                              '10px',
+                                                                                          }}
+                                                                                        >
+                                                                                          🟡
+                                                                                          Due
+                                                                                          in{' '}
+                                                                                          {
+                                                                                            d
+                                                                                          }
+                                                                                          d
+                                                                                        </span>
+                                                                                      );
+                                                                                    })()}
+                                                                                  {sa.expiry_date && (
+                                                                                    <span
+                                                                                      style={{
+                                                                                        fontSize:
+                                                                                          '10px',
+                                                                                        color:
+                                                                                          '#94a3b8',
+                                                                                      }}
+                                                                                    >
+                                                                                      due{' '}
+                                                                                      {
+                                                                                        sa.expiry_date
+                                                                                      }
+                                                                                    </span>
+                                                                                  )}
+                                                                                </>
+                                                                              )}
+                                                                              {sa.status !==
+                                                                                'Done' && (
+                                                                                <button
+                                                                                  onClick={() =>
+                                                                                    handleCompleteSubAction(
+                                                                                      da.id,
+                                                                                      idx,
+                                                                                      saIdx
+                                                                                    )
+                                                                                  }
+                                                                                  className="btn-action btn-success"
+                                                                                  style={{
+                                                                                    fontSize:
+                                                                                      '10px',
+                                                                                    padding:
+                                                                                      '2px 6px',
+                                                                                  }}
+                                                                                >
+                                                                                  ✓
+                                                                                  Complete
+                                                                                </button>
+                                                                              )}
+                                                                              {sa.completed_by && (
+                                                                                <span
+                                                                                  style={{
+                                                                                    fontSize:
+                                                                                      '10px',
+                                                                                    color:
+                                                                                      '#94a3b8',
+                                                                                  }}
+                                                                                >
+                                                                                  ✓
+                                                                                  by{' '}
+                                                                                  {
+                                                                                    sa.completed_by?.split(
+                                                                                      '@'
+                                                                                    )[0]
+                                                                                  }
+                                                                                </span>
+                                                                              )}
+                                                                              <button
+                                                                                onClick={() => {
+                                                                                  setEditingSubActionEntry(
+                                                                                    {
+                                                                                      daId: da.id,
+                                                                                      step: idx,
+                                                                                      saIdx,
+                                                                                    }
+                                                                                  );
+                                                                                  setEditSubActionDesc(
+                                                                                    sa.desc
+                                                                                  );
+                                                                                  setEditSubActionDate(
+                                                                                    sa.date
+                                                                                  );
+                                                                                  setEditSubActionSla(
+                                                                                    sa.sla_days ||
+                                                                                      2
+                                                                                  );
+                                                                                }}
+                                                                                className="btn-action"
+                                                                                style={{
+                                                                                  fontSize:
+                                                                                    '10px',
+                                                                                  padding:
+                                                                                    '2px 6px',
+                                                                                }}
+                                                                              >
+                                                                                ✏️
+                                                                              </button>
+                                                                              {sa.modified_by && (
+                                                                                <span
+                                                                                  style={{
+                                                                                    fontSize:
+                                                                                      '10px',
+                                                                                    color:
+                                                                                      '#94a3b8',
+                                                                                  }}
+                                                                                >
+                                                                                  modified
+                                                                                  by{' '}
+                                                                                  {
+                                                                                    sa.modified_by?.split(
+                                                                                      '@'
+                                                                                    )[0]
+                                                                                  }{' '}
+                                                                                  on{' '}
+                                                                                  {formatDateTime(
+                                                                                    sa.modified_at
+                                                                                  )}
+                                                                                </span>
+                                                                              )}
+                                                                              {editingSubActionEntry &&
+                                                                                editingSubActionEntry.daId ===
+                                                                                  da.id &&
+                                                                                editingSubActionEntry.step ===
+                                                                                  idx &&
+                                                                                editingSubActionEntry.saIdx ===
+                                                                                  saIdx && (
+                                                                                  <form
+                                                                                    onSubmit={(
+                                                                                      e
+                                                                                    ) =>
+                                                                                      handleEditSubAction(
+                                                                                        e,
+                                                                                        da.id,
+                                                                                        idx,
+                                                                                        saIdx
+                                                                                      )
+                                                                                    }
+                                                                                    style={{
+                                                                                      width:
+                                                                                        '100%',
+                                                                                      display:
+                                                                                        'flex',
+                                                                                      gap: '8px',
+                                                                                      marginTop:
+                                                                                        '4px',
+                                                                                      flexWrap:
+                                                                                        'wrap',
+                                                                                    }}
+                                                                                  >
+                                                                                    <input
+                                                                                      type="text"
+                                                                                      value={
+                                                                                        editSubActionDesc
+                                                                                      }
+                                                                                      onChange={(
+                                                                                        e
+                                                                                      ) =>
+                                                                                        setEditSubActionDesc(
+                                                                                          e
+                                                                                            .target
+                                                                                            .value
+                                                                                        )
+                                                                                      }
+                                                                                      required
+                                                                                      style={{
+                                                                                        flex: 1,
+                                                                                        minWidth:
+                                                                                          '200px',
+                                                                                        padding:
+                                                                                          '4px',
+                                                                                        border:
+                                                                                          '1px solid #e2e8f0',
+                                                                                        borderRadius:
+                                                                                          '6px',
+                                                                                        fontSize:
+                                                                                          '12px',
+                                                                                      }}
+                                                                                    />
+                                                                                    <input
+                                                                                      type="date"
+                                                                                      value={
+                                                                                        editSubActionDate
+                                                                                      }
+                                                                                      onChange={(
+                                                                                        e
+                                                                                      ) =>
+                                                                                        setEditSubActionDate(
+                                                                                          e
+                                                                                            .target
+                                                                                            .value
+                                                                                        )
+                                                                                      }
+                                                                                      style={{
+                                                                                        padding:
+                                                                                          '4px',
+                                                                                        border:
+                                                                                          '1px solid #e2e8f0',
+                                                                                        borderRadius:
+                                                                                          '6px',
+                                                                                        fontSize:
+                                                                                          '12px',
+                                                                                      }}
+                                                                                    />
+                                                                                    <input
+                                                                                      type="number"
+                                                                                      min="1"
+                                                                                      max="100"
+                                                                                      value={
+                                                                                        editSubActionSla
+                                                                                      }
+                                                                                      onChange={(
+                                                                                        e
+                                                                                      ) =>
+                                                                                        setEditSubActionSla(
+                                                                                          parseInt(
+                                                                                            e
+                                                                                              .target
+                                                                                              .value,
+                                                                                            10
+                                                                                          ) ||
+                                                                                            1
+                                                                                        )
+                                                                                      }
+                                                                                      title="SLA in working days"
+                                                                                      style={{
+                                                                                        width:
+                                                                                          '56px',
+                                                                                        padding:
+                                                                                          '4px',
+                                                                                        border:
+                                                                                          '1px solid #e2e8f0',
+                                                                                        borderRadius:
+                                                                                          '6px',
+                                                                                        fontSize:
+                                                                                          '12px',
+                                                                                      }}
+                                                                                    />
+                                                                                    <button
+                                                                                      type="submit"
+                                                                                      className="btn-log"
+                                                                                      style={{
+                                                                                        backgroundColor:
+                                                                                          '#10b981',
+                                                                                        fontSize:
+                                                                                          '11px',
+                                                                                        padding:
+                                                                                          '4px 8px',
+                                                                                      }}
+                                                                                    >
+                                                                                      Update
+                                                                                    </button>
+                                                                                    <button
+                                                                                      type="button"
+                                                                                      onClick={() =>
+                                                                                        setEditingSubActionEntry(
+                                                                                          null
+                                                                                        )
+                                                                                      }
+                                                                                      className="btn-action"
+                                                                                      style={{
+                                                                                        fontSize:
+                                                                                          '11px',
+                                                                                        padding:
+                                                                                          '4px 8px',
+                                                                                      }}
+                                                                                    >
+                                                                                      Cancel
+                                                                                    </button>
+                                                                                  </form>
+                                                                                )}
+                                                                            </div>
+                                                                          )
+                                                                        )}
+
+                                                                      {addingSubAction &&
+                                                                      addingSubAction.daId ===
+                                                                        da.id &&
+                                                                      addingSubAction.step ===
+                                                                        idx ? (
+                                                                        <form
+                                                                          onSubmit={(
+                                                                            e
+                                                                          ) =>
+                                                                            handleAddSubAction(
+                                                                              e,
+                                                                              da.id,
+                                                                              idx
+                                                                            )
+                                                                          }
+                                                                          className="sub-action-form"
+                                                                        >
+                                                                          <input
+                                                                            type="text"
+                                                                            placeholder="Journal entry (e.g., Sent for approval)"
+                                                                            value={
+                                                                              newSubActionDesc
+                                                                            }
+                                                                            onChange={(
+                                                                              e
+                                                                            ) =>
+                                                                              setNewSubActionDesc(
+                                                                                e
+                                                                                  .target
+                                                                                  .value
+                                                                              )
+                                                                            }
+                                                                            required
+                                                                            style={{
+                                                                              flex: 1,
+                                                                              minWidth:
+                                                                                '150px',
+                                                                              padding:
+                                                                                '6px',
+                                                                              border:
+                                                                                '1px solid #e2e8f0',
+                                                                              borderRadius:
+                                                                                '6px',
+                                                                            }}
+                                                                          />
+                                                                          <input
+                                                                            type="date"
+                                                                            value={
+                                                                              newSubActionDate
+                                                                            }
+                                                                            onChange={(
+                                                                              e
+                                                                            ) =>
+                                                                              setNewSubActionDate(
+                                                                                e
+                                                                                  .target
+                                                                                  .value
+                                                                              )
+                                                                            }
+                                                                            style={{
+                                                                              padding:
+                                                                                '6px',
+                                                                              border:
+                                                                                '1px solid #e2e8f0',
+                                                                              borderRadius:
+                                                                                '6px',
+                                                                            }}
+                                                                          />
+                                                                          <div
+                                                                            style={{
+                                                                              display:
+                                                                                'flex',
+                                                                              alignItems:
+                                                                                'center',
+                                                                              gap: '4px',
+                                                                            }}
+                                                                            title="SLA in working days"
+                                                                          >
+                                                                            <span
+                                                                              style={{
+                                                                                fontSize:
+                                                                                  '11px',
+                                                                                color:
+                                                                                  '#64748b',
+                                                                              }}
+                                                                            >
+                                                                              SLA
+                                                                            </span>
+                                                                            <input
+                                                                              type="number"
+                                                                              min="1"
+                                                                              max="100"
+                                                                              value={
+                                                                                newSubActionSla
+                                                                              }
+                                                                              onChange={(
+                                                                                e
+                                                                              ) =>
+                                                                                setNewSubActionSla(
+                                                                                  parseInt(
+                                                                                    e
+                                                                                      .target
+                                                                                      .value,
+                                                                                    10
+                                                                                  ) ||
+                                                                                    1
+                                                                                )
+                                                                              }
+                                                                              style={{
+                                                                                width:
+                                                                                  '56px',
+                                                                                padding:
+                                                                                  '6px',
+                                                                                border:
+                                                                                  '1px solid #e2e8f0',
+                                                                                borderRadius:
+                                                                                  '6px',
+                                                                              }}
+                                                                            />
+                                                                          </div>
+                                                                          <button
+                                                                            type="submit"
+                                                                            className="btn-log"
+                                                                            style={{
+                                                                              backgroundColor:
+                                                                                '#10b981',
+                                                                            }}
+                                                                          >
+                                                                            Add
+                                                                          </button>
+                                                                          <button
+                                                                            type="button"
+                                                                            onClick={() =>
+                                                                              setAddingSubAction(
+                                                                                null
+                                                                              )
+                                                                            }
+                                                                            className="btn-action"
+                                                                          >
+                                                                            Cancel
+                                                                          </button>
+                                                                        </form>
+                                                                      ) : (
+                                                                        <button
+                                                                          onClick={() =>
+                                                                            setAddingSubAction(
+                                                                              {
+                                                                                daId: da.id,
+                                                                                step: idx,
+                                                                              }
+                                                                            )
+                                                                          }
+                                                                          className="btn-action"
+                                                                          style={{
+                                                                            marginTop:
+                                                                              '4px',
+                                                                            fontSize:
+                                                                              '10px',
+                                                                          }}
+                                                                        >
+                                                                          + Add
+                                                                          Journal
+                                                                          Entry
+                                                                        </button>
+                                                                      )}
+                                                                    </div>
+                                                                  </div>
+                                                                );
+                                                              }
+                                                            )}
+
+                                                          {addingDaFor ===
+                                                          da.id ? (
+                                                            <form
+                                                              onSubmit={(e) =>
+                                                                handleAddDaAction(
+                                                                  e,
+                                                                  da.id
+                                                                )
+                                                              }
+                                                              style={{
+                                                                marginTop:
+                                                                  '8px',
+                                                                display: 'flex',
+                                                                gap: '8px',
+                                                                flexWrap:
+                                                                  'wrap',
+                                                              }}
+                                                            >
+                                                              <input
+                                                                type="text"
+                                                                placeholder="Action Name"
+                                                                value={
+                                                                  newDaAction
+                                                                }
+                                                                onChange={(e) =>
+                                                                  setNewDaAction(
+                                                                    e.target
+                                                                      .value
+                                                                  )
+                                                                }
+                                                                required
+                                                                style={{
+                                                                  flex: 1,
+                                                                  minWidth:
+                                                                    '150px',
+                                                                  padding:
+                                                                    '6px',
+                                                                  border:
+                                                                    '1px solid #e2e8f0',
+                                                                  borderRadius:
+                                                                    '6px',
+                                                                }}
+                                                              />
+                                                              {daList.length >
+                                                                1 && (
+                                                                <div
+                                                                  style={{
+                                                                    width:
+                                                                      '100%',
+                                                                    marginTop:
+                                                                      '6px',
+                                                                  }}
+                                                                >
+                                                                  <label
+                                                                    style={{
+                                                                      display:
+                                                                        'flex',
+                                                                      alignItems:
+                                                                        'center',
+                                                                      gap: '6px',
+                                                                      fontSize:
+                                                                        '12px',
+                                                                    }}
+                                                                  >
+                                                                    <input
+                                                                      type="checkbox"
+                                                                      checked={
+                                                                        bulkActionMode
+                                                                      }
+                                                                      onChange={(
+                                                                        e
+                                                                      ) => {
+                                                                        setBulkActionMode(
+                                                                          e
+                                                                            .target
+                                                                            .checked
+                                                                        );
+                                                                        setBulkActionTargets(
+                                                                          {}
+                                                                        );
+                                                                        setBulkJournalText(
+                                                                          ''
+                                                                        );
+                                                                      }}
+                                                                    />
+                                                                    Apply to
+                                                                    other
+                                                                    respondents
+                                                                  </label>
+                                                                  {bulkActionMode && (
+                                                                    <div
+                                                                      style={{
+                                                                        marginTop:
+                                                                          '6px',
+                                                                        border:
+                                                                          '1px solid #e2e8f0',
+                                                                        borderRadius:
+                                                                          '6px',
+                                                                        padding:
+                                                                          '6px',
+                                                                      }}
+                                                                    >
+                                                                      <div
+                                                                        style={{
+                                                                          fontSize:
+                                                                            '11px',
+                                                                          color:
+                                                                            '#64748b',
+                                                                          marginBottom:
+                                                                            '4px',
+                                                                        }}
+                                                                      >
+                                                                        Tick the
+                                                                        respondents
+                                                                        who
+                                                                        should
+                                                                        also get
+                                                                        "
+                                                                        {newDaAction ||
+                                                                          '(action name)'}
+                                                                        ":
+                                                                      </div>
+                                                                      {daList
+                                                                        .filter(
+                                                                          (d) =>
+                                                                            d.id !==
+                                                                            da.id
+                                                                        )
+                                                                        .map(
+                                                                          (
+                                                                            d
+                                                                          ) => {
+                                                                            const hist =
+                                                                              d.action_history ||
+                                                                              [];
+                                                                            const lastAct =
+                                                                              hist.length
+                                                                                ? hist[
+                                                                                    hist.length -
+                                                                                      1
+                                                                                  ]
+                                                                                    .action ||
+                                                                                  ''
+                                                                                : '';
+                                                                            const same =
+                                                                              newDaAction &&
+                                                                              lastAct
+                                                                                .toLowerCase()
+                                                                                .trim() ===
+                                                                                newDaAction
+                                                                                  .toLowerCase()
+                                                                                  .trim();
+                                                                            return (
+                                                                              <div
+                                                                                key={
+                                                                                  d.id
+                                                                                }
+                                                                                style={{
+                                                                                  display:
+                                                                                    'flex',
+                                                                                  alignItems:
+                                                                                    'center',
+                                                                                  gap: '8px',
+                                                                                  fontSize:
+                                                                                    '12px',
+                                                                                  padding:
+                                                                                    '2px 0',
+                                                                                }}
+                                                                              >
+                                                                                <input
+                                                                                  type="checkbox"
+                                                                                  checked={
+                                                                                    !!bulkActionTargets[
+                                                                                      d
+                                                                                        .id
+                                                                                    ]
+                                                                                  }
+                                                                                  onChange={(
+                                                                                    e
+                                                                                  ) =>
+                                                                                    setBulkActionTargets(
+                                                                                      (
+                                                                                        prev
+                                                                                      ) => ({
+                                                                                        ...prev,
+                                                                                        [d.id]:
+                                                                                          e
+                                                                                            .target
+                                                                                            .checked,
+                                                                                      })
+                                                                                    )
+                                                                                  }
+                                                                                />
+                                                                                <span
+                                                                                  style={{
+                                                                                    flex: 1,
+                                                                                  }}
+                                                                                >
+                                                                                  {d.respondent_name ||
+                                                                                    '(unnamed)'}
+                                                                                </span>
+                                                                                <span
+                                                                                  style={{
+                                                                                    minWidth:
+                                                                                      '90px',
+                                                                                    color:
+                                                                                      '#64748b',
+                                                                                  }}
+                                                                                >
+                                                                                  {d.respondent_id ||
+                                                                                    '—'}
+                                                                                </span>
+                                                                                {same && (
+                                                                                  <span
+                                                                                    className="badge badge-yellow"
+                                                                                    style={{
+                                                                                      fontSize:
+                                                                                        '10px',
+                                                                                    }}
+                                                                                  >
+                                                                                    ⚠
+                                                                                    already
+                                                                                    at
+                                                                                    "
+                                                                                    {
+                                                                                      lastAct
+                                                                                    }
+                                                                                    "
+                                                                                  </span>
+                                                                                )}
+                                                                              </div>
+                                                                            );
+                                                                          }
+                                                                        )}
+                                                                      <div
+                                                                        className="wip-input-group"
+                                                                        style={{
+                                                                          width:
+                                                                            '100%',
+                                                                          marginTop:
+                                                                            '6px',
+                                                                        }}
+                                                                      >
+                                                                        <label
+                                                                          style={{
+                                                                            fontSize:
+                                                                              '11px',
+                                                                          }}
+                                                                        >
+                                                                          Journal
+                                                                          entry
+                                                                          (optional)
+                                                                          —
+                                                                          copied
+                                                                          to
+                                                                          everyone
+                                                                          selected,
+                                                                          and to
+                                                                          this
+                                                                          respondent
+                                                                        </label>
+                                                                        <textarea
+                                                                          value={
+                                                                            bulkJournalText
+                                                                          }
+                                                                          rows={
+                                                                            3
+                                                                          }
+                                                                          onChange={(
+                                                                            e
+                                                                          ) =>
+                                                                            setBulkJournalText(
+                                                                              e
+                                                                                .target
+                                                                                .value
+                                                                            )
+                                                                          }
+                                                                          style={{
+                                                                            width:
+                                                                              '100%',
+                                                                            padding:
+                                                                              '6px',
+                                                                            border:
+                                                                              '1px solid #e2e8f0',
+                                                                            borderRadius:
+                                                                              '6px',
+                                                                            fontSize:
+                                                                              '12px',
+                                                                          }}
+                                                                        />
+                                                                      </div>
+                                                                    </div>
+                                                                  )}
+                                                                </div>
+                                                              )}
+                                                              <button
+                                                                type="submit"
+                                                                className="btn-log"
+                                                                style={{
+                                                                  backgroundColor:
+                                                                    '#10b981',
+                                                                }}
+                                                              >
+                                                                Add
+                                                              </button>
+                                                              <button
+                                                                type="button"
+                                                                onClick={() =>
+                                                                  setAddingDaFor(
+                                                                    null
+                                                                  )
+                                                                }
+                                                                className="btn-action"
+                                                              >
+                                                                Cancel
+                                                              </button>
+                                                            </form>
+                                                          ) : (
+                                                            <button
+                                                              onClick={() =>
+                                                                setAddingDaFor(
+                                                                  da.id
+                                                                )
+                                                              }
+                                                              className="btn-action"
+                                                              style={{
+                                                                marginTop:
+                                                                  '8px',
+                                                              }}
+                                                            >
+                                                              + Add Action
+                                                            </button>
+                                                          )}
+                                                        </div>
+                                                      )}
+                                                    </div>
+                                                  );
+                                                })}
+                                                {hideRespondents &&
+                                                  daList.length > 3 && (
+                                                    <div
+                                                      style={{
+                                                        textAlign: 'center',
+                                                        padding: '8px',
+                                                        color: '#3b82f6',
+                                                        cursor: 'pointer',
+                                                        fontSize: '13px',
+                                                      }}
+                                                      onClick={() =>
+                                                        setHideRespondents(
+                                                          false
+                                                        )
+                                                      }
+                                                    >
+                                                      Show {daList.length - 3}{' '}
+                                                      more respondents...
+                                                    </div>
+                                                  )}
+                                              </div>
+                                            )}
+                                          </div>
+                                        </div>
                                       </div>
                                     </div>
                                   </td>
@@ -3368,246 +8145,752 @@ const [wipImportProgress, setWipImportProgress] = useState('');
                     </table>
 
                     <div className="pagination">
-                      <button onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} disabled={currentPage === 1} className="btn-page">← Previous</button>
-                      <span style={{ color: '#64748b', fontSize: '13px' }}>Page {currentPage} of {totalPages || 1}</span>
-                      <button onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))} disabled={currentPage === totalPages || totalPages === 0} className="btn-page">Next →</button>
+                      <button
+                        onClick={() =>
+                          setCurrentPage((prev) => Math.max(1, prev - 1))
+                        }
+                        disabled={currentPage === 1}
+                        className="btn-page"
+                      >
+                        ← Previous
+                      </button>
+                      <span style={{ color: '#64748b', fontSize: '13px' }}>
+                        Page {currentPage} of {totalPages || 1}
+                      </span>
+                      <button
+                        onClick={() =>
+                          setCurrentPage((prev) =>
+                            Math.min(totalPages, prev + 1)
+                          )
+                        }
+                        disabled={
+                          currentPage === totalPages || totalPages === 0
+                        }
+                        className="btn-page"
+                      >
+                        Next →
+                      </button>
                     </div>
                   </>
                 )}
               </div>
             </>
           )}
-{activeTab === 'wip' && (
-  <>
-    <div className="page-header">
-      <div className="page-header-text">
-        <h2>⏳ WIP — Pending Items</h2>
-        <p>Everything awaiting action, across all cases. Grouped by case, most overdue first.</p>
-      </div>
-      <div style={{ display: 'flex', gap: 8 }}>
-        <button className="btn-secondary" onClick={fetchAllWip} disabled={wipTabLoading}>
-          {wipTabLoading ? 'Loading...' : 'Refresh'}
-        </button>
-        <button
-          className="btn-secondary"
-          onClick={() => setWipShowImport(v => !v)}>
-          📥 Import from Excel
-        </button>
-      </div>
-    </div>
+          {activeTab === 'wip' && (
+            <>
+              <div className="page-header">
+                <div className="page-header-text">
+                  <h2>⏳ WIP — Pending Items</h2>
+                  <p>
+                    Everything awaiting action, across all cases. Grouped by
+                    case, most overdue first.
+                  </p>
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button
+                    className="btn-secondary"
+                    onClick={fetchAllWip}
+                    disabled={wipTabLoading}
+                  >
+                    {wipTabLoading ? 'Loading...' : 'Refresh'}
+                  </button>
+                  <button
+                    className="btn-secondary"
+                    onClick={() => setWipShowImport((v) => !v)}
+                  >
+                    📥 Import from Excel
+                  </button>
+                </div>
+              </div>
 
-    {wipShowImport && (
-      <div style={{ marginTop: 10, marginBottom: 16, padding: 12, border: '1px solid #ddd', borderRadius: 8, background: '#fafafa' }}>
-        <div style={{ fontWeight: 600, marginBottom: 6 }}>Import WIP rows from your Excel workbook</div>
-        <div style={{ fontSize: 12, color: '#666', marginBottom: 8 }}>
-          Pick your workbook file. It reads the <b>WIP_Tracker</b> sheet only. Nothing is saved yet — you'll review first.
-        </div>
-        <input type="file" accept=".xlsx,.xlsm,.xls" onChange={handleWipFileUpload} disabled={wipImportBusy} />
-        {wipImportMsg && <div style={{ marginTop: 8, fontSize: 13 }}>{wipImportMsg}</div>}
-        {wipImportProgress && <div style={{ marginTop: 6, fontSize: 13, fontWeight: 600 }}>{wipImportProgress}</div>}
-        {wipImportRows.length > 0 && (
-  <div style={{ marginTop: 10 }}>
-    <div style={{ marginBottom: 6, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-      <button className="btn-secondary" style={{ fontSize: 12, padding: '4px 10px' }}
-        onClick={() => {
-          const c = {}; wipImportRows.forEach((r, i) => { c[i] = r.canImport; });
-          setWipImportChecked(c);
-        }}>Select all importable</button>
-      <button className="btn-secondary" style={{ fontSize: 12, padding: '4px 10px' }}
-        onClick={() => {
-          const c = {}; wipImportRows.forEach((r, i) => { c[i] = r.verdict === '✅ Ready'; });
-          setWipImportChecked(c);
-        }}>Only ✅ Ready</button>
-      <button className="btn-secondary" style={{ fontSize: 12, padding: '4px 10px' }}
-        onClick={() => setWipImportChecked({})}>Select none</button>
-      <span style={{ fontSize: 13, fontWeight: 600, marginLeft: 'auto' }}>
-        {Object.values(wipImportChecked).filter(Boolean).length} of {wipImportRows.length} selected
-      </span>
-      <button
-        onClick={runWipImport}
-        disabled={wipImportSaving}
-        style={{ padding: '6px 14px', borderRadius: 6, border: 'none', background: '#2e7d32', color: '#fff', fontWeight: 600, cursor: 'pointer' }}>
-        {wipImportSaving ? 'Importing...' : `⬆ Import ${Object.values(wipImportChecked).filter(Boolean).length} row(s)`}
-      </button>
-    </div>
+              {wipShowImport && (
+                <div
+                  style={{
+                    marginTop: 10,
+                    marginBottom: 16,
+                    padding: 12,
+                    border: '1px solid #ddd',
+                    borderRadius: 8,
+                    background: '#fafafa',
+                  }}
+                >
+                  <div style={{ fontWeight: 600, marginBottom: 6 }}>
+                    Import WIP rows from your Excel workbook
+                  </div>
+                  <div style={{ fontSize: 12, color: '#666', marginBottom: 8 }}>
+                    Pick your workbook file. It reads the <b>WIP_Tracker</b>{' '}
+                    sheet only. Nothing is saved yet — you'll review first.
+                  </div>
+                  <input
+                    type="file"
+                    accept=".xlsx,.xlsm,.xls"
+                    onChange={handleWipFileUpload}
+                    disabled={wipImportBusy}
+                  />
+                  {wipImportMsg && (
+                    <div style={{ marginTop: 8, fontSize: 13 }}>
+                      {wipImportMsg}
+                    </div>
+                  )}
+                  {wipImportProgress && (
+                    <div
+                      style={{ marginTop: 6, fontSize: 13, fontWeight: 600 }}
+                    >
+                      {wipImportProgress}
+                    </div>
+                  )}
+                  {wipImportRows.length > 0 && (
+                    <div style={{ marginTop: 10 }}>
+                      <div
+                        style={{
+                          marginBottom: 6,
+                          display: 'flex',
+                          gap: 8,
+                          alignItems: 'center',
+                          flexWrap: 'wrap',
+                        }}
+                      >
+                        <button
+                          className="btn-secondary"
+                          style={{ fontSize: 12, padding: '4px 10px' }}
+                          onClick={() => {
+                            const c = {};
+                            wipImportRows.forEach((r, i) => {
+                              c[i] = r.canImport;
+                            });
+                            setWipImportChecked(c);
+                          }}
+                        >
+                          Select all importable
+                        </button>
+                        <button
+                          className="btn-secondary"
+                          style={{ fontSize: 12, padding: '4px 10px' }}
+                          onClick={() => {
+                            const c = {};
+                            wipImportRows.forEach((r, i) => {
+                              c[i] = r.verdict === '✅ Ready';
+                            });
+                            setWipImportChecked(c);
+                          }}
+                        >
+                          Only ✅ Ready
+                        </button>
+                        <button
+                          className="btn-secondary"
+                          style={{ fontSize: 12, padding: '4px 10px' }}
+                          onClick={() => setWipImportChecked({})}
+                        >
+                          Select none
+                        </button>
+                        <span
+                          style={{
+                            fontSize: 13,
+                            fontWeight: 600,
+                            marginLeft: 'auto',
+                          }}
+                        >
+                          {
+                            Object.values(wipImportChecked).filter(Boolean)
+                              .length
+                          }{' '}
+                          of {wipImportRows.length} selected
+                        </span>
+                        <button
+                          onClick={runWipImport}
+                          disabled={wipImportSaving}
+                          style={{
+                            padding: '6px 14px',
+                            borderRadius: 6,
+                            border: 'none',
+                            background: '#2e7d32',
+                            color: '#fff',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          {wipImportSaving
+                            ? 'Importing...'
+                            : `⬆ Import ${
+                                Object.values(wipImportChecked).filter(Boolean)
+                                  .length
+                              } row(s)`}
+                        </button>
+                      </div>
 
-    <div style={{ maxHeight: 380, overflow: 'auto', border: '1px solid #eee', background: '#fff' }}>
-      <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse' }}>
-        <thead>
-          <tr style={{ background: '#f0f0f0', position: 'sticky', top: 0 }}>
-            <th style={{ padding: 4, width: 30 }}></th>
-            <th style={{ padding: 4, textAlign: 'left' }}>Row</th>
-            <th style={{ padding: 4, textAlign: 'left' }}>Verdict</th>
-            <th style={{ padding: 4, textAlign: 'left' }}>Case</th>
-            <th style={{ padding: 4, textAlign: 'left' }}>Description</th>
-            <th style={{ padding: 4, textAlign: 'left' }}>Sent</th>
-            <th style={{ padding: 4, textAlign: 'left' }}>SLA</th>
-            <th style={{ padding: 4, textAlign: 'left' }}>PIC</th>
-          </tr>
-        </thead>
-        <tbody>
-          {wipImportRows.map((r, i) => (
-            <tr key={i} style={{
-              borderTop: '1px solid #eee',
-              background: !r.canImport ? '#fafafa' : (wipImportChecked[i] ? '#f4fbf4' : '#fff'),
-              color: !r.canImport ? '#999' : '#222'
-            }}>
-              <td style={{ padding: 4, textAlign: 'center' }}>
-                <input type="checkbox"
-                  checked={!!wipImportChecked[i]}
-                  disabled={!r.canImport}
-                  onChange={() => setWipImportChecked(p => ({ ...p, [i]: !p[i] }))} />
-              </td>
-              <td style={{ padding: 4 }}>{r.excelRow}</td>
-              <td style={{ padding: 4, whiteSpace: 'nowrap' }}>{r.verdict}</td>
-              <td style={{ padding: 4, whiteSpace: 'nowrap' }}>{r.case_number}</td>
-              <td style={{ padding: 4 }} title={r.description}>{r.description.slice(0, 60)}</td>
-              <td style={{ padding: 4, whiteSpace: 'nowrap' }}>{String(r.date_sent_raw || '')}</td>
-              <td style={{ padding: 4 }}>{r.sla_days}</td>
-              <td style={{ padding: 4 }}>{r.appPic || r.pic}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  </div>
-)}
-
-      </div>
-    )}
+                      <div
+                        style={{
+                          maxHeight: 380,
+                          overflow: 'auto',
+                          border: '1px solid #eee',
+                          background: '#fff',
+                        }}
+                      >
+                        <table
+                          style={{
+                            width: '100%',
+                            fontSize: 12,
+                            borderCollapse: 'collapse',
+                          }}
+                        >
+                          <thead>
+                            <tr
+                              style={{
+                                background: '#f0f0f0',
+                                position: 'sticky',
+                                top: 0,
+                              }}
+                            >
+                              <th style={{ padding: 4, width: 30 }}></th>
+                              <th style={{ padding: 4, textAlign: 'left' }}>
+                                Row
+                              </th>
+                              <th style={{ padding: 4, textAlign: 'left' }}>
+                                Verdict
+                              </th>
+                              <th style={{ padding: 4, textAlign: 'left' }}>
+                                Case
+                              </th>
+                              <th style={{ padding: 4, textAlign: 'left' }}>
+                                Description
+                              </th>
+                              <th style={{ padding: 4, textAlign: 'left' }}>
+                                Sent
+                              </th>
+                              <th style={{ padding: 4, textAlign: 'left' }}>
+                                SLA
+                              </th>
+                              <th style={{ padding: 4, textAlign: 'left' }}>
+                                PIC
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {wipImportRows.map((r, i) => (
+                              <tr
+                                key={i}
+                                style={{
+                                  borderTop: '1px solid #eee',
+                                  background: !r.canImport
+                                    ? '#fafafa'
+                                    : wipImportChecked[i]
+                                    ? '#f4fbf4'
+                                    : '#fff',
+                                  color: !r.canImport ? '#999' : '#222',
+                                }}
+                              >
+                                <td style={{ padding: 4, textAlign: 'center' }}>
+                                  <input
+                                    type="checkbox"
+                                    checked={!!wipImportChecked[i]}
+                                    disabled={!r.canImport}
+                                    onChange={() =>
+                                      setWipImportChecked((p) => ({
+                                        ...p,
+                                        [i]: !p[i],
+                                      }))
+                                    }
+                                  />
+                                </td>
+                                <td style={{ padding: 4 }}>{r.excelRow}</td>
+                                <td
+                                  style={{ padding: 4, whiteSpace: 'nowrap' }}
+                                >
+                                  {r.verdict}
+                                </td>
+                                <td
+                                  style={{ padding: 4, whiteSpace: 'nowrap' }}
+                                >
+                                  {r.case_number}
+                                </td>
+                                <td
+                                  style={{ padding: 4 }}
+                                  title={r.description}
+                                >
+                                  {r.description.slice(0, 60)}
+                                </td>
+                                <td
+                                  style={{ padding: 4, whiteSpace: 'nowrap' }}
+                                >
+                                  {String(r.date_sent_raw || '')}
+                                </td>
+                                <td style={{ padding: 4 }}>{r.sla_days}</td>
+                                <td style={{ padding: 4 }}>
+                                  {r.appPic || r.pic}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="resp-filters">
-                <input className="resp-search" placeholder="Search case no, description or respondent..." value={wipSearch} onChange={(ev) => setWipSearch(ev.target.value)} />
-                <select value={wipPicFilter} onChange={(ev) => setWipPicFilter(ev.target.value)}>
+                <input
+                  className="resp-search"
+                  placeholder="Search case no, description or respondent..."
+                  value={wipSearch}
+                  onChange={(ev) => setWipSearch(ev.target.value)}
+                />
+                <select
+                  value={wipPicFilter}
+                  onChange={(ev) => setWipPicFilter(ev.target.value)}
+                >
                   <option value="">All PICs</option>
-                  {Array.from(new Set(wipRows.map(r => r.pic).filter(Boolean))).sort().map(p => <option key={p} value={p}>{p}</option>)}
+                  {Array.from(
+                    new Set(wipRows.map((r) => r.pic).filter(Boolean))
+                  )
+                    .sort()
+                    .map((p) => (
+                      <option key={p} value={p}>
+                        {p}
+                      </option>
+                    ))}
                 </select>
-                <label className="resp-toggle"><input type="checkbox" checked={wipMineOnly} onChange={(ev) => setWipMineOnly(ev.target.checked)} /> My cases only</label>
-                <label className="resp-toggle"><input type="checkbox" checked={wipBreachedOnly} onChange={(ev) => setWipBreachedOnly(ev.target.checked)} /> Breached only</label>
-                <label className="resp-toggle"><input type="checkbox" checked={wipHideClosed} onChange={(ev) => setWipHideClosed(ev.target.checked)} /> Hide closed cases</label>
-                <label className="resp-toggle"><input type="checkbox" checked={wipNoFollowUp} onChange={(ev) => setWipNoFollowUp(ev.target.checked)} /> Never followed up</label>
-                <button className="btn-secondary" onClick={() => { setWipSearch(''); setWipPicFilter(''); setWipMineOnly(false); setWipBreachedOnly(false); setWipHideClosed(false); setWipNoFollowUp(false); }}>Clear</button>
+                <label className="resp-toggle">
+                  <input
+                    type="checkbox"
+                    checked={wipMineOnly}
+                    onChange={(ev) => setWipMineOnly(ev.target.checked)}
+                  />{' '}
+                  My cases only
+                </label>
+                <label className="resp-toggle">
+                  <input
+                    type="checkbox"
+                    checked={wipBreachedOnly}
+                    onChange={(ev) => setWipBreachedOnly(ev.target.checked)}
+                  />{' '}
+                  Breached only
+                </label>
+                <label className="resp-toggle">
+                  <input
+                    type="checkbox"
+                    checked={wipHideClosed}
+                    onChange={(ev) => setWipHideClosed(ev.target.checked)}
+                  />{' '}
+                  Hide closed cases
+                </label>
+                <label className="resp-toggle">
+                  <input
+                    type="checkbox"
+                    checked={wipNoFollowUp}
+                    onChange={(ev) => setWipNoFollowUp(ev.target.checked)}
+                  />{' '}
+                  Never followed up
+                </label>
+                <button
+                  className="btn-secondary"
+                  onClick={() => {
+                    setWipSearch('');
+                    setWipPicFilter('');
+                    setWipMineOnly(false);
+                    setWipBreachedOnly(false);
+                    setWipHideClosed(false);
+                    setWipNoFollowUp(false);
+                  }}
+                >
+                  Clear
+                </button>
               </div>
 
               {wipTabLoading ? (
                 <div className="resp-empty">Loading pending items…</div>
-              ) : (() => {
-                const myName = (userEmail || '').split('@')[0].split('.').join(' ').toLowerCase();
-                const q = wipSearch.trim().toLowerCase();
-                const isClosed = (s) => s === 'COMPLETED' || s === 'CANCELLED';
+              ) : (
+                (() => {
+                  const myName = (userEmail || '')
+                    .split('@')[0]
+                    .split('.')
+                    .join(' ')
+                    .toLowerCase();
+                  const q = wipSearch.trim().toLowerCase();
+                  const isClosed = (s) =>
+                    s === 'COMPLETED' || s === 'CANCELLED';
 
-                const withDays = wipRows.map(r => ({ ...r, days: r.expiry_date ? calculateBusinessDays(r.expiry_date) : null }))
-                  .filter(r => {
-                    if (wipPicFilter && r.pic !== wipPicFilter) return false;
-                    if (wipMineOnly && !(r.pic || '').toLowerCase().includes(myName)) return false;
-                    if (wipBreachedOnly && !(r.days !== null && r.days < 0)) return false;
-                    if (wipHideClosed && isClosed(r.case_status)) return false;
-                    if (wipNoFollowUp && !(r.kind === 'WIP' && (!Array.isArray(r.follow_ups) || r.follow_ups.length === 0))) return false;
-                    if (q) {
-                      const hay = `${r.case_number} ${r.description} ${r.who} ${r.action_type}`.toLowerCase();
-                      if (!hay.includes(q)) return false;
-                    }
-                    return true;
+                  const withDays = wipRows
+                    .map((r) => ({
+                      ...r,
+                      days: r.expiry_date
+                        ? calculateBusinessDays(r.expiry_date)
+                        : null,
+                    }))
+                    .filter((r) => {
+                      if (wipPicFilter && r.pic !== wipPicFilter) return false;
+                      if (
+                        wipMineOnly &&
+                        !(r.pic || '').toLowerCase().includes(myName)
+                      )
+                        return false;
+                      if (wipBreachedOnly && !(r.days !== null && r.days < 0))
+                        return false;
+                      if (wipHideClosed && isClosed(r.case_status))
+                        return false;
+                      if (
+                        wipNoFollowUp &&
+                        !(
+                          r.kind === 'WIP' &&
+                          (!Array.isArray(r.follow_ups) ||
+                            r.follow_ups.length === 0)
+                        )
+                      )
+                        return false;
+                      if (q) {
+                        const hay =
+                          `${r.case_number} ${r.description} ${r.who} ${r.action_type}`.toLowerCase();
+                        if (!hay.includes(q)) return false;
+                      }
+                      return true;
+                    });
+
+                  const groups = new Map();
+                  withDays.forEach((r) => {
+                    if (!groups.has(r.case_number))
+                      groups.set(r.case_number, []);
+                    groups.get(r.case_number).push(r);
+                  });
+                  const worst = (arr) =>
+                    arr.reduce(
+                      (m, r) => (r.days === null ? m : Math.min(m, r.days)),
+                      9999
+                    );
+                  const ordered = Array.from(groups.entries()).sort((a, b) => {
+                    const aC = isClosed(a[1][0].case_status),
+                      bC = isClosed(b[1][0].case_status);
+                    if (aC !== bC) return aC ? 1 : -1;
+                    return worst(a[1]) - worst(b[1]);
                   });
 
-                const groups = new Map();
-                withDays.forEach(r => {
-                  if (!groups.has(r.case_number)) groups.set(r.case_number, []);
-                  groups.get(r.case_number).push(r);
-                });
-                const worst = (arr) => arr.reduce((m, r) => (r.days === null ? m : Math.min(m, r.days)), 9999);
-                const ordered = Array.from(groups.entries()).sort((a, b) => {
-                  const aC = isClosed(a[1][0].case_status), bC = isClosed(b[1][0].case_status);
-                  if (aC !== bC) return aC ? 1 : -1;
-                  return worst(a[1]) - worst(b[1]);
-                });
+                  if (ordered.length === 0)
+                    return (
+                      <div className="resp-empty">🎉 Nothing pending.</div>
+                    );
 
-                if (ordered.length === 0) return <div className="resp-empty">🎉 Nothing pending.</div>;
-
-                return (
-                  <>
-                    <div className="resp-count">{withDays.length} pending items across {ordered.length} cases</div>
-                    {ordered.map(([caseNum, list]) => {
-                      const dup = new Map();
-                      list.forEach(r => {
-                        const k = `${r.kind}|${r.description}|${r.days}`;
-                        if (!dup.has(k)) dup.set(k, []);
-                        dup.get(k).push(r);
-                      });
-                      const lines = Array.from(dup.entries()).sort((a, b) => {
-                        const ad = a[1][0].days === null ? 9999 : a[1][0].days;
-                        const bd = b[1][0].days === null ? 9999 : b[1][0].days;
-                        return ad - bd;
-                      });
-                      const closed = isClosed(list[0].case_status);
-                      return (
-                        <div key={caseNum} className="card" style={{ marginBottom: '12px', padding: '12px', opacity: closed ? 0.75 : 1 }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', flexWrap: 'wrap', gap: '8px', cursor: 'pointer' }}
-                               onClick={() => { setActiveTab('cases'); handleCaseClick(caseNum); }}>
-                            <span style={{ fontWeight: 600 }}>📁 {caseNum}</span>
-                            <span style={{ fontSize: '12px', color: '#64748b' }}>{list[0].pic || '—'}{closed ? ` · ⚠️ ${list[0].case_status}` : ''}</span>
-                          </div>
-                          {lines.map(([key, items], li) => {
-                            const r = items[0];
-                            const many = items.length > 1;
-                            const open = !!wipExpanded[`${caseNum}|${li}`];
-                            return (
-                              <div key={li} style={{ padding: '3px 0' }}>
-                                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', fontSize: '12px', flexWrap: 'wrap' }}>
-                                  {r.days === null
-                                    ? <span className="badge badge-grey" style={{ fontSize: '10px' }}>⏳ No due date</span>
-                                    : r.days < 0
-                                      ? <span className="badge badge-red" style={{ fontSize: '10px' }}>🔴 Breached {Math.abs(r.days)}d</span>
-                                      : <span className="badge badge-yellow" style={{ fontSize: '10px' }}>🟡 Due in {r.days}d</span>}
-                                  <span className="badge badge-grey" style={{ fontSize: '10px' }}>{r.kind}</span>
-                                  {Array.isArray(r.follow_ups) && r.follow_ups.length > 0 && (
-                                    <span className="badge badge-purple" style={{ fontSize: '10px', cursor: 'help' }}
-                                      title={`Last follow-up: ${r.follow_ups[r.follow_ups.length - 1].date}${r.follow_ups.length > 1 ? ` · Previous: ${r.follow_ups[r.follow_ups.length - 2].date}` : ''}`}>
-                                      📅 {r.follow_ups.length}
+                  return (
+                    <>
+                      <div className="resp-count">
+                        {withDays.length} pending items across {ordered.length}{' '}
+                        cases
+                      </div>
+                      {ordered.map(([caseNum, list]) => {
+                        const dup = new Map();
+                        list.forEach((r) => {
+                          const k = `${r.kind}|${r.description}|${r.days}`;
+                          if (!dup.has(k)) dup.set(k, []);
+                          dup.get(k).push(r);
+                        });
+                        const lines = Array.from(dup.entries()).sort((a, b) => {
+                          const ad =
+                            a[1][0].days === null ? 9999 : a[1][0].days;
+                          const bd =
+                            b[1][0].days === null ? 9999 : b[1][0].days;
+                          return ad - bd;
+                        });
+                        const closed = isClosed(list[0].case_status);
+                        return (
+                          <div
+                            key={caseNum}
+                            className="card"
+                            style={{
+                              marginBottom: '12px',
+                              padding: '12px',
+                              opacity: closed ? 0.75 : 1,
+                            }}
+                          >
+                            <div
+                              style={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                marginBottom: '6px',
+                                flexWrap: 'wrap',
+                                gap: '8px',
+                                cursor: 'pointer',
+                              }}
+                              onClick={() => {
+                                setActiveTab('cases');
+                                handleCaseClick(caseNum);
+                              }}
+                            >
+                              <span style={{ fontWeight: 600 }}>
+                                📁 {caseNum}
+                              </span>
+                              <span
+                                style={{ fontSize: '12px', color: '#64748b' }}
+                              >
+                                {list[0].pic || '—'}
+                                {closed ? ` · ⚠️ ${list[0].case_status}` : ''}
+                              </span>
+                            </div>
+                            {lines.map(([key, items], li) => {
+                              const r = items[0];
+                              const many = items.length > 1;
+                              const open = !!wipExpanded[`${caseNum}|${li}`];
+                              return (
+                                <div key={li} style={{ padding: '3px 0' }}>
+                                  <div
+                                    style={{
+                                      display: 'flex',
+                                      gap: '8px',
+                                      alignItems: 'center',
+                                      fontSize: '12px',
+                                      flexWrap: 'wrap',
+                                    }}
+                                  >
+                                    {r.days === null ? (
+                                      <span
+                                        className="badge badge-grey"
+                                        style={{ fontSize: '10px' }}
+                                      >
+                                        ⏳ No due date
+                                      </span>
+                                    ) : r.days < 0 ? (
+                                      <span
+                                        className="badge badge-red"
+                                        style={{ fontSize: '10px' }}
+                                      >
+                                        🔴 Breached {Math.abs(r.days)}d
+                                      </span>
+                                    ) : (
+                                      <span
+                                        className="badge badge-yellow"
+                                        style={{ fontSize: '10px' }}
+                                      >
+                                        🟡 Due in {r.days}d
+                                      </span>
+                                    )}
+                                    <span
+                                      className="badge badge-grey"
+                                      style={{ fontSize: '10px' }}
+                                    >
+                                      {r.kind}
                                     </span>
-                                  )}
-                                  <span style={{ flex: 1, minWidth: '200px' }}>{r.description}</span>
-                                  {r.kind === 'WIP' && r.wip_id && r.days !== null && (r.days < 0 || (Array.isArray(r.follow_ups) && r.follow_ups.length > 0)) && (
-                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                                      <input type="date"
-                                        value={followUpDates[r.wip_id] || new Date().toISOString().split('T')[0]}
-                                        onChange={(ev) => setFollowUpDates(p => ({ ...p, [r.wip_id]: ev.target.value }))}
-                                        style={{ padding: '2px 4px', border: '1px solid #e2e8f0', borderRadius: '5px', fontSize: '11px' }} />
-                                      <button className="btn-action btn-purple" style={{ color: 'white', fontSize: '10px', padding: '2px 8px', marginRight: 0 }}
-                                        disabled={followUpBusy === r.wip_id}
-                                        onClick={() => handleAddFollowUpFromTab(r.wip_id)}>
-                                        {followUpBusy === r.wip_id ? '...' : '📅 Log'}
-                                      </button>
+                                    {Array.isArray(r.follow_ups) &&
+                                      r.follow_ups.length > 0 && (
+                                        <span
+                                          className="badge badge-purple"
+                                          style={{
+                                            fontSize: '10px',
+                                            cursor: 'help',
+                                          }}
+                                          title={`Last follow-up: ${
+                                            r.follow_ups[
+                                              r.follow_ups.length - 1
+                                            ].date
+                                          }${
+                                            r.follow_ups.length > 1
+                                              ? ` · Previous: ${
+                                                  r.follow_ups[
+                                                    r.follow_ups.length - 2
+                                                  ].date
+                                                }`
+                                              : ''
+                                          }`}
+                                        >
+                                          📅 {r.follow_ups.length}
+                                        </span>
+                                      )}
+                                    <span
+                                      style={{ flex: 1, minWidth: '200px' }}
+                                    >
+                                      {r.description}
+                                      {!many && r.who && (
+                                        <div
+                                          style={{
+                                            fontSize: '11px',
+                                            color: '#94a3b8',
+                                            marginTop: '2px',
+                                          }}
+                                        >
+                                          ↳ {r.who}
+                                          {r.action_type
+                                            ? ` · ${r.action_type}`
+                                            : ''}
+                                        </div>
+                                      )}
+                                      {many && (
+                                        <div style={{ marginTop: '2px' }}>
+                                          <button
+                                            className="btn-action"
+                                            style={{
+                                              fontSize: '10px',
+                                              padding: '2px 6px',
+                                            }}
+                                            onClick={() =>
+                                              setWipExpanded((p) => ({
+                                                ...p,
+                                                [`${caseNum}|${li}`]: !open,
+                                              }))
+                                            }
+                                          >
+                                            ↳ {items.length} respondents{' '}
+                                            {open ? '▾' : '▸'}
+                                          </button>
+                                          {open && (
+                                            <div
+                                              style={{
+                                                paddingLeft: '12px',
+                                                marginTop: '2px',
+                                              }}
+                                            >
+                                              {items.map((it, ii) => (
+                                                <div
+                                                  key={ii}
+                                                  style={{
+                                                    fontSize: '11px',
+                                                    color: '#64748b',
+                                                  }}
+                                                >
+                                                  ↳ {it.who}
+                                                  {it.action_type
+                                                    ? ` · ${it.action_type}`
+                                                    : ''}
+                                                </div>
+                                              ))}
+                                            </div>
+                                          )}
+                                        </div>
+                                      )}
                                     </span>
-                                  )}
-                                  {many
-                                    ? <button className="btn-action" style={{ fontSize: '10px', padding: '2px 6px' }} onClick={() => setWipExpanded(p => ({ ...p, [`${caseNum}|${li}`]: !open }))}>↳ {items.length} respondents {open ? '▾' : '▸'}</button>
-                                    : (r.who && <span style={{ fontSize: '11px', color: '#94a3b8' }}>↳ {r.who}{r.action_type ? ` · ${r.action_type}` : ''}</span>)}
-                                </div>
-                                {many && open && (
-                                  <div style={{ paddingLeft: '24px', marginTop: '2px' }}>
-                                    {items.map((it, ii) => <div key={ii} style={{ fontSize: '11px', color: '#64748b' }}>↳ {it.who}{it.action_type ? ` · ${it.action_type}` : ''}</div>)}
+                                    {r.kind === 'WIP' &&
+                                      r.wip_id &&
+                                      r.days !== null &&
+                                      (r.days < 0 ||
+                                        (Array.isArray(r.follow_ups) &&
+                                          r.follow_ups.length > 0)) && (
+                                        <span
+                                          style={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: '4px',
+                                          }}
+                                        >
+                                          <input
+                                            type="date"
+                                            value={
+                                              followUpDates[r.wip_id] ||
+                                              new Date()
+                                                .toISOString()
+                                                .split('T')[0]
+                                            }
+                                            onChange={(ev) =>
+                                              setFollowUpDates((p) => ({
+                                                ...p,
+                                                [r.wip_id]: ev.target.value,
+                                              }))
+                                            }
+                                            style={{
+                                              padding: '2px 4px',
+                                              border: '1px solid #e2e8f0',
+                                              borderRadius: '5px',
+                                              fontSize: '11px',
+                                            }}
+                                          />
+                                          <button
+                                            className="btn-action btn-purple"
+                                            style={{
+                                              color: 'white',
+                                              fontSize: '10px',
+                                              padding: '2px 8px',
+                                              marginRight: 0,
+                                            }}
+                                            disabled={followUpBusy === r.wip_id}
+                                            onClick={() =>
+                                              handleAddFollowUpFromTab(r.wip_id)
+                                            }
+                                          >
+                                            {followUpBusy === r.wip_id
+                                              ? '...'
+                                              : '📅 Log'}
+                                          </button>
+                                        </span>
+                                      )}
+                                    {r.kind === 'Journal' &&
+                                      r.da_id &&
+                                      r.days !== null &&
+                                      (r.days < 0 ||
+                                        (Array.isArray(r.follow_ups) &&
+                                          r.follow_ups.length > 0)) &&
+                                      (() => {
+                                        const jKey = `J|${r.da_id}|${r.h_idx}|${r.sa_idx}`;
+                                        return (
+                                          <span
+                                            style={{
+                                              display: 'inline-flex',
+                                              alignItems: 'center',
+                                              gap: '4px',
+                                            }}
+                                          >
+                                            <input
+                                              type="date"
+                                              value={
+                                                followUpDates[jKey] ||
+                                                new Date()
+                                                  .toISOString()
+                                                  .split('T')[0]
+                                              }
+                                              onChange={(ev) =>
+                                                setFollowUpDates((p) => ({
+                                                  ...p,
+                                                  [jKey]: ev.target.value,
+                                                }))
+                                              }
+                                              style={{
+                                                padding: '2px 4px',
+                                                border: '1px solid #e2e8f0',
+                                                borderRadius: '5px',
+                                                fontSize: '11px',
+                                              }}
+                                            />
+                                            <button
+                                              className="btn-action btn-purple"
+                                              style={{
+                                                color: 'white',
+                                                fontSize: '10px',
+                                                padding: '2px 8px',
+                                                marginRight: 0,
+                                              }}
+                                              disabled={followUpBusy === jKey}
+                                              onClick={() =>
+                                                handleAddJournalFollowUp(items)
+                                              }
+                                            >
+                                              {followUpBusy === jKey
+                                                ? '...'
+                                                : '📅 Log'}
+                                            </button>
+                                          </span>
+                                        );
+                                      })()}
                                   </div>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      );
-                    })}
-                  </>
-                );
-              })()}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        );
+                      })}
+                    </>
+                  );
+                })()
+              )}
             </>
-          )}          
-{activeTab === 'respondents' && (
+          )}
+          {activeTab === 'respondents' && (
             <>
               <div className="page-header">
                 <div className="page-header-text">
                   <h2>Respondents</h2>
-                  <p>View-only register of every complainant-respondent pair. Edit records from the case drawer.</p>
+                  <p>
+                    View-only register of every complainant-respondent pair.
+                    Edit records from the case drawer.
+                  </p>
                 </div>
-                <button className="btn-secondary" onClick={fetchRespondents} disabled={respLoading}>
+                <button
+                  className="btn-secondary"
+                  onClick={fetchRespondents}
+                  disabled={respLoading}
+                >
                   {respLoading ? 'Loading...' : 'Refresh'}
                 </button>
               </div>
@@ -3619,38 +8902,106 @@ const [wipImportProgress, setWipImportProgress] = useState('');
                   value={respSearchInput}
                   onChange={(ev) => setRespSearchInput(ev.target.value)}
                 />
-                <select value={respCountry} onChange={(ev) => { setRespCountry(ev.target.value); setRespPage(1); }}>
+                <select
+                  value={respCountry}
+                  onChange={(ev) => {
+                    setRespCountry(ev.target.value);
+                    setRespPage(1);
+                  }}
+                >
                   <option value="">All countries</option>
-                  {respUniqueVals.countries.map(c => <option key={c} value={c}>{c}</option>)}
+                  {respUniqueVals.countries.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
                 </select>
-                <select value={respViolation} onChange={(ev) => { setRespViolation(ev.target.value); setRespPage(1); }}>
+                <select
+                  value={respViolation}
+                  onChange={(ev) => {
+                    setRespViolation(ev.target.value);
+                    setRespPage(1);
+                  }}
+                >
                   <option value="">All violations</option>
-                  {respUniqueVals.violations.map(c => <option key={c} value={c}>{c}</option>)}
+                  {respUniqueVals.violations.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
                 </select>
-                <select value={respAction} onChange={(ev) => { setRespAction(ev.target.value); setRespPage(1); }}>
+                <select
+                  value={respAction}
+                  onChange={(ev) => {
+                    setRespAction(ev.target.value);
+                    setRespPage(1);
+                  }}
+                >
                   <option value="">All actions</option>
-                  {respUniqueVals.actions.map(c => <option key={c} value={c}>{c}</option>)}
+                  {respUniqueVals.actions.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
                 </select>
-                <select value={respStatus} onChange={(ev) => { setRespStatus(ev.target.value); setRespPage(1); }}>
+                <select
+                  value={respStatus}
+                  onChange={(ev) => {
+                    setRespStatus(ev.target.value);
+                    setRespPage(1);
+                  }}
+                >
                   <option value="">All case status</option>
-                  {respUniqueVals.statuses.map(c => <option key={c} value={c}>{c}</option>)}
+                  {respUniqueVals.statuses.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
                 </select>
                 <label className="resp-toggle">
-                  <input type="checkbox" checked={respRepeatOnly}
-                    onChange={(ev) => { setRespRepeatOnly(ev.target.checked); setRespPage(1); }} />
+                  <input
+                    type="checkbox"
+                    checked={respRepeatOnly}
+                    onChange={(ev) => {
+                      setRespRepeatOnly(ev.target.checked);
+                      setRespPage(1);
+                    }}
+                  />
                   Repeat offenders only
                 </label>
-                <button className="btn-secondary" onClick={() => {
-                  setRespSearchInput(''); setRespCountry(''); setRespViolation('');
-                  setRespAction(''); setRespStatus(''); setRespRepeatOnly(false); setRespPage(1);
-                }}>Clear</button>
+                <button
+                  className="btn-secondary"
+                  onClick={() => {
+                    setRespSearchInput('');
+                    setRespCountry('');
+                    setRespViolation('');
+                    setRespAction('');
+                    setRespStatus('');
+                    setRespRepeatOnly(false);
+                    setRespPage(1);
+                  }}
+                >
+                  Clear
+                </button>
               </div>
 
               <div className="resp-count">
-                {respLoading ? 'Loading records...' :
-                  `Showing ${respFiltered.length === 0 ? 0 : (respPage - 1) * respPageSize + 1}-${Math.min(respPage * respPageSize, respFiltered.length)} of ${respFiltered.length} records`}
-                {respRows.length > 0 && respFiltered.length !== respRows.length ? ` (filtered from ${respRows.length})` : ''}
-                <span className="resp-hint">Double-click a row for full details</span>
+                {respLoading
+                  ? 'Loading records...'
+                  : `Showing ${
+                      respFiltered.length === 0
+                        ? 0
+                        : (respPage - 1) * respPageSize + 1
+                    }-${Math.min(
+                      respPage * respPageSize,
+                      respFiltered.length
+                    )} of ${respFiltered.length} records`}
+                {respRows.length > 0 && respFiltered.length !== respRows.length
+                  ? ` (filtered from ${respRows.length})`
+                  : ''}
+                <span className="resp-hint">
+                  Double-click a row for full details
+                </span>
               </div>
 
               <div className="resp-table-wrap">
@@ -3682,8 +9033,23 @@ const [wipImportProgress, setWipImportProgress] = useState('');
                       return (
                         <tr key={r.id} onDoubleClick={() => openRespDetail(r)}>
                           <td>
-                            {respMissingInfo(r) ? <span title="Missing complainant or respondent details">⚠️</span> : ''}
-                            {rc > 1 ? <span className="resp-badge" title={`Appears in ${rc} cases`}>{rc}</span> : ''}
+                            {respMissingInfo(r) ? (
+                              <span title="Missing complainant or respondent details">
+                                ⚠️
+                              </span>
+                            ) : (
+                              ''
+                            )}
+                            {rc > 1 ? (
+                              <span
+                                className="resp-badge"
+                                title={`Appears in ${rc} cases`}
+                              >
+                                {rc}
+                              </span>
+                            ) : (
+                              ''
+                            )}
                           </td>
                           <td>{r.case_number}</td>
                           <td>{r.complainant_name}</td>
@@ -3700,79 +9066,204 @@ const [wipImportProgress, setWipImportProgress] = useState('');
                           <td>{r.upline_name}</td>
                           <td>{r.cases ? r.cases.case_status : ''}</td>
                           <td>{r.modified_by_email}</td>
-                          <td>{r.last_modified ? formatDateTime(r.last_modified) : ''}</td>
+                          <td>
+                            {r.last_modified
+                              ? formatDateTime(r.last_modified)
+                              : ''}
+                          </td>
                         </tr>
                       );
                     })}
                   </tbody>
                 </table>
-                {!respLoading && respFiltered.length === 0 ? <div className="resp-empty">No records match your filters.</div> : null}
+                {!respLoading && respFiltered.length === 0 ? (
+                  <div className="resp-empty">
+                    No records match your filters.
+                  </div>
+                ) : null}
               </div>
 
               <div className="resp-pager">
-                <button className="btn-secondary" disabled={respPage <= 1} onClick={() => setRespPage(respPage - 1)}>Previous</button>
-                <span>Page {respPage} of {respTotalPages}</span>
-                <button className="btn-secondary" disabled={respPage >= respTotalPages} onClick={() => setRespPage(respPage + 1)}>Next</button>
+                <button
+                  className="btn-secondary"
+                  disabled={respPage <= 1}
+                  onClick={() => setRespPage(respPage - 1)}
+                >
+                  Previous
+                </button>
+                <span>
+                  Page {respPage} of {respTotalPages}
+                </span>
+                <button
+                  className="btn-secondary"
+                  disabled={respPage >= respTotalPages}
+                  onClick={() => setRespPage(respPage + 1)}
+                >
+                  Next
+                </button>
               </div>
 
               {respDetail ? (
                 <div className="resp-host">
-                  <div className="resp-overlay" onClick={() => setRespDetail(null)}></div>
+                  <div
+                    className="resp-overlay"
+                    onClick={() => setRespDetail(null)}
+                  ></div>
                   <div className="resp-panel">
                     <div className="resp-topbar">
-                      <strong>{respDetail.respondent_name || 'Respondent'} — {respDetail.case_number}</strong>
-                      <button className="resp-close" onClick={() => setRespDetail(null)}>✕</button>
+                      <strong>
+                        {respDetail.respondent_name || 'Respondent'} —{' '}
+                        {respDetail.case_number}
+                      </strong>
+                      <button
+                        className="resp-close"
+                        onClick={() => setRespDetail(null)}
+                      >
+                        ✕
+                      </button>
                     </div>
                     <div className="resp-panel-body">
                       <div className="resp-grid">
-                        <div><span>Case No</span><b>{respDetail.case_number}</b></div>
-                        <div><span>NID Case No</span><b>{respDetail.nid_case_no || '—'}</b></div>
-                        <div><span>Date Received</span><b>{respDetail.date_received || '—'}</b></div>
-                        <div><span>Sent By</span><b>{respDetail.sent_by || '—'}</b></div>
-                        <div><span>Complainant</span><b>{respDetail.complainant_name || '—'}</b></div>
-                        <div><span>Complainant ID</span><b>{respDetail.complainant_id || '—'}</b></div>
-                        <div><span>Cust Purchase ID</span><b>{respDetail.complainant_cust_id || '—'}</b></div>
-                        <div><span>Respondent</span><b>{respDetail.respondent_name || '—'}</b></div>
-                        <div><span>Respondent ID</span><b>{respDetail.respondent_id || '—'}</b></div>
-                        <div><span>Country</span><b>{respDetail.respondent_country || '—'}</b></div>
-                        <div><span>Team</span><b>{respDetail.team_name || '—'}</b></div>
-                        <div><span>Referrer</span><b>{respDetail.referrer_name || '—'}</b></div>
-                        <div><span>Referrer ID</span><b>{respDetail.referrer_id || '—'}</b></div>
-                        <div><span>VA Upline</span><b>{respDetail.upline_name || '—'}</b></div>
-                        <div><span>VA Upline ID</span><b>{respDetail.upline_id || '—'}</b></div>
-                        <div><span>Violation Category</span><b>{respDetail.violation_category || '—'}</b></div>
-                        <div><span>Current Action</span><b>{respDetail.current_action || '—'}</b></div>
-                        <div><span>Execution Date</span><b>{respDetail.execution_date || '—'}</b></div>
-                        <div><span>DA Confirmed</span><b>{respDetail.da_confirmed ? 'Yes' : 'No'}</b></div>
-                        <div><span>Modified By</span><b>{respDetail.modified_by_email || '—'}</b></div>
+                        <div>
+                          <span>Case No</span>
+                          <b>{respDetail.case_number}</b>
+                        </div>
+                        <div>
+                          <span>NID Case No</span>
+                          <b>{respDetail.nid_case_no || '—'}</b>
+                        </div>
+                        <div>
+                          <span>Date Received</span>
+                          <b>{respDetail.date_received || '—'}</b>
+                        </div>
+                        <div>
+                          <span>Sent By</span>
+                          <b>{respDetail.sent_by || '—'}</b>
+                        </div>
+                        <div>
+                          <span>Complainant</span>
+                          <b>{respDetail.complainant_name || '—'}</b>
+                        </div>
+                        <div>
+                          <span>Complainant ID</span>
+                          <b>{respDetail.complainant_id || '—'}</b>
+                        </div>
+                        <div>
+                          <span>Cust Purchase ID</span>
+                          <b>{respDetail.complainant_cust_id || '—'}</b>
+                        </div>
+                        <div>
+                          <span>Respondent</span>
+                          <b>{respDetail.respondent_name || '—'}</b>
+                        </div>
+                        <div>
+                          <span>Respondent ID</span>
+                          <b>{respDetail.respondent_id || '—'}</b>
+                        </div>
+                        <div>
+                          <span>Country</span>
+                          <b>{respDetail.respondent_country || '—'}</b>
+                        </div>
+                        <div>
+                          <span>Team</span>
+                          <b>{respDetail.team_name || '—'}</b>
+                        </div>
+                        <div>
+                          <span>Referrer</span>
+                          <b>{respDetail.referrer_name || '—'}</b>
+                        </div>
+                        <div>
+                          <span>Referrer ID</span>
+                          <b>{respDetail.referrer_id || '—'}</b>
+                        </div>
+                        <div>
+                          <span>VA Upline</span>
+                          <b>{respDetail.upline_name || '—'}</b>
+                        </div>
+                        <div>
+                          <span>VA Upline ID</span>
+                          <b>{respDetail.upline_id || '—'}</b>
+                        </div>
+                        <div>
+                          <span>Violation Category</span>
+                          <b>{respDetail.violation_category || '—'}</b>
+                        </div>
+                        <div>
+                          <span>Current Action</span>
+                          <b>{respDetail.current_action || '—'}</b>
+                        </div>
+                        <div>
+                          <span>Execution Date</span>
+                          <b>{respDetail.execution_date || '—'}</b>
+                        </div>
+                        <div>
+                          <span>DA Confirmed</span>
+                          <b>{respDetail.da_confirmed ? 'Yes' : 'No'}</b>
+                        </div>
+                        <div>
+                          <span>Modified By</span>
+                          <b>{respDetail.modified_by_email || '—'}</b>
+                        </div>
                       </div>
 
                       <h4 className="resp-h4">Remarks</h4>
-                      <div className="resp-note">{respDetail.remarks || 'No remarks recorded.'}</div>
+                      <div className="resp-note">
+                        {respDetail.remarks || 'No remarks recorded.'}
+                      </div>
 
                       <h4 className="resp-h4">Action History</h4>
-                      {Array.isArray(respDetail.action_history) && respDetail.action_history.length > 0 ? (
+                      {Array.isArray(respDetail.action_history) &&
+                      respDetail.action_history.length > 0 ? (
                         <table className="resp-mini">
-                          <thead><tr><th>Step</th><th>Action</th><th>Date</th></tr></thead>
+                          <thead>
+                            <tr>
+                              <th>Step</th>
+                              <th>Action</th>
+                              <th>Date</th>
+                            </tr>
+                          </thead>
                           <tbody>
                             {respDetail.action_history.map((h, i) => (
-                              <tr key={i}><td>{h.step}</td><td>{h.action}</td><td>{h.date || '—'}</td></tr>
+                              <tr key={i}>
+                                <td>{h.step}</td>
+                                <td>{h.action}</td>
+                                <td>{h.date || '—'}</td>
+                              </tr>
                             ))}
                           </tbody>
                         </table>
-                      ) : <div className="resp-note">No action history recorded.</div>}
+                      ) : (
+                        <div className="resp-note">
+                          No action history recorded.
+                        </div>
+                      )}
 
                       <h4 className="resp-h4">
                         Repeat Offender Check
-                        {respRepeatCount(respDetail) > 1
-                          ? <span className="resp-badge-big">Appears in {respRepeatCount(respDetail)} cases</span>
-                          : <span className="resp-ok">Only this case</span>}
+                        {respRepeatCount(respDetail) > 1 ? (
+                          <span className="resp-badge-big">
+                            Appears in {respRepeatCount(respDetail)} cases
+                          </span>
+                        ) : (
+                          <span className="resp-ok">Only this case</span>
+                        )}
                       </h4>
                       {respOtherCases(respDetail).length > 0 ? (
                         <>
-                          <div className="resp-warn">Review these before treating as a repeat offender — a reactivated case may carry a new case number.</div>
+                          <div className="resp-warn">
+                            Review these before treating as a repeat offender —
+                            a reactivated case may carry a new case number.
+                          </div>
                           <table className="resp-mini">
-                            <thead><tr><th>Case No</th><th>Complainant</th><th>Violation</th><th>Action</th><th>Date</th></tr></thead>
+                            <thead>
+                              <tr>
+                                <th>Case No</th>
+                                <th>Complainant</th>
+                                <th>Violation</th>
+                                <th>Action</th>
+                                <th>Date</th>
+                              </tr>
+                            </thead>
                             <tbody>
                               {respOtherCases(respDetail).map((o) => (
                                 <tr key={o.id}>
@@ -3786,217 +9277,580 @@ const [wipImportProgress, setWipImportProgress] = useState('');
                             </tbody>
                           </table>
                         </>
-                      ) : <div className="resp-note">No other cases found for this respondent ID.</div>}
+                      ) : (
+                        <div className="resp-note">
+                          No other cases found for this respondent ID.
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
               ) : null}
             </>
           )}
-          {activeTab === 'analytics' && (() => {
-            // Year comes from the case number: CXN-20260521-0364 -> 2026
-            const yearOf = (cn) => {
-              const m = String(cn || '').toUpperCase().match(/^C[XV]N-?(\d{4})\d{4}/);
-              return m ? m[1] : 'No year';
-            };
-            // Same case set as the Cases tab: CXN always, CVN only once promoted
-            const analyticsBase = cases.filter(c =>
-              !(String(c.case_number || '').toUpperCase().startsWith('CVN') && !c.promoted)
-            );
-            const yearList = Array.from(new Set(analyticsBase.map(c => yearOf(c.case_number))))
-              .sort((a, b) => (a === 'No year' ? 1 : b === 'No year' ? -1 : b.localeCompare(a)));
-            const aCases = analyticsYear === 'ALL'
-              ? analyticsBase
-              : analyticsBase.filter(c => yearOf(c.case_number) === analyticsYear);
+          {activeTab === 'analytics' &&
+            (() => {
+              // Year comes from the case number: CXN-20260521-0364 -> 2026
+              const yearOf = (cn) => {
+                const m = String(cn || '')
+                  .toUpperCase()
+                  .match(/^C[XV]N-?(\d{4})\d{4}/);
+                return m ? m[1] : 'No year';
+              };
+              // Same case set as the Cases tab: CXN always, CVN only once promoted
+              const analyticsBase = cases.filter(
+                (c) =>
+                  !(
+                    String(c.case_number || '')
+                      .toUpperCase()
+                      .startsWith('CVN') && !c.promoted
+                  )
+              );
+              const yearList = Array.from(
+                new Set(analyticsBase.map((c) => yearOf(c.case_number)))
+              ).sort((a, b) =>
+                a === 'No year' ? 1 : b === 'No year' ? -1 : b.localeCompare(a)
+              );
+              const aCases =
+                analyticsYear === 'ALL'
+                  ? analyticsBase
+                  : analyticsBase.filter(
+                      (c) => yearOf(c.case_number) === analyticsYear
+                    );
 
-            const aTotal = aCases.length;
-            const aInProgress = aCases.filter(c => c.case_status === 'IN PROGRESS').length;
-            const aCompleted = aCases.filter(c => c.case_status === 'COMPLETED').length;
-            const aCancelled = aCases.filter(c => c.case_status === 'CANCELLED').length;
-            const aBreached = aCases.filter(c => c.case_status === 'IN PROGRESS' && calculateBusinessDays(c.sla_due_date) < 0).length;
+              const aTotal = aCases.length;
+              const aInProgress = aCases.filter(
+                (c) => c.case_status === 'IN PROGRESS'
+              ).length;
+              const aCompleted = aCases.filter(
+                (c) => c.case_status === 'COMPLETED'
+              ).length;
+              const aCancelled = aCases.filter(
+                (c) => c.case_status === 'CANCELLED'
+              ).length;
+              const aBreached = aCases.filter(
+                (c) =>
+                  c.case_status === 'IN PROGRESS' &&
+                  calculateBusinessDays(c.sla_due_date) < 0
+              ).length;
 
-            const prio = (c) => {
-              const p = String(c.priority || '').trim().toLowerCase();
-              if (p === 'high') return 'High';
-              if (p === 'medium') return 'Medium';
-              if (p === 'low') return 'Low';
-              return 'Unassigned';
-            };
-            const aHigh = aCases.filter(c => prio(c) === 'High').length;
-            const aMed = aCases.filter(c => prio(c) === 'Medium').length;
-            const aLow = aCases.filter(c => prio(c) === 'Low').length;
-            const aNone = aCases.filter(c => prio(c) === 'Unassigned').length;
+              const prio = (c) => {
+                const p = String(c.priority || '')
+                  .trim()
+                  .toLowerCase();
+                if (p === 'high') return 'High';
+                if (p === 'medium') return 'Medium';
+                if (p === 'low') return 'Low';
+                return 'Unassigned';
+              };
+              const aHigh = aCases.filter((c) => prio(c) === 'High').length;
+              const aMed = aCases.filter((c) => prio(c) === 'Medium').length;
+              const aLow = aCases.filter((c) => prio(c) === 'Low').length;
+              const aNone = aCases.filter(
+                (c) => prio(c) === 'Unassigned'
+              ).length;
 
-            // PIC table — count and SLA breaches side by side
-            const picMap = new Map();
-            aCases.forEach(c => {
-              const key = tidyPic(c.pic) || '(unassigned)';
-              if (!picMap.has(key)) picMap.set(key, { pic: key, total: 0, open: 0, done: 0, breach: 0 });
-              const row = picMap.get(key);
-              row.total++;
-              if (c.case_status === 'IN PROGRESS') {
-                row.open++;
-                if (calculateBusinessDays(c.sla_due_date) < 0) row.breach++;
-              } else if (c.case_status === 'COMPLETED') row.done++;
-            });
-            const picRows = Array.from(picMap.values()).sort((a, b) => b.breach - a.breach || b.total - a.total);
+              // PIC table — count and SLA breaches side by side
+              const picMap = new Map();
+              aCases.forEach((c) => {
+                const key = tidyPic(c.pic) || '(unassigned)';
+                if (!picMap.has(key))
+                  picMap.set(key, {
+                    pic: key,
+                    total: 0,
+                    open: 0,
+                    done: 0,
+                    breach: 0,
+                  });
+                const row = picMap.get(key);
+                row.total++;
+                if (c.case_status === 'IN PROGRESS') {
+                  row.open++;
+                  if (calculateBusinessDays(c.sla_due_date) < 0) row.breach++;
+                } else if (c.case_status === 'COMPLETED') row.done++;
+              });
+              const picRows = Array.from(picMap.values()).sort(
+                (a, b) => b.breach - a.breach || b.total - a.total
+              );
 
-            return (
-            <>
-              <div className="page-header">
-                <div className="page-header-text">
-                  <h2>Analytics &amp; Insights</h2>
-                  <p>{analyticsYear === 'ALL' ? 'All years' : `Cases created in ${analyticsYear}`} · {aTotal} cases</p>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                {isAdmin && (
-                    <button onClick={handleFixPicNames} disabled={picFixBusy} className="btn-admin"
-                      style={{ padding: '8px 14px', fontSize: '13px' }}
-                      title="Permanently merge messy PIC spellings in the database">
-                      {picFixBusy ? 'Fixing...' : '🧹 Tidy PIC Names'}
-                    </button>
+              return (
+                <>
+                  <div className="page-header">
+                    <div className="page-header-text">
+                      <h2>Analytics &amp; Insights</h2>
+                      <p>
+                        {analyticsYear === 'ALL'
+                          ? 'All years'
+                          : `Cases created in ${analyticsYear}`}{' '}
+                        · {aTotal} cases
+                      </p>
+                    </div>
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                      }}
+                    >
+                      {isAdmin && (
+                        <button
+                          onClick={handleFixPicNames}
+                          disabled={picFixBusy}
+                          className="btn-admin"
+                          style={{ padding: '8px 14px', fontSize: '13px' }}
+                          title="Permanently merge messy PIC spellings in the database"
+                        >
+                          {picFixBusy ? 'Fixing...' : '🧹 Tidy PIC Names'}
+                        </button>
+                      )}
+                      <span
+                        style={{
+                          fontSize: '13px',
+                          color: '#64748b',
+                          fontWeight: 500,
+                        }}
+                      >
+                        Year:
+                      </span>
+                      <select
+                        value={analyticsYear}
+                        onChange={(e) => setAnalyticsYear(e.target.value)}
+                        style={{
+                          padding: '8px 14px',
+                          border: '1px solid #e2e8f0',
+                          borderRadius: '8px',
+                          fontSize: '14px',
+                          fontWeight: 600,
+                          background: 'white',
+                        }}
+                      >
+                        {yearList.map((y) => (
+                          <option key={y} value={y}>
+                            {y}
+                          </option>
+                        ))}
+                        <option value="ALL">All years</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {aTotal === 0 ? (
+                    <div
+                      className="card"
+                      style={{ textAlign: 'center', color: '#94a3b8' }}
+                    >
+                      No cases found for {analyticsYear}.
+                    </div>
+                  ) : (
+                    <>
+                      <div
+                        style={{
+                          display: 'grid',
+                          gridTemplateColumns:
+                            'repeat(auto-fit, minmax(300px, 1fr))',
+                          gap: '16px',
+                        }}
+                      >
+                        <div className="card">
+                          <h3 className="card-header">Case Status Breakdown</h3>
+                          <ChartRow
+                            label="In Progress"
+                            value={aInProgress}
+                            total={aTotal}
+                            color="#3b82f6"
+                          />
+                          <ChartRow
+                            label="Completed"
+                            value={aCompleted}
+                            total={aTotal}
+                            color="#10b981"
+                          />
+                          <ChartRow
+                            label="Cancelled"
+                            value={aCancelled}
+                            total={aTotal}
+                            color="#ef4444"
+                          />
+                        </div>
+                        <div className="card">
+                          <h3 className="card-header">
+                            SLA Compliance (Active Cases)
+                          </h3>
+                          <ChartRow
+                            label="Within SLA"
+                            value={aInProgress - aBreached}
+                            total={aInProgress}
+                            color="#10b981"
+                          />
+                          <ChartRow
+                            label="Out of SLA"
+                            value={aBreached}
+                            total={aInProgress}
+                            color="#ef4444"
+                          />
+                        </div>
+                        <div className="card">
+                          <h3 className="card-header">Priority Distribution</h3>
+                          <ChartRow
+                            label="High Priority"
+                            value={aHigh}
+                            total={aTotal}
+                            color="#ef4444"
+                          />
+                          <ChartRow
+                            label="Medium Priority"
+                            value={aMed}
+                            total={aTotal}
+                            color="#f59e0b"
+                          />
+                          <ChartRow
+                            label="Low Priority"
+                            value={aLow}
+                            total={aTotal}
+                            color="#64748b"
+                          />
+                          {aNone > 0 && (
+                            <ChartRow
+                              label="Unassigned"
+                              value={aNone}
+                              total={aTotal}
+                              color="#cbd5e1"
+                            />
+                          )}
+                        </div>
+                      </div>
+
+                      <div
+                        className="card"
+                        style={{ marginTop: '16px', padding: 0 }}
+                      >
+                        <div
+                          style={{
+                            padding: '16px',
+                            borderBottom: '1px solid #e2e8f0',
+                          }}
+                        >
+                          <h3 className="card-header" style={{ margin: 0 }}>
+                            Workload by PIC
+                          </h3>
+                          <p
+                            style={{
+                              margin: '5px 0 0 0',
+                              color: '#64748b',
+                              fontSize: '13px',
+                            }}
+                          >
+                            Sorted by SLA breaches, then case count.
+                          </p>
+                        </div>
+                        <div
+                          className="table-container"
+                          style={{ border: 'none' }}
+                        >
+                          <table className="table">
+                            <thead>
+                              <tr>
+                                <th style={{ cursor: 'default' }}>PIC</th>
+                                <th
+                                  style={{
+                                    cursor: 'default',
+                                    textAlign: 'center',
+                                  }}
+                                >
+                                  Total Cases
+                                </th>
+                                <th
+                                  style={{
+                                    cursor: 'default',
+                                    textAlign: 'center',
+                                  }}
+                                >
+                                  In Progress
+                                </th>
+                                <th
+                                  style={{
+                                    cursor: 'default',
+                                    textAlign: 'center',
+                                  }}
+                                >
+                                  Completed
+                                </th>
+                                <th
+                                  style={{
+                                    cursor: 'default',
+                                    textAlign: 'center',
+                                  }}
+                                >
+                                  Out of SLA
+                                </th>
+                                <th
+                                  style={{
+                                    cursor: 'default',
+                                    textAlign: 'center',
+                                  }}
+                                >
+                                  Breach Rate
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {picRows.map((r) => (
+                                <tr key={r.pic}>
+                                  <td
+                                    style={{
+                                      fontWeight: 600,
+                                      color: '#0f172a',
+                                    }}
+                                  >
+                                    {r.pic}
+                                  </td>
+                                  <td
+                                    style={{
+                                      textAlign: 'center',
+                                      fontWeight: 600,
+                                    }}
+                                  >
+                                    {r.total}
+                                  </td>
+                                  <td
+                                    style={{
+                                      textAlign: 'center',
+                                      color: '#d97706',
+                                      fontWeight: 600,
+                                    }}
+                                  >
+                                    {r.open}
+                                  </td>
+                                  <td
+                                    style={{
+                                      textAlign: 'center',
+                                      color: '#059669',
+                                      fontWeight: 600,
+                                    }}
+                                  >
+                                    {r.done}
+                                  </td>
+                                  <td
+                                    style={{
+                                      textAlign: 'center',
+                                      fontWeight: 700,
+                                      color:
+                                        r.breach > 0 ? '#dc2626' : '#94a3b8',
+                                    }}
+                                  >
+                                    {r.breach}
+                                  </td>
+                                  <td style={{ textAlign: 'center' }}>
+                                    {r.open === 0 ? (
+                                      <span style={{ color: '#94a3b8' }}>
+                                        —
+                                      </span>
+                                    ) : (
+                                      <span
+                                        className={`badge ${
+                                          r.breach / r.open > 0.5
+                                            ? 'badge-red'
+                                            : r.breach > 0
+                                            ? 'badge-yellow'
+                                            : 'badge-green'
+                                        }`}
+                                      >
+                                        {Math.round((r.breach / r.open) * 100)}%
+                                      </span>
+                                    )}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </>
                   )}
-                  <span style={{ fontSize: '13px', color: '#64748b', fontWeight: 500 }}>Year:</span>
-                  <select value={analyticsYear} onChange={(e) => setAnalyticsYear(e.target.value)}
-                    style={{ padding: '8px 14px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '14px', fontWeight: 600, background: 'white' }}>
-                    {yearList.map(y => <option key={y} value={y}>{y}</option>)}
-                    <option value="ALL">All years</option>
-                  </select>
-                </div>
-              </div>
-
-              {aTotal === 0 ? (
-                <div className="card" style={{ textAlign: 'center', color: '#94a3b8' }}>No cases found for {analyticsYear}.</div>
-              ) : (
-              <>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px' }}>
-                <div className="card">
-                  <h3 className="card-header">Case Status Breakdown</h3>
-                  <ChartRow label="In Progress" value={aInProgress} total={aTotal} color="#3b82f6" />
-                  <ChartRow label="Completed" value={aCompleted} total={aTotal} color="#10b981" />
-                  <ChartRow label="Cancelled" value={aCancelled} total={aTotal} color="#ef4444" />
-                </div>
-                <div className="card">
-                  <h3 className="card-header">SLA Compliance (Active Cases)</h3>
-                  <ChartRow label="Within SLA" value={aInProgress - aBreached} total={aInProgress} color="#10b981" />
-                  <ChartRow label="Out of SLA" value={aBreached} total={aInProgress} color="#ef4444" />
-                </div>
-                <div className="card">
-                  <h3 className="card-header">Priority Distribution</h3>
-                  <ChartRow label="High Priority" value={aHigh} total={aTotal} color="#ef4444" />
-                  <ChartRow label="Medium Priority" value={aMed} total={aTotal} color="#f59e0b" />
-                  <ChartRow label="Low Priority" value={aLow} total={aTotal} color="#64748b" />
-                  {aNone > 0 && <ChartRow label="Unassigned" value={aNone} total={aTotal} color="#cbd5e1" />}
-                </div>
-              </div>
-
-              <div className="card" style={{ marginTop: '16px', padding: 0 }}>
-                <div style={{ padding: '16px', borderBottom: '1px solid #e2e8f0' }}>
-                  <h3 className="card-header" style={{ margin: 0 }}>Workload by PIC</h3>
-                  <p style={{ margin: '5px 0 0 0', color: '#64748b', fontSize: '13px' }}>Sorted by SLA breaches, then case count.</p>
-                </div>
-                <div className="table-container" style={{ border: 'none' }}>
-                  <table className="table">
-                    <thead>
-                      <tr>
-                        <th style={{ cursor: 'default' }}>PIC</th>
-                        <th style={{ cursor: 'default', textAlign: 'center' }}>Total Cases</th>
-                        <th style={{ cursor: 'default', textAlign: 'center' }}>In Progress</th>
-                        <th style={{ cursor: 'default', textAlign: 'center' }}>Completed</th>
-                        <th style={{ cursor: 'default', textAlign: 'center' }}>Out of SLA</th>
-                        <th style={{ cursor: 'default', textAlign: 'center' }}>Breach Rate</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {picRows.map(r => (
-                        <tr key={r.pic}>
-                          <td style={{ fontWeight: 600, color: '#0f172a' }}>{r.pic}</td>
-                          <td style={{ textAlign: 'center', fontWeight: 600 }}>{r.total}</td>
-                          <td style={{ textAlign: 'center', color: '#d97706', fontWeight: 600 }}>{r.open}</td>
-                          <td style={{ textAlign: 'center', color: '#059669', fontWeight: 600 }}>{r.done}</td>
-                          <td style={{ textAlign: 'center', fontWeight: 700, color: r.breach > 0 ? '#dc2626' : '#94a3b8' }}>{r.breach}</td>
-                          <td style={{ textAlign: 'center' }}>
-                            {r.open === 0
-                              ? <span style={{ color: '#94a3b8' }}>—</span>
-                              : <span className={`badge ${r.breach / r.open > 0.5 ? 'badge-red' : r.breach > 0 ? 'badge-yellow' : 'badge-green'}`}>
-                                  {Math.round((r.breach / r.open) * 100)}%
-                                </span>}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-              </>
-              )}
-            </>
-            );
-          })()}
-                              {activeTab === 'india' && (
+                </>
+              );
+            })()}
+          {activeTab === 'india' && (
             <>
               <div className="page-header">
                 <div className="page-header-text">
                   <h2>India Tracker (Staging)</h2>
-                  <p>{indiaStaging.length} cases · {indiaDuplicateMap.size} possible duplicates · {indiaNoIdCount} without ID#</p>
+                  <p>
+                    {indiaStaging.length} cases · {indiaDuplicateMap.size}{' '}
+                    possible duplicates · {indiaNoIdCount} without ID#
+                  </p>
                 </div>
                 <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                  <button onClick={handleBatchPromote} className="btn-action btn-success" disabled={indiaSelectedCount === 0}>
+                  <button
+                    onClick={handleBatchPromote}
+                    className="btn-action btn-success"
+                    disabled={indiaSelectedCount === 0}
+                  >
                     ✓ Add Selected ({indiaSelectedCount})
                   </button>
-                  <button onClick={handleBatchDelete} className="btn-action btn-danger" disabled={indiaSelectedCount === 0}>
+                  <button
+                    onClick={handleBatchDelete}
+                    className="btn-action btn-danger"
+                    disabled={indiaSelectedCount === 0}
+                  >
                     🗑 Delete Selected ({indiaSelectedCount})
                   </button>
-                  <button onClick={handleBulkDeleteNoId} className="btn-action btn-warning" disabled={indiaNoIdCount === 0}>
+                  <button
+                    onClick={handleBulkDeleteNoId}
+                    className="btn-action btn-warning"
+                    disabled={indiaNoIdCount === 0}
+                  >
                     🗑 Delete {indiaNoIdCount} No ID
                   </button>
-                  <button onClick={handleScanIndiaDupes} className="btn-action" disabled={indiaDupBusy}>
+                  <button
+                    onClick={handleScanIndiaDupes}
+                    className="btn-action"
+                    disabled={indiaDupBusy}
+                  >
                     {indiaDupBusy ? 'Scanning...' : '🔍 Scan for Duplicates'}
                   </button>
-                  <button onClick={handleScanIndiaStale} style={{ padding: '8px 14px', background: '#fff', border: '1px solid #f59e0b', color: '#b45309', borderRadius: 6, cursor: 'pointer', fontWeight: 600, marginLeft: 8 }}>
-              🧭 Scan for Stale Cases
-            </button>
+                  <button
+                    onClick={handleScanIndiaStale}
+                    style={{
+                      padding: '8px 14px',
+                      background: '#fff',
+                      border: '1px solid #f59e0b',
+                      color: '#b45309',
+                      borderRadius: 6,
+                      cursor: 'pointer',
+                      fontWeight: 600,
+                      marginLeft: 8,
+                    }}
+                  >
+                    🧭 Scan for Stale Cases
+                  </button>
                 </div>
               </div>
               {staleReport && (
-                <div className="card" style={{ marginBottom: '16px', borderColor: '#f59e0b' }}>
-                  {staleReport.loading ? <p className="card-subtitle">Scanning…</p> : (
+                <div
+                  className="card"
+                  style={{ marginBottom: '16px', borderColor: '#f59e0b' }}
+                >
+                  {staleReport.loading ? (
+                    <p className="card-subtitle">Scanning…</p>
+                  ) : (
                     <>
                       <h3 className="card-header" style={{ margin: 0 }}>
                         🧭 Stale Case Scan — nothing has been changed
                       </h3>
-                      <table style={{ borderCollapse: 'collapse', margin: '10px 0' }}>
+                      <table
+                        style={{ borderCollapse: 'collapse', margin: '10px 0' }}
+                      >
                         <tbody>
-                          <tr><td style={{ padding: '3px 14px 3px 0' }}>Case numbers in the uploaded file</td><td style={{ fontWeight: 700 }}>{staleReport.fileCount}</td></tr>
-                          <tr><td style={{ padding: '3px 14px 3px 0' }}>India cases in the database</td><td style={{ fontWeight: 700 }}>{staleReport.dbCount}</td></tr>
-                          <tr><td style={{ padding: '3px 14px 3px 0', color: '#15803d' }}>Matched — real, keep</td><td style={{ fontWeight: 700, color: '#15803d' }}>{staleReport.matched}</td></tr>
-                          <tr><td style={{ padding: '3px 14px 3px 0', color: '#b91c1c' }}>Stale — in DB but not in the file</td><td style={{ fontWeight: 700, color: '#b91c1c' }}>{staleReport.stale}</td></tr>
-                          <tr><td style={{ padding: '3px 14px 3px 0' }}>In the file but missing from the DB</td><td style={{ fontWeight: 700 }}>{staleReport.missingFromDb}</td></tr>
+                          <tr>
+                            <td style={{ padding: '3px 14px 3px 0' }}>
+                              Case numbers in the uploaded file
+                            </td>
+                            <td style={{ fontWeight: 700 }}>
+                              {staleReport.fileCount}
+                            </td>
+                          </tr>
+                          <tr>
+                            <td style={{ padding: '3px 14px 3px 0' }}>
+                              India cases in the database
+                            </td>
+                            <td style={{ fontWeight: 700 }}>
+                              {staleReport.dbCount}
+                            </td>
+                          </tr>
+                          <tr>
+                            <td
+                              style={{
+                                padding: '3px 14px 3px 0',
+                                color: '#15803d',
+                              }}
+                            >
+                              Matched — real, keep
+                            </td>
+                            <td style={{ fontWeight: 700, color: '#15803d' }}>
+                              {staleReport.matched}
+                            </td>
+                          </tr>
+                          <tr>
+                            <td
+                              style={{
+                                padding: '3px 14px 3px 0',
+                                color: '#b91c1c',
+                              }}
+                            >
+                              Stale — in DB but not in the file
+                            </td>
+                            <td style={{ fontWeight: 700, color: '#b91c1c' }}>
+                              {staleReport.stale}
+                            </td>
+                          </tr>
+                          <tr>
+                            <td style={{ padding: '3px 14px 3px 0' }}>
+                              In the file but missing from the DB
+                            </td>
+                            <td style={{ fontWeight: 700 }}>
+                              {staleReport.missingFromDb}
+                            </td>
+                          </tr>
                         </tbody>
                       </table>
-                      <div style={{ fontWeight: 600, marginBottom: 4 }}>Stale cases by year created:</div>
-                      <div style={{ marginBottom: 10 }}>
-                        {Object.keys(staleReport.byYear).sort().map(y => (
-                          <div key={y}>• {y}: {staleReport.byYear[y]} case(s)</div>
-                        ))}
+                      <div style={{ fontWeight: 600, marginBottom: 4 }}>
+                        Stale cases by year created:
                       </div>
-                      <div style={{ fontWeight: 600, marginBottom: 4 }}>Sample of up to 20 stale cases:</div>
-                      <table style={{ borderCollapse: 'collapse', fontSize: 12 }}>
+                      <div style={{ marginBottom: 10 }}>
+                        {Object.keys(staleReport.byYear)
+                          .sort()
+                          .map((y) => (
+                            <div key={y}>
+                              • {y}: {staleReport.byYear[y]} case(s)
+                            </div>
+                          ))}
+                      </div>
+                      <div style={{ fontWeight: 600, marginBottom: 4 }}>
+                        Sample of up to 20 stale cases:
+                      </div>
+                      <table
+                        style={{ borderCollapse: 'collapse', fontSize: 12 }}
+                      >
                         <thead>
                           <tr style={{ background: '#fef3c7' }}>
-                            <th style={{ padding: '4px 10px', textAlign: 'left' }}>Case Number</th>
-                            <th style={{ padding: '4px 10px', textAlign: 'left' }}>Created</th>
-                            <th style={{ padding: '4px 10px', textAlign: 'left' }}>Status</th>
-                            <th style={{ padding: '4px 10px', textAlign: 'left' }}>PIC</th>
+                            <th
+                              style={{ padding: '4px 10px', textAlign: 'left' }}
+                            >
+                              Case Number
+                            </th>
+                            <th
+                              style={{ padding: '4px 10px', textAlign: 'left' }}
+                            >
+                              Created
+                            </th>
+                            <th
+                              style={{ padding: '4px 10px', textAlign: 'left' }}
+                            >
+                              Status
+                            </th>
+                            <th
+                              style={{ padding: '4px 10px', textAlign: 'left' }}
+                            >
+                              PIC
+                            </th>
                           </tr>
                         </thead>
                         <tbody>
-                          {staleReport.sample.map(c => (
+                          {staleReport.sample.map((c) => (
                             <tr key={c.case_number}>
-                              <td style={{ padding: '3px 10px' }}>{c.case_number}</td>
-                              <td style={{ padding: '3px 10px' }}>{c.created_on || '—'}</td>
-                              <td style={{ padding: '3px 10px' }}>{c.case_status || '—'}</td>
-                              <td style={{ padding: '3px 10px' }}>{c.pic || '—'}</td>
+                              <td style={{ padding: '3px 10px' }}>
+                                {c.case_number}
+                              </td>
+                              <td style={{ padding: '3px 10px' }}>
+                                {c.created_on || '—'}
+                              </td>
+                              <td style={{ padding: '3px 10px' }}>
+                                {c.case_status || '—'}
+                              </td>
+                              <td style={{ padding: '3px 10px' }}>
+                                {c.pic || '—'}
+                              </td>
                             </tr>
                           ))}
                         </tbody>
@@ -4006,15 +9860,36 @@ const [wipImportProgress, setWipImportProgress] = useState('');
                 </div>
               )}
               {indiaDupReport && (
-                <div className="card" style={{ marginBottom: '16px', borderColor: indiaDupReport.dupeCases.length > 0 ? '#fbbf24' : '#bbf7d0' }}>
+                <div
+                  className="card"
+                  style={{
+                    marginBottom: '16px',
+                    borderColor:
+                      indiaDupReport.dupeCases.length > 0
+                        ? '#fbbf24'
+                        : '#bbf7d0',
+                  }}
+                >
                   <h3 className="card-header" style={{ margin: 0 }}>
-                    🔍 Duplicate Scan — {indiaDupReport.dupeCases.length === 0 ? 'all clear' : `${indiaDupReport.dupeCases.length} case(s) with more than one record`}
+                    🔍 Duplicate Scan —{' '}
+                    {indiaDupReport.dupeCases.length === 0
+                      ? 'all clear'
+                      : `${indiaDupReport.dupeCases.length} case(s) with more than one record`}
                   </h3>
                   <p className="card-subtitle">
-                    Scanned {indiaDupReport.totalRows} record(s) across {indiaDupReport.totalCases} India case(s). Nothing has been changed.
+                    Scanned {indiaDupReport.totalRows} record(s) across{' '}
+                    {indiaDupReport.totalCases} India case(s). Nothing has been
+                    changed.
                   </p>
                   {indiaDupReport.dupeCases.length > 0 && (
-                    <div style={{ maxHeight: '340px', overflow: 'auto', border: '1px solid #e2e8f0', borderRadius: '6px' }}>
+                    <div
+                      style={{
+                        maxHeight: '340px',
+                        overflow: 'auto',
+                        border: '1px solid #e2e8f0',
+                        borderRadius: '6px',
+                      }}
+                    >
                       <table className="table">
                         <thead>
                           <tr>
@@ -4028,12 +9903,30 @@ const [wipImportProgress, setWipImportProgress] = useState('');
                           {indiaDupReport.sample.map(([cn, rows]) => (
                             <tr key={cn}>
                               <td style={{ fontWeight: 600 }}>{cn}</td>
-                              <td style={{ textAlign: 'center', fontWeight: 700, color: '#d97706' }}>{rows.length}</td>
-                              <td style={{ fontSize: '11px' }}>
-                                {rows.map((r, i) => <div key={i}>{r.respondent_name || r.complainant_name || '—'}</div>)}
+                              <td
+                                style={{
+                                  textAlign: 'center',
+                                  fontWeight: 700,
+                                  color: '#d97706',
+                                }}
+                              >
+                                {rows.length}
                               </td>
                               <td style={{ fontSize: '11px' }}>
-                                {rows.map((r, i) => <div key={i}>{r.respondent_id || r.complainant_id || '—'}</div>)}
+                                {rows.map((r, i) => (
+                                  <div key={i}>
+                                    {r.respondent_name ||
+                                      r.complainant_name ||
+                                      '—'}
+                                  </div>
+                                ))}
+                              </td>
+                              <td style={{ fontSize: '11px' }}>
+                                {rows.map((r, i) => (
+                                  <div key={i}>
+                                    {r.respondent_id || r.complainant_id || '—'}
+                                  </div>
+                                ))}
                               </td>
                             </tr>
                           ))}
@@ -4043,32 +9936,101 @@ const [wipImportProgress, setWipImportProgress] = useState('');
                   )}
                   {(() => {
                     const spread = {};
-                    indiaDupReport.dupeCases.forEach(([, rows]) => { spread[rows.length] = (spread[rows.length] || 0) + 1; });
-                    const idMismatch = indiaDupReport.dupeCases.filter(([, rows]) => {
-                      const ids = new Set(rows.map(r => (r.respondent_id || r.complainant_id || '').trim().toUpperCase()));
-                      return ids.size > 1;
+                    indiaDupReport.dupeCases.forEach(([, rows]) => {
+                      spread[rows.length] = (spread[rows.length] || 0) + 1;
                     });
-                    const blankIdPairs = indiaDupReport.dupeCases.filter(([, rows]) =>
-                      rows.some(r => !(r.respondent_id || r.complainant_id)) &&
-                      rows.some(r => (r.respondent_id || r.complainant_id))
+                    const idMismatch = indiaDupReport.dupeCases.filter(
+                      ([, rows]) => {
+                        const ids = new Set(
+                          rows.map((r) =>
+                            (r.respondent_id || r.complainant_id || '')
+                              .trim()
+                              .toUpperCase()
+                          )
+                        );
+                        return ids.size > 1;
+                      }
+                    );
+                    const blankIdPairs = indiaDupReport.dupeCases.filter(
+                      ([, rows]) =>
+                        rows.some(
+                          (r) => !(r.respondent_id || r.complainant_id)
+                        ) &&
+                        rows.some((r) => r.respondent_id || r.complainant_id)
                     );
                     return (
-                      <div style={{ marginTop: '10px', fontSize: '13px', color: '#334155' }}>
-                        <div style={{ fontWeight: 600, marginBottom: '4px' }}>Breakdown of all {indiaDupReport.dupeCases.length} duplicate case(s):</div>
-                        {Object.entries(spread).sort().map(([n, count]) => (
-                          <div key={n}>• {count} case(s) have <b>{n} rows</b></div>
-                        ))}
-                        <div style={{ marginTop: '6px' }}>• <b>{blankIdPairs.length}</b> are an old blank-ID row sitting beside a new row that has the ID</div>
-                        <div>• <b>{idMismatch.length}</b> have <b>different</b> IDs on each row — these need your eyes, not a bulk action</div>
+                      <div
+                        style={{
+                          marginTop: '10px',
+                          fontSize: '13px',
+                          color: '#334155',
+                        }}
+                      >
+                        <div style={{ fontWeight: 600, marginBottom: '4px' }}>
+                          Breakdown of all {indiaDupReport.dupeCases.length}{' '}
+                          duplicate case(s):
+                        </div>
+                        {Object.entries(spread)
+                          .sort()
+                          .map(([n, count]) => (
+                            <div key={n}>
+                              • {count} case(s) have <b>{n} rows</b>
+                            </div>
+                          ))}
+                        <div style={{ marginTop: '6px' }}>
+                          • <b>{blankIdPairs.length}</b> are an old blank-ID row
+                          sitting beside a new row that has the ID
+                        </div>
+                        <div>
+                          • <b>{idMismatch.length}</b> have <b>different</b> IDs
+                          on each row — these need your eyes, not a bulk action
+                        </div>
                       </div>
                     );
                   })()}
                 </div>
               )}
               <div className="table-container">
-                <div style={{ padding: '16px', borderBottom: '1px solid #e2e8f0', display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
-                  <input type="text" placeholder="Search case #, person, ID..." value={indiaSearch} onChange={(e) => { setIndiaSearch(e.target.value); setIndiaPage(1); }} style={{ flex: 1, minWidth: '200px', padding: '10px 16px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '14px', outline: 'none', color: '#334155' }} />
-                  <select value={indiaMatchFilter} onChange={(e) => setIndiaMatchFilter(e.target.value)} style={{ padding: '10px 16px', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '14px', color: '#334155' }}>
+                <div
+                  style={{
+                    padding: '16px',
+                    borderBottom: '1px solid #e2e8f0',
+                    display: 'flex',
+                    gap: '12px',
+                    flexWrap: 'wrap',
+                    alignItems: 'center',
+                  }}
+                >
+                  <input
+                    type="text"
+                    placeholder="Search case #, person, ID..."
+                    value={indiaSearch}
+                    onChange={(e) => {
+                      setIndiaSearch(e.target.value);
+                      setIndiaPage(1);
+                    }}
+                    style={{
+                      flex: 1,
+                      minWidth: '200px',
+                      padding: '10px 16px',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: '8px',
+                      fontSize: '14px',
+                      outline: 'none',
+                      color: '#334155',
+                    }}
+                  />
+                  <select
+                    value={indiaMatchFilter}
+                    onChange={(e) => setIndiaMatchFilter(e.target.value)}
+                    style={{
+                      padding: '10px 16px',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: '8px',
+                      fontSize: '14px',
+                      color: '#334155',
+                    }}
+                  >
                     <option value="">All Cases</option>
                     <option value="matched">⚠ Possible Duplicates Only</option>
                     <option value="unmatched">No Match Found</option>
@@ -4077,63 +10039,239 @@ const [wipImportProgress, setWipImportProgress] = useState('');
 
                 <table className="table">
                   <thead>
-                  <tr>
+                    <tr>
                       <th style={{ width: '30px' }}>
-                        <input type="checkbox" checked={indiaFiltered.length > 0 && indiaFiltered.every(c => indiaSelectedCases[c.case_number])} onChange={handleSelectAllIndia} />
+                        <input
+                          type="checkbox"
+                          checked={
+                            indiaFiltered.length > 0 &&
+                            indiaFiltered.every(
+                              (c) => indiaSelectedCases[c.case_number]
+                            )
+                          }
+                          onChange={handleSelectAllIndia}
+                        />
                       </th>
-                      <th onClick={() => requestIndiaSort('case_number')} style={{ cursor: 'pointer' }}>Case Number {indiaSortConfig.key === 'case_number' ? (indiaSortConfig.direction === 'ascending' ? '▲' : '▼') : '↕'}</th>
-                      <th onClick={() => requestIndiaSort('role')} style={{ cursor: 'pointer' }}>Role {indiaSortConfig.key === 'role' ? (indiaSortConfig.direction === 'ascending' ? '▲' : '▼') : '↕'}</th>
-                      <th onClick={() => requestIndiaSort('person_name')} style={{ cursor: 'pointer' }}>Person {indiaSortConfig.key === 'person_name' ? (indiaSortConfig.direction === 'ascending' ? '▲' : '▼') : '↕'}</th>
-                      <th onClick={() => requestIndiaSort('person_id')} style={{ cursor: 'pointer' }}>ID# {indiaSortConfig.key === 'person_id' ? (indiaSortConfig.direction === 'ascending' ? '▲' : '▼') : '↕'}</th>
-                      <th onClick={() => requestIndiaSort('case_status')} style={{ cursor: 'pointer' }}>Status {indiaSortConfig.key === 'case_status' ? (indiaSortConfig.direction === 'ascending' ? '▲' : '▼') : '↕'}</th>
+                      <th
+                        onClick={() => requestIndiaSort('case_number')}
+                        style={{ cursor: 'pointer' }}
+                      >
+                        Case Number{' '}
+                        {indiaSortConfig.key === 'case_number'
+                          ? indiaSortConfig.direction === 'ascending'
+                            ? '▲'
+                            : '▼'
+                          : '↕'}
+                      </th>
+                      <th
+                        onClick={() => requestIndiaSort('role')}
+                        style={{ cursor: 'pointer' }}
+                      >
+                        Role{' '}
+                        {indiaSortConfig.key === 'role'
+                          ? indiaSortConfig.direction === 'ascending'
+                            ? '▲'
+                            : '▼'
+                          : '↕'}
+                      </th>
+                      <th
+                        onClick={() => requestIndiaSort('person_name')}
+                        style={{ cursor: 'pointer' }}
+                      >
+                        Person{' '}
+                        {indiaSortConfig.key === 'person_name'
+                          ? indiaSortConfig.direction === 'ascending'
+                            ? '▲'
+                            : '▼'
+                          : '↕'}
+                      </th>
+                      <th
+                        onClick={() => requestIndiaSort('person_id')}
+                        style={{ cursor: 'pointer' }}
+                      >
+                        ID#{' '}
+                        {indiaSortConfig.key === 'person_id'
+                          ? indiaSortConfig.direction === 'ascending'
+                            ? '▲'
+                            : '▼'
+                          : '↕'}
+                      </th>
+                      <th
+                        onClick={() => requestIndiaSort('case_status')}
+                        style={{ cursor: 'pointer' }}
+                      >
+                        Status{' '}
+                        {indiaSortConfig.key === 'case_status'
+                          ? indiaSortConfig.direction === 'ascending'
+                            ? '▲'
+                            : '▼'
+                          : '↕'}
+                      </th>
                       <th>Notice Type</th>
-                      <th onClick={() => requestIndiaSort('pic')} style={{ cursor: 'pointer' }}>PIC {indiaSortConfig.key === 'pic' ? (indiaSortConfig.direction === 'ascending' ? '▲' : '▼') : '↕'}</th>
-                      <th onClick={() => requestIndiaSort('created_on')} style={{ cursor: 'pointer' }}>Created {indiaSortConfig.key === 'created_on' ? (indiaSortConfig.direction === 'ascending' ? '▲' : '▼') : '↕'}</th>
+                      <th
+                        onClick={() => requestIndiaSort('pic')}
+                        style={{ cursor: 'pointer' }}
+                      >
+                        PIC{' '}
+                        {indiaSortConfig.key === 'pic'
+                          ? indiaSortConfig.direction === 'ascending'
+                            ? '▲'
+                            : '▼'
+                          : '↕'}
+                      </th>
+                      <th
+                        onClick={() => requestIndiaSort('created_on')}
+                        style={{ cursor: 'pointer' }}
+                      >
+                        Created{' '}
+                        {indiaSortConfig.key === 'created_on'
+                          ? indiaSortConfig.direction === 'ascending'
+                            ? '▲'
+                            : '▼'
+                          : '↕'}
+                      </th>
                       <th>Possible Match</th>
                       <th style={{ width: '100px' }}>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                  {indiaCurrentPage.length === 0 ? (
-                      <tr><td colSpan="11" style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>
-                        {indiaStaging.length === 0 ? '🎉 India tab is empty — all cases reviewed!' : 'No cases match your filter.'}
-                      </td></tr>
+                    {indiaCurrentPage.length === 0 ? (
+                      <tr>
+                        <td
+                          colSpan="11"
+                          style={{
+                            textAlign: 'center',
+                            padding: '40px',
+                            color: '#94a3b8',
+                          }}
+                        >
+                          {indiaStaging.length === 0
+                            ? '🎉 India tab is empty — all cases reviewed!'
+                            : 'No cases match your filter.'}
+                        </td>
+                      </tr>
                     ) : (
-                      indiaCurrentPage.map(c => {
+                      indiaCurrentPage.map((c) => {
                         const da = (c.disciplinary_actions || [])[0] || {};
-                        const isRespondent = da.respondent_name || da.respondent_id;
-                        const personName = isRespondent ? da.respondent_name : da.complainant_name;
-                        const personId = isRespondent ? da.respondent_id : da.complainant_id;
-                        const fullCustomer = personId ? `IR:${personId} ${personName || ''}` : (personName || '—');
-                        const noticeType = (c.remarks || '').replace(/^\[|\]$/g, '');
-                        const matchCaseNum = indiaDuplicateMap.get(c.case_number);
-                        const matchCaseData = matchCaseNum ? cases.find(x => x.case_number === matchCaseNum) : null;
+                        const isRespondent =
+                          da.respondent_name || da.respondent_id;
+                        const personName = isRespondent
+                          ? da.respondent_name
+                          : da.complainant_name;
+                        const personId = isRespondent
+                          ? da.respondent_id
+                          : da.complainant_id;
+                        const fullCustomer = personId
+                          ? `IR:${personId} ${personName || ''}`
+                          : personName || '—';
+                        const noticeType = (c.remarks || '').replace(
+                          /^\[|\]$/g,
+                          ''
+                        );
+                        const matchCaseNum = indiaDuplicateMap.get(
+                          c.case_number
+                        );
+                        const matchCaseData = matchCaseNum
+                          ? cases.find((x) => x.case_number === matchCaseNum)
+                          : null;
                         return (
-                          <tr key={c.case_number} style={indiaSelectedCases[c.case_number] ? { backgroundColor: '#f0fdf4' } : {}}>
-                            <td><input type="checkbox" checked={!!indiaSelectedCases[c.case_number]} onChange={() => handleToggleIndiaCase(c.case_number)} /></td>
-                            <td style={{ fontWeight: 600, color: '#0f172a' }}>{c.case_number}</td>
-                            <td>{isRespondent ? <span className="badge badge-red">Respondent</span> : <span className="badge badge-blue">Complainant</span>}</td>
-                            <td style={{ fontWeight: 500, fontSize: '12px' }}>{fullCustomer}</td>
-                            <td style={{ fontSize: '11px', color: '#64748b' }}>{personId || 'no ID'}</td>
-                            <td><span className={`badge ${c.case_status === 'IN PROGRESS' ? 'badge-blue' : c.case_status === 'CANCELLED' ? 'badge-grey' : c.case_status === 'COMPLETED' ? 'badge-green' : 'badge-yellow'}`}>{c.case_status}</span></td>
-                            <td style={{ fontSize: '11px' }}>{noticeType || '—'}</td>
+                          <tr
+                            key={c.case_number}
+                            style={
+                              indiaSelectedCases[c.case_number]
+                                ? { backgroundColor: '#f0fdf4' }
+                                : {}
+                            }
+                          >
+                            <td>
+                              <input
+                                type="checkbox"
+                                checked={!!indiaSelectedCases[c.case_number]}
+                                onChange={() =>
+                                  handleToggleIndiaCase(c.case_number)
+                                }
+                              />
+                            </td>
+                            <td style={{ fontWeight: 600, color: '#0f172a' }}>
+                              {c.case_number}
+                            </td>
+                            <td>
+                              {isRespondent ? (
+                                <span className="badge badge-red">
+                                  Respondent
+                                </span>
+                              ) : (
+                                <span className="badge badge-blue">
+                                  Complainant
+                                </span>
+                              )}
+                            </td>
+                            <td style={{ fontWeight: 500, fontSize: '12px' }}>
+                              {fullCustomer}
+                            </td>
+                            <td style={{ fontSize: '11px', color: '#64748b' }}>
+                              {personId || 'no ID'}
+                            </td>
+                            <td>
+                              <span
+                                className={`badge ${
+                                  c.case_status === 'IN PROGRESS'
+                                    ? 'badge-blue'
+                                    : c.case_status === 'CANCELLED'
+                                    ? 'badge-grey'
+                                    : c.case_status === 'COMPLETED'
+                                    ? 'badge-green'
+                                    : 'badge-yellow'
+                                }`}
+                              >
+                                {c.case_status}
+                              </span>
+                            </td>
+                            <td style={{ fontSize: '11px' }}>
+                              {noticeType || '—'}
+                            </td>
                             <td style={{ fontSize: '11px' }}>{c.pic || '—'}</td>
-                            <td style={{ fontSize: '11px' }}>{c.created_on || '—'}</td>
+                            <td style={{ fontSize: '11px' }}>
+                              {c.created_on || '—'}
+                            </td>
                             <td>
                               {matchCaseNum ? (
                                 <div>
-                                  <span className="badge badge-red">⚠ {matchCaseNum}</span>
+                                  <span className="badge badge-red">
+                                    ⚠ {matchCaseNum}
+                                  </span>
                                   {matchCaseData && (
-                                    <div style={{ fontSize: '10px', color: '#64748b', marginTop: '2px' }}>
-                                      {matchCaseData.case_status} | {matchCaseData.pic || '—'}
+                                    <div
+                                      style={{
+                                        fontSize: '10px',
+                                        color: '#64748b',
+                                        marginTop: '2px',
+                                      }}
+                                    >
+                                      {matchCaseData.case_status} |{' '}
+                                      {matchCaseData.pic || '—'}
                                     </div>
                                   )}
                                 </div>
-                              ) : (<span style={{ color: '#94a3b8' }}>—</span>)}
+                              ) : (
+                                <span style={{ color: '#94a3b8' }}>—</span>
+                              )}
                             </td>
                             <td>
-                              <button onClick={() => handlePromoteCase(c.case_number)} className="btn-action btn-success">✓</button>
-                              <button onClick={() => handleDeleteStagingCase(c.case_number)} className="btn-action btn-danger">🗑</button>
+                              <button
+                                onClick={() => handlePromoteCase(c.case_number)}
+                                className="btn-action btn-success"
+                              >
+                                ✓
+                              </button>
+                              <button
+                                onClick={() =>
+                                  handleDeleteStagingCase(c.case_number)
+                                }
+                                className="btn-action btn-danger"
+                              >
+                                🗑
+                              </button>
                             </td>
                           </tr>
                         );
@@ -4143,12 +10281,38 @@ const [wipImportProgress, setWipImportProgress] = useState('');
                 </table>
 
                 <div className="pagination">
-                  <button onClick={() => setIndiaPage(prev => Math.max(1, prev - 1))} disabled={indiaPage === 1} className="btn-page">← Previous</button>
+                  <button
+                    onClick={() =>
+                      setIndiaPage((prev) => Math.max(1, prev - 1))
+                    }
+                    disabled={indiaPage === 1}
+                    className="btn-page"
+                  >
+                    ← Previous
+                  </button>
                   <span style={{ color: '#64748b', fontSize: '13px' }}>
-                    Page {indiaPage} of {indiaTotalPages || 1} · {indiaSorted.length} cases
-                    {indiaSelectedCount > 0 && <span style={{ color: '#059669', fontWeight: 600 }}> · {indiaSelectedCount} selected (all pages)</span>}
+                    Page {indiaPage} of {indiaTotalPages || 1} ·{' '}
+                    {indiaSorted.length} cases
+                    {indiaSelectedCount > 0 && (
+                      <span style={{ color: '#059669', fontWeight: 600 }}>
+                        {' '}
+                        · {indiaSelectedCount} selected (all pages)
+                      </span>
+                    )}
                   </span>
-                  <button onClick={() => setIndiaPage(prev => Math.min(indiaTotalPages, prev + 1))} disabled={indiaPage === indiaTotalPages || indiaTotalPages === 0} className="btn-page">Next →</button>
+                  <button
+                    onClick={() =>
+                      setIndiaPage((prev) =>
+                        Math.min(indiaTotalPages, prev + 1)
+                      )
+                    }
+                    disabled={
+                      indiaPage === indiaTotalPages || indiaTotalPages === 0
+                    }
+                    className="btn-page"
+                  >
+                    Next →
+                  </button>
                 </div>
               </div>
             </>
@@ -4163,8 +10327,18 @@ function ChartRow({ label, value, total, color }) {
   const percent = total > 0 ? (value / total) * 100 : 0;
   return (
     <div className="chart-row">
-      <div className="chart-label"><span style={{ fontWeight: 500, color: '#334155' }}>{label}</span><span style={{ color: '#64748b' }}>{value} ({percent.toFixed(1)}%)</span></div>
-      <div className="chart-track"><div className="chart-fill" style={{ width: `${percent}%`, backgroundColor: color }}></div></div>
+      <div className="chart-label">
+        <span style={{ fontWeight: 500, color: '#334155' }}>{label}</span>
+        <span style={{ color: '#64748b' }}>
+          {value} ({percent.toFixed(1)}%)
+        </span>
+      </div>
+      <div className="chart-track">
+        <div
+          className="chart-fill"
+          style={{ width: `${percent}%`, backgroundColor: color }}
+        ></div>
+      </div>
     </div>
   );
 }
