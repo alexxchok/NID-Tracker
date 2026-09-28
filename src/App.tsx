@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import * as XLSX from 'xlsx';
+import CaseSummary, { CaseSummaryButton } from './CaseSummary';
 
 const supabaseUrl = 'https://yymvagbwxdaxrldrhmtm.supabase.co';
 const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl5bXZhZ2J3eGRheHJsZHJobXRtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY2OTEyMjcsImV4cCI6MjEwMjI2NzIyN30.W6WFGXzR7gMU0ln-vfMIJlsxwctWqnCv5Cb7qW8UXXY';
@@ -62,6 +63,15 @@ const addBusinessDays = (startDate, daysToAdd) => {
   return `${y}-${m}-${d}`;
 };
 
+// ==== SLA clock start: reactivation date if the case was reopened, otherwise the created date ====
+const toLocalDateStr = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const slaStartDate = (c) => {
+  if (c && c.reactivated_at) {
+    const d = new Date(c.reactivated_at);
+    if (!isNaN(d.getTime())) return toLocalDateStr(d);
+  }
+  return (c && c.created_on) || null;
+};
 // ==== ADMIN: count business days between a start date and a due date ====
 const businessDaysFromStart = (startDate, dueDate) => {
   if (!startDate || !dueDate) return null;
@@ -668,7 +678,7 @@ setEditingRespondentId(null);
   };
 
   const handleReactivateCase = async (caseNum) => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = toLocalDateStr(new Date());
     const newSlaDate = addBusinessDays(today, STANDARD_CASE_SLA_DAYS);
     const { error } = await supabase.from('cases').update({
       case_status: 'IN PROGRESS', date_completed: null, sla_due_date: newSlaDate, priority: calculatePriority(newSlaDate), modified_by_email: userEmail, reactivated_at: new Date().toISOString(), last_modified: new Date().toISOString()
@@ -689,7 +699,7 @@ const openCaseEdit = () => {
     case_number: c.case_number || '',
     pic: c.pic || '', country: c.country || '', sla_due_date: c.sla_due_date || '',
     created_on: c.created_on || '',
-    sla_days: businessDaysFromStart(c.created_on, c.sla_due_date) ?? '',
+    sla_days: businessDaysFromStart(slaStartDate(c), c.sla_due_date) ?? '', sla_base: c.reactivated_at ? slaStartDate(c) : '',
     priority: c.priority || 'Medium', stage: c.stage || '',
     case_status: c.case_status || 'IN PROGRESS', remarks: c.remarks || '', date_completed: c.date_completed || '',
     case_folder_no: c.case_folder_no || '',
@@ -726,6 +736,10 @@ const handleUpdateCase = async (e) => {
       if (caseForm.priority === c.priority) limited.priority = 'Low';
     } else if (!isClosed(caseForm.case_status) && isClosed(c.case_status)) {
       limited.date_completed = null;
+        const restartDate = addBusinessDays(toLocalDateStr(new Date()), STANDARD_CASE_SLA_DAYS);
+        limited.sla_due_date = restartDate;
+        limited.priority = calculatePriority(restartDate);
+        limited.reactivated_at = new Date().toISOString();
     }
     const { error } = await supabase.from('cases').update(limited).eq('case_number', selectedCase);
     if (error) { alert('Error updating case: ' + error.message); return; }
@@ -818,6 +832,12 @@ const handleUpdateCase = async (e) => {
     }
   } else if (!isClosed(caseForm.case_status) && isClosed(c.case_status)) {
     updates.date_completed = null;
+        if (!cleanVal(caseForm.sla_due_date) || caseForm.sla_due_date === c.sla_due_date) {
+          const restartDate = addBusinessDays(toLocalDateStr(new Date()), STANDARD_CASE_SLA_DAYS);
+          updates.sla_due_date = restartDate;
+          updates.priority = calculatePriority(restartDate);
+        }
+        updates.reactivated_at = new Date().toISOString();
   }
   const { error } = await supabase.from('cases').update(updates).eq('case_number', caseNumToUse);
   if (error) { alert('Error updating case: ' + error.message); return; }
@@ -2877,7 +2897,8 @@ const [wipImportProgress, setWipImportProgress] = useState('');
                                         <div style={{ textAlign: 'right' }}>
                                           <span className="expanded-label">SLA DUE DATE</span>
                                           <div className="expanded-value">{c.sla_due_date || '—'}</div>
-                                          <div className="expanded-sub">Created: {c.created_on || '—'}{(() => { const d = businessDaysFromStart(c.created_on, c.sla_due_date); return d != null ? ` · ${d} working days` : ''; })()}</div>
+                                          <div className="expanded-sub">Created: {c.created_on || '—'}{!c.reactivated_at && (() => { const d = businessDaysFromStart(c.created_on, c.sla_due_date); return d != null ? ` · ${d} working days` : ''; })()}</div>
+{c.reactivated_at && <div className="expanded-sub">SLA restarted: {slaStartDate(c)}{(() => { const d = businessDaysFromStart(slaStartDate(c), c.sla_due_date); return d != null ? ` · ${d} working days` : ''; })()}</div>}
 {renderClosureInfo(c)}
 {renderModifiedInfo(c)}
                                         </div>
@@ -2907,6 +2928,7 @@ const [wipImportProgress, setWipImportProgress] = useState('');
     🔗 Case Findings
   </button>
 )}
+<CaseSummaryButton supabase={supabase} caseRow={c} userEmail={userEmail} isAdmin={isAdmin} />
 {!editingCase && (
   <button className="btn-admin" onClick={openCaseEdit}>✏️ Edit Case</button>
 )}
@@ -2922,7 +2944,7 @@ const [wipImportProgress, setWipImportProgress] = useState('');
       <div className="wip-input-group"><label>{!isAdmin && '🔒 '}Case Number *</label><input type="text" value={caseForm.case_number} disabled={!isAdmin} onChange={(e) => setCaseForm({ ...caseForm, case_number: e.target.value })} required /></div>
       <div className="wip-input-group"><label>{!isAdmin && '🔒 '}PIC</label><input type="text" value={caseForm.pic} disabled={!isAdmin} onChange={(e) => setCaseForm({ ...caseForm, pic: e.target.value })} /></div>
       <div className="wip-input-group"><label>{!isAdmin && '🔒 '}Case Country</label><input type="text" value={caseForm.country} disabled={!isAdmin} onChange={(e) => setCaseForm({ ...caseForm, country: e.target.value })} /></div>
-      <div className="wip-input-group"><label>{!isAdmin && '🔒 '}SLA Days (working days)</label><input type="number" placeholder="auto from Created On" value={caseForm.sla_days} disabled={!isAdmin} onChange={(e) => { const days = parseInt(e.target.value, 10); const base = caseForm.created_on || (cases.find(x => x.case_number === selectedCase) || {}).created_on; if (!isNaN(days) && days > 0 && base) { setCaseForm({ ...caseForm, sla_days: days, sla_due_date: addBusinessDays(base, days) }); } else { setCaseForm({ ...caseForm, sla_days: e.target.value }); } }} /></div>
+      <div className="wip-input-group"><label>{!isAdmin && '🔒 '}SLA Days (working days)</label><input type="number" placeholder="auto from Created On" value={caseForm.sla_days} disabled={!isAdmin} onChange={(e) => { const days = parseInt(e.target.value, 10); const base = caseForm.sla_base || caseForm.created_on || (cases.find(x => x.case_number === selectedCase) || {}).created_on; if (!isNaN(days) && days > 0 && base) { setCaseForm({ ...caseForm, sla_days: days, sla_due_date: addBusinessDays(base, days) }); } else { setCaseForm({ ...caseForm, sla_days: e.target.value }); } }} /></div>
       <div className="wip-input-group"><label>{!isAdmin && '🔒 '}SLA Due Date</label><input type="date" value={caseForm.sla_due_date} disabled={!isAdmin} onChange={(e) => setCaseForm({ ...caseForm, sla_due_date: e.target.value })} /></div>
       <div className="wip-input-group"><label>{!isAdmin && '🔒 '}Created On</label><input type="date" value={caseForm.created_on} disabled={!isAdmin} onChange={(e) => setCaseForm({ ...caseForm, created_on: e.target.value })} /></div>
       <div className="wip-input-group"><label>Priority</label>
