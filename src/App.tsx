@@ -8551,15 +8551,32 @@ function Dashboard({ userEmail, onSignOut }) {
                       groups.set(r.case_number, []);
                     groups.get(r.case_number).push(r);
                   });
+                  // Look up each case's own SLA due date (restarted date if reactivated)
+                  const slaMap = new Map();
+                  (cases || []).forEach((c) => {
+                    if (c && c.case_number && c.sla_due_date)
+                      slaMap.set(
+                        c.case_number,
+                        String(c.sla_due_date).slice(0, 10)
+                      );
+                  });
+                  // Cases with no SLA date go after cases that have one
+                  const slaOf = (num) => slaMap.get(num) || '9999-12-31';
                   const worst = (arr) =>
                     arr.reduce(
                       (m, r) => (r.days === null ? m : Math.min(m, r.days)),
                       9999
                     );
                   const ordered = Array.from(groups.entries()).sort((a, b) => {
+                    // 1. Open cases first, closed cases last
                     const aC = isClosed(a[1][0].case_status),
                       bC = isClosed(b[1][0].case_status);
                     if (aC !== bC) return aC ? 1 : -1;
+                    // 2. Earliest case SLA due date first
+                    const aS = slaOf(a[0]),
+                      bS = slaOf(b[0]);
+                    if (aS !== bS) return aS < bS ? -1 : 1;
+                    // 3. Same SLA date: item overdue the longest goes first
                     return worst(a[1]) - worst(b[1]);
                   });
 
