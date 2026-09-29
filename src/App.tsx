@@ -1820,9 +1820,12 @@ function Dashboard({ userEmail, onSignOut }) {
         sub_actions: [],
       };
       if (bulkJournalText.trim()) {
+        const jDate = toLocalDateStr(new Date());
         entry.sub_actions.push({
           desc: bulkJournalText.trim(),
-          date: new Date().toISOString().split('T')[0],
+          date: jDate,
+          sla_days: 2,
+          expiry_date: addBusinessDays(jDate, 2),
           status: 'Pending',
           added_by: userEmail,
           added_at: stamp,
@@ -5795,8 +5798,15 @@ function Dashboard({ userEmail, onSignOut }) {
                                                         {wipList.length - i}
                                                       </div>
                                                       <div className="item-content">
-                                                        <div className="item-title">
-                                                          {w.action_type}{' '}
+                                                      <div
+                                                          className="item-title"
+                                                          style={{
+                                                            whiteSpace:
+                                                              'pre-wrap',
+                                                          }}
+                                                        >
+                                                          {w.description ||
+                                                            '—'}{' '}
                                                           {w.status ===
                                                             'Done' && (
                                                             <span
@@ -5810,9 +5820,18 @@ function Dashboard({ userEmail, onSignOut }) {
                                                             </span>
                                                           )}
                                                         </div>
-                                                        <div className="item-sub">
-                                                          {w.description}
-                                                        </div>
+                                                        {w.action_type && (
+                                                          <div
+                                                            className="item-sub"
+                                                            style={{
+                                                              fontStyle:
+                                                                'italic',
+                                                              fontWeight: 400,
+                                                            }}
+                                                          >
+                                                            {w.action_type}
+                                                          </div>
+                                                        )}
                                                         {w.notes && (
                                                           <div
                                                             className="item-sub"
@@ -8182,8 +8201,7 @@ function Dashboard({ userEmail, onSignOut }) {
                 <div className="page-header-text">
                   <h2>⏳ WIP — Pending Items</h2>
                   <p>
-                    Everything awaiting action, across all cases. Grouped by
-                    case, most overdue first.
+                  Everything awaiting action, across all cases. Grouped by case, earliest case SLA date first.
                   </p>
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
@@ -8531,7 +8549,6 @@ function Dashboard({ userEmail, onSignOut }) {
                       if (
                         wipNoFollowUp &&
                         !(
-                          r.kind === 'WIP' &&
                           (!Array.isArray(r.follow_ups) ||
                             r.follow_ups.length === 0)
                         )
@@ -8637,6 +8654,9 @@ function Dashboard({ userEmail, onSignOut }) {
                                 style={{ fontSize: '12px', color: '#64748b' }}
                               >
                                 {list[0].pic || '—'}
+                                {slaMap.get(caseNum)
+                                  ? ` · SLA ${slaMap.get(caseNum)}`
+                                  : ''}
                                 {closed ? ` · ⚠️ ${list[0].case_status}` : ''}
                               </span>
                             </div>
@@ -8668,6 +8688,17 @@ function Dashboard({ userEmail, onSignOut }) {
                                         style={{ fontSize: '10px' }}
                                       >
                                         🔴 Breached {Math.abs(r.days)}d
+                                      </span>
+                                    ) : r.days === 0 ? (
+                                      <span
+                                        className="badge"
+                                        style={{
+                                          fontSize: '10px',
+                                          backgroundColor: '#ffedd5',
+                                          color: '#ea580c',
+                                        }}
+                                      >
+                                        🟠 Due today
                                       </span>
                                     ) : (
                                       <span
@@ -8711,7 +8742,21 @@ function Dashboard({ userEmail, onSignOut }) {
                                     <span
                                       style={{ flex: 1, minWidth: '200px' }}
                                     >
-                                      {r.description}
+                                        <b>{r.description}</b>
+                                      {r.kind === 'WIP' &&
+                                        r.action_type &&
+                                        r.action_type !== r.description && (
+                                          <div
+                                            style={{
+                                              fontSize: '11px',
+                                              color: '#64748b',
+                                              fontStyle: 'italic',
+                                              marginTop: '2px',
+                                            }}
+                                          >
+                                            {r.action_type}
+                                          </div>
+                                        )}
                                       {!many && r.who && (
                                         <div
                                           style={{
