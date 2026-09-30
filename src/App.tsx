@@ -5874,21 +5874,22 @@ function Dashboard({ userEmail, onSignOut }) {
                                                         <div className="expanded-label">
                                                           SLA Timer
                                                         </div>
-                                                        <span
-                                                          style={{
-                                                            fontWeight: 600,
-                                                            color:
-                                                              wipSlaDays < 0
-                                                                ? '#dc2626'
-                                                                : '#059669',
-                                                          }}
-                                                        >
-                                                          {wipSlaDays < 0
-                                                            ? `🔴 ${Math.abs(
-                                                                wipSlaDays
-                                                              )}wd`
-                                                            : `🟢 ${wipSlaDays}wd`}
-                                                        </span>
+                                                        {w.status === 'Done' ? (
+  <span style={{ fontWeight: 600, color: '#94a3b8' }}>
+    ✓ Done
+  </span>
+) : (
+  <span
+    style={{
+      fontWeight: 600,
+      color: wipSlaDays < 0 ? '#dc2626' : '#059669',
+    }}
+  >
+    {wipSlaDays < 0
+      ? `🔴 ${Math.abs(wipSlaDays)}wd`
+      : `🟢 ${wipSlaDays}wd`}
+  </span>
+)}
                                                       </div>
                                                       {(wipSlaDays < 0 ||
                                                         (Array.isArray(

@@ -1,6 +1,7 @@
 // @ts-nocheck
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { downloadCaseSummaryWord } from './caseSummaryWord';
 
 /* =========================================================
    CASE SUMMARY  —  multi-summary version (v2)
@@ -317,9 +318,7 @@ export default function CaseSummary({ supabase, caseRow, userEmail, isAdmin, onC
       )}
     </div>
   );
-  const clip = () => (
-    <button type="button" disabled title="Screenshots — coming in the next step" style={{ ...S.btn, ...S.btnDisabled, padding: '3px 10px' }}>📎 Attach</button>
-  );
+  const clip = () => null;
   const secHead = (title, extra) => (
     <div style={S.secHead}>
       <span>{title}</span>
@@ -356,7 +355,19 @@ export default function CaseSummary({ supabase, caseRow, userEmail, isAdmin, onC
             )}
             {view === 'form' && mayEdit && rec?.status === 'Final' && <button style={S.btn} onClick={unlock}>🔓 Unlock</button>}
             {view === 'form' && (
-              <button disabled title="Generate PDF — coming in a later step" style={{ ...S.btn, ...S.btnDisabled }}>📄 Generate PDF</button>
+              <button
+                style={S.btn}
+                title="Download this summary as a Word file"
+                onClick={async () => {
+                  try {
+                    await downloadCaseSummaryWord(data, rec, userEmail);
+                  } catch (e) {
+                    alert('Could not create Word file: ' + (e?.message || e));
+                  }
+                }}
+              >
+                📄 Generate Word
+              </button>
             )}
             <button style={S.btn} onClick={safeClose}>✕ Close</button>
           </div>
