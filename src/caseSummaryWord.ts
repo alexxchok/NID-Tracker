@@ -216,6 +216,28 @@ function actionRow(date: string, type: string, remarks: string, header = false) 
   });
 }
 
+// redraws any picture as a clean, standard PNG so Word can always display it
+async function loadImageAsPng(url: string): Promise<Uint8Array | null> {
+  try {
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    if (!blob.type.startsWith('image/')) return null; // got the app page, not a picture
+    const bmp = await createImageBitmap(blob);
+    const canvas = document.createElement('canvas');
+    canvas.width = bmp.width;
+    canvas.height = bmp.height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    ctx.drawImage(bmp, 0, 0);
+    const png: Blob | null = await new Promise((r) => canvas.toBlob(r, 'image/png'));
+    if (!png) return null;
+    return new Uint8Array(await png.arrayBuffer());
+  } catch {
+    return null; // if anything fails, the logo is simply left out
+  }
+}
+
 // ---------- main ----------
 export async function downloadCaseSummaryWord(data: any, rec: any, userEmail: string) {
   listInstance = 0;
@@ -227,7 +249,7 @@ export async function downloadCaseSummaryWord(data: any, rec: any, userEmail: st
   const actions: any[] = Array.isArray(d.actions) ? d.actions.filter((a: any) => a && (a.date || a.type || a.remarks)) : [];
 
   // pictures from the public folder
-  const logo = await loadImage('/qnet-header.png');
+  const logo = await loadImageAsPng('/qnet-header.png');
   const bg = await loadImage('/qnet-background.jpeg');
 
   // ----- HEADER (same on every page) -----
@@ -254,12 +276,13 @@ export async function downloadCaseSummaryWord(data: any, rec: any, userEmail: st
       new ImageRun({
         type: 'png',
         data: logo,
-        transformation: { width: 363, height: 90 },
+        transformation: { width: 400, height: 99 },
         floating: {
-          horizontalPosition: { relative: HorizontalPositionRelativeFrom.COLUMN, offset: -999490 },
-          verticalPosition: { relative: VerticalPositionRelativeFrom.PARAGRAPH, offset: -476250 },
-          behindDocument: true,
-          zIndex: 2, // logo sits ON TOP of the background
+          // fixed spot measured from the top-left corner of the page
+          horizontalPosition: { relative: HorizontalPositionRelativeFrom.PAGE, offset: 320040 }, // ~0.35 inch from left edge
+          verticalPosition: { relative: VerticalPositionRelativeFrom.PAGE, offset: 228600 },     // ~0.25 inch from top edge
+          behindDocument: false, // in FRONT of the background, so it can't be hidden
+          zIndex: 10,
           allowOverlap: true,
           wrap: { type: TextWrappingType.NONE },
         },
