@@ -19,7 +19,11 @@ const PUBLIC_HOLIDAYS = [];
 const STANDARD_CASE_SLA_DAYS = 30;
 
 const isHoliday = (dateObj) => {
-  const dateStr = dateObj.toISOString().split('T')[0];
+  // Use local (Malaysia) date, not UK/UTC date
+  const y = dateObj.getFullYear();
+  const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+  const d = String(dateObj.getDate()).padStart(2, '0');
+  const dateStr = `${y}-${m}-${d}`;
   return PUBLIC_HOLIDAYS.includes(dateStr);
 };
 
@@ -285,7 +289,7 @@ function Dashboard({ userEmail, onSignOut }) {
   const [wipActionType, setWipActionType] = useState('');
   const [wipDesc, setWipDesc] = useState('');
   const [wipDateSent, setWipDateSent] = useState(
-    new Date().toISOString().split('T')[0]
+    toLocalDateStr(new Date())
   );
   const [wipSlaDays, setWipSlaDays] = useState(2);
   const [wipNotes, setWipNotes] = useState('');
@@ -294,7 +298,7 @@ function Dashboard({ userEmail, onSignOut }) {
   const [addingDaFor, setAddingDaFor] = useState(null);
   const [newDaAction, setNewDaAction] = useState('');
   const [newDaDate, setNewDaDate] = useState(
-    new Date().toISOString().split('T')[0]
+    toLocalDateStr(new Date())
   );
   const [expandedDAs, setExpandedDAs] = useState({});
   const [newViolation, setNewViolation] = useState({});
@@ -310,7 +314,7 @@ function Dashboard({ userEmail, onSignOut }) {
   const [addingSubAction, setAddingSubAction] = useState(null);
   const [newSubActionDesc, setNewSubActionDesc] = useState('');
   const [newSubActionDate, setNewSubActionDate] = useState(
-    new Date().toISOString().split('T')[0]
+    toLocalDateStr(new Date())
   );
   const [newSubActionSla, setNewSubActionSla] = useState(2);
   const [editingSubActionEntry, setEditingSubActionEntry] = useState(null);
@@ -664,7 +668,7 @@ function Dashboard({ userEmail, onSignOut }) {
               if (!slaDue) {
                 const base = created ? new Date(created) : new Date();
                 base.setDate(base.getDate() + 30);
-                slaDue = base.toISOString().split('T')[0];
+                slaDue = toLocalDateStr(base);
               }
               if (personName || personId) {
                 const pr = {
@@ -901,14 +905,14 @@ function Dashboard({ userEmail, onSignOut }) {
           )
           .map((cn) => {
             const today = new Date();
-            const slaDate = new Date(today.setDate(today.getDate() + 30))
-              .toISOString()
-              .split('T')[0];
+            const slaDate = toLocalDateStr(
+              new Date(today.setDate(today.getDate() + 30))
+            );
             return {
               case_number: cn,
               case_status: 'IN PROGRESS',
               sla_due_date: slaDate,
-              created_on: new Date().toISOString().split('T')[0],
+              created_on: toLocalDateStr(new Date()),
               priority: 'Medium',
               stage: 'Stage 1',
             };
@@ -1047,7 +1051,7 @@ function Dashboard({ userEmail, onSignOut }) {
 
   const handleAddCase = async (e) => {
     e.preventDefault();
-    const today = new Date().toISOString().split('T')[0];
+    const today = toLocalDateStr(new Date());
     const slaDate = addBusinessDays(today, newSlaDays);
     const priority = calculatePriority(slaDate);
     const { error } = await supabase.from('cases').insert([
@@ -1079,7 +1083,7 @@ function Dashboard({ userEmail, onSignOut }) {
       .update({
         case_status: closeStatus,
         priority: 'Low',
-        date_completed: new Date().toISOString().split('T')[0],
+        date_completed: toLocalDateStr(new Date()),
         modified_by_email: userEmail,
         last_modified: new Date().toISOString(),
       })
@@ -1162,7 +1166,7 @@ function Dashboard({ userEmail, onSignOut }) {
         last_modified: stamp,
       };
       if (isClosed(caseForm.case_status) && !isClosed(c.case_status)) {
-        limited.date_completed = new Date().toISOString().split('T')[0];
+        limited.date_completed = toLocalDateStr(new Date());
         if (caseForm.priority === c.priority) limited.priority = 'Low';
       } else if (!isClosed(caseForm.case_status) && isClosed(c.case_status)) {
         limited.date_completed = null;
@@ -1319,7 +1323,7 @@ function Dashboard({ userEmail, onSignOut }) {
     if (isClosed(caseForm.case_status) && !isClosed(c.case_status)) {
       updates.date_completed =
         cleanVal(caseForm.date_completed) ||
-        new Date().toISOString().split('T')[0];
+        toLocalDateStr(new Date());
       if (caseForm.priority === c.priority) updates.priority = 'Low';
     } else if (isClosed(caseForm.case_status) && isClosed(c.case_status)) {
       if (caseForm.date_completed !== (c.date_completed || '')) {
@@ -1414,16 +1418,41 @@ function Dashboard({ userEmail, onSignOut }) {
       modified_by_email: userEmail,
       last_modified: new Date().toISOString(),
     };
-    // Keep unique_key in sync when the ID changes (so future Excel uploads match)
-    if (newId && newId !== oldDa?.respondent_id) {
-      updates.unique_key = `${selectedCase}|${newId}`;
+    // Keep unique_key in the SAME format as the Excel upload:
+    //   case | respondent | complainant   (respondent sheet)
+    //   case | respondent                 (India / no complainant)
+    // Also repairs old 2-part tags left behind by the previous code.
+    const oldKey = String(oldDa?.unique_key || '');
+    const parts = oldKey.split('|');
+    const isIndia = selectedCase.toUpperCase().startsWith('CVN');
+    const compPart = oldDa?.complainant_id || oldDa?.complainant_name || null;
+    let rebuiltKey = null;
+    if (newId && !oldKey.includes('_')) {
+      if (parts.length >= 3) {
+        parts[1] = newId;
+        rebuiltKey = parts.join('|');
+      } else if (compPart && !isIndia) {
+        rebuiltKey = `${selectedCase}|${newId}|${compPart}`;
+      } else {
+        rebuiltKey = `${selectedCase}|${newId}`;
+      }
+    }
+    if (rebuiltKey && rebuiltKey !== oldKey) {
+      updates.unique_key = rebuiltKey;
     }
     const { error } = await supabase
       .from('disciplinary_actions')
       .update(updates)
       .eq('id', daId);
-    if (error) alert('Error updating respondent: ' + error.message);
-    else {
+    if (error) {
+      if ((error.message || '').toLowerCase().includes('duplicate')) {
+        alert(
+          'Another record in this case already uses this respondent ID (a duplicate already exists).\n\nPlease check the case for a second copy of this respondent and tell your admin.'
+        );
+      } else {
+        alert('Error updating respondent: ' + error.message);
+      }
+    } else {
       setEditingRespondentId(null);
       refreshDaList();
     }
@@ -1431,7 +1460,7 @@ function Dashboard({ userEmail, onSignOut }) {
   const resetWipForm = () => {
     setWipActionType('');
     setWipDesc('');
-    setWipDateSent(new Date().toISOString().split('T')[0]);
+    setWipDateSent(toLocalDateStr(new Date()));
     setWipSlaDays(2);
     setWipNotes('');
     setEditingWipId(null);
@@ -1530,7 +1559,7 @@ function Dashboard({ userEmail, onSignOut }) {
 
   const handleAddFollowUp = async (wipId) => {
     const theDate =
-      followUpDates[wipId] || new Date().toISOString().split('T')[0];
+      followUpDates[wipId] || toLocalDateStr(new Date());
     if (!theDate) {
       alert('Please pick a follow-up date first.');
       return;
@@ -1574,7 +1603,7 @@ function Dashboard({ userEmail, onSignOut }) {
       return;
     }
     const theDate =
-      followUpDates[wipId] || new Date().toISOString().split('T')[0];
+      followUpDates[wipId] || toLocalDateStr(new Date());
     if (!theDate) {
       alert('Please pick a follow-up date first.');
       return;
@@ -1619,7 +1648,7 @@ function Dashboard({ userEmail, onSignOut }) {
     }
     const key = `J|${rows[0].da_id}|${rows[0].h_idx}|${rows[0].sa_idx}`;
     const theDate =
-      followUpDates[key] || new Date().toISOString().split('T')[0];
+      followUpDates[key] || toLocalDateStr(new Date());
     setFollowUpBusy(key);
     const entry = {
       date: theDate,
@@ -1854,7 +1883,7 @@ function Dashboard({ userEmail, onSignOut }) {
 
     setAddingDaFor(null);
     setNewDaAction('');
-    setNewDaDate(new Date().toISOString().split('T')[0]);
+    setNewDaDate(toLocalDateStr(new Date()));
     setBulkActionMode(false);
     setBulkActionTargets({});
     setBulkJournalText('');
@@ -1987,7 +2016,7 @@ function Dashboard({ userEmail, onSignOut }) {
     else {
       setAddingSubAction(null);
       setNewSubActionDesc('');
-      setNewSubActionDate(new Date().toISOString().split('T')[0]);
+      setNewSubActionDate(toLocalDateStr(new Date()));
       refreshDaList();
     }
   };
@@ -2108,7 +2137,7 @@ function Dashboard({ userEmail, onSignOut }) {
     if (!window.confirm(msg)) return;
 
     const da = daList.find((d) => d.id === daId);
-    const today = new Date().toISOString().split('T')[0];
+    const today = toLocalDateStr(new Date());
     const history = (da?.action_history || []).map((h, i, arr) =>
       i === arr.length - 1
         ? {
@@ -2421,6 +2450,32 @@ function Dashboard({ userEmail, onSignOut }) {
     }
   };
 
+  // ==== DA In Force: latest action determines if the DA is still active ====
+  // Release or Termination = resolved, no longer in force
+  const isDAResolving = (da) => {
+    const action = (da?.current_action || '').toLowerCase();
+    return action.includes('release') || action.includes('terminat');
+  };
+
+  const isDAInForce = (da) => {
+    if (!da) return false;
+    const action = (da.current_action || '').toLowerCase();
+    const prev = (da.previous_action || '').toLowerCase();
+
+    if (isDAResolving(da)) {
+      // A release or termination only takes effect once confirmed.
+      if (da.da_confirmed === true) return false;
+      // Not yet approved — the earlier action still governs.
+      return prev.includes('suspend');
+    }
+
+    // Only suspensions count. Other actions (SCO/SCN, warning letters, reinstatements)
+    // are tracked via WIP, not the DA count.
+    // Only suspensions count, and only once confirmed as approved and in force.
+    // Unapproved suspensions are tracked via WIP until the notice is issued.
+    if (!action.includes('suspend')) return false;
+    return da.da_confirmed === true;
+  };
   const requestSort = (key) => {
     let direction = 'ascending';
     if (sortConfig.key === key && sortConfig.direction === 'ascending')
@@ -2484,6 +2539,19 @@ function Dashboard({ userEmail, onSignOut }) {
           a.wip_actions?.filter((w) => w.status === 'Pending').length || 0;
         const bCount =
           b.wip_actions?.filter((w) => w.status === 'Pending').length || 0;
+        return sortConfig.direction === 'ascending'
+          ? aCount - bCount
+          : bCount - aCount;
+      });
+    } else if (sortConfig.key === 'da_in_force') {
+      // FIX: "DA In Force" is not stored on the case, it is worked out.
+      // Count each case's DAs in force (same rule as the DA In Force filter)
+      // and sort by that number.
+      const countInForce = (c) =>
+        (c.disciplinary_actions || []).filter(isDAInForce).length;
+      sortableCases.sort((a, b) => {
+        const aCount = countInForce(a);
+        const bCount = countInForce(b);
         return sortConfig.direction === 'ascending'
           ? aCount - bCount
           : bCount - aCount;
@@ -2552,50 +2620,41 @@ function Dashboard({ userEmail, onSignOut }) {
     currentPage * pageSize
   );
 
-  const totalCases = cases.length;
-  const inProgress = cases.filter(
-    (c) => c.case_status === 'IN PROGRESS'
-  ).length;
-  const completed = cases.filter((c) => c.case_status === 'COMPLETED').length;
-  const cancelled = cases.filter((c) => c.case_status === 'CANCELLED').length;
-  // PERF FIX: was recalculated on every render (including every keystroke anywhere
-  // in the Dashboard). Now only recalculates when `cases` actually changes.
-  const outOfSlaCases = React.useMemo(
+  // ==== Dashboard counts: use the SAME cases as the Cases tab ====
+  // Unpromoted CVN (India staging) cases are excluded, matching filteredCases.
+  const liveCases = React.useMemo(
     () =>
       cases.filter(
+        (c) =>
+          !(
+            (c.case_number || '').toUpperCase().startsWith('CVN') &&
+            !c.promoted
+          )
+      ),
+    [cases]
+  );
+  const totalCases = liveCases.length;
+  const inProgress = liveCases.filter(
+    (c) => c.case_status === 'IN PROGRESS'
+  ).length;
+  const completed = liveCases.filter(
+    (c) => c.case_status === 'COMPLETED'
+  ).length;
+  const cancelled = liveCases.filter(
+    (c) => c.case_status === 'CANCELLED'
+  ).length;
+  // PERF FIX: only recalculates when `cases` actually changes.
+  const outOfSlaCases = React.useMemo(
+    () =>
+      liveCases.filter(
         (c) =>
           calculateBusinessDays(c.sla_due_date) < 0 &&
           c.case_status === 'IN PROGRESS'
       ),
-    [cases]
+    [liveCases]
   );
 
-  // ==== DA In Force: latest action determines if the DA is still active ====
-  // Release or Termination = resolved, no longer in force
-  const isDAResolving = (da) => {
-    const action = (da?.current_action || '').toLowerCase();
-    return action.includes('release') || action.includes('terminat');
-  };
-
-  const isDAInForce = (da) => {
-    if (!da) return false;
-    const action = (da.current_action || '').toLowerCase();
-    const prev = (da.previous_action || '').toLowerCase();
-
-    if (isDAResolving(da)) {
-      // A release or termination only takes effect once confirmed.
-      if (da.da_confirmed === true) return false;
-      // Not yet approved — the earlier action still governs.
-      return prev.includes('suspend');
-    }
-
-    // Only suspensions count. Other actions (SCO/SCN, warning letters, reinstatements)
-    // are tracked via WIP, not the DA count.
-    // Only suspensions count, and only once confirmed as approved and in force.
-    // Unapproved suspensions are tracked via WIP until the notice is issued.
-    if (!action.includes('suspend')) return false;
-    return da.da_confirmed === true;
-  };
+  
   const getActionColor = (action) => {
     if (!action) return { text: '#64748b', bg: '#f1f5f9' };
     const lower = action.toLowerCase();
@@ -2866,21 +2925,32 @@ function Dashboard({ userEmail, onSignOut }) {
   const handleDeleteStagingCase = async (caseNum) => {
     if (
       !window.confirm(
-        `Delete staging case ${caseNum}?\n\nThis removes the case and its respondent records permanently.`
+        `Delete staging case ${caseNum}?\n\nThis removes the case, its respondents, complainants and WIP actions permanently.`
       )
     )
       return;
-    await supabase
-      .from('disciplinary_actions')
-      .delete()
-      .eq('case_number', caseNum);
-    await supabase.from('wip_actions').delete().eq('case_number', caseNum);
-    const { error } = await supabase
-      .from('cases')
-      .delete()
-      .eq('case_number', caseNum);
-    if (error) alert('Error deleting: ' + error.message);
-    else fetchCases(true);
+    // Delete in order: child records first, then the case itself.
+    // If any step fails, stop so the case is never half-deleted.
+    const steps = [
+      'wip_actions',
+      'case_complainants',
+      'disciplinary_actions',
+      'cases',
+    ];
+    for (const table of steps) {
+      const { error } = await supabase
+        .from(table)
+        .delete()
+        .eq('case_number', caseNum);
+      if (error) {
+        alert(
+          `Could not delete ${caseNum}.\n\nStopped at: ${table}\nReason: ${error.message}\n\nNothing after this step was deleted.`
+        );
+        fetchCases(true);
+        return;
+      }
+    }
+    fetchCases(true);
   };
   const handleBulkDeleteNoId = async () => {
     const noIdCases = indiaStaging.filter(
@@ -2892,19 +2962,48 @@ function Dashboard({ userEmail, onSignOut }) {
     }
     if (
       !window.confirm(
-        `Delete ${noIdCases.length} cases without ID#?\n\nThese cannot be matched to any person.`
+        `Delete ${noIdCases.length} cases without ID#?\n\nThese cannot be matched to any person.\n\nTheir WIP actions and complainant records will also be deleted.`
       )
     )
       return;
+
+    let deleted = 0;
+    const failed = [];
     for (const c of noIdCases) {
-      await supabase
-        .from('disciplinary_actions')
-        .delete()
-        .eq('case_number', c.case_number);
-      await supabase.from('cases').delete().eq('case_number', c.case_number);
+      const cn = c.case_number;
+      // Delete in order: child records first, then the case itself.
+      // If any step fails, stop for this case so it is never half-deleted.
+      const steps = [
+        'wip_actions',
+        'case_complainants',
+        'disciplinary_actions',
+        'cases',
+      ];
+      let ok = true;
+      for (const table of steps) {
+        const { error } = await supabase
+          .from(table)
+          .delete()
+          .eq('case_number', cn);
+        if (error) {
+          failed.push(`${cn} (${table}: ${error.message})`);
+          ok = false;
+          break;
+        }
+      }
+      if (ok) deleted++;
     }
+
     fetchCases(true);
-    alert(`Deleted ${noIdCases.length} cases without ID#.`);
+    if (failed.length === 0) {
+      alert(`Deleted ${deleted} cases without ID# (including their WIP actions).`);
+    } else {
+      alert(
+        `Deleted ${deleted} cases.\n\n${failed.length} could not be deleted:\n` +
+          failed.slice(0, 10).join('\n') +
+          (failed.length > 10 ? `\n...and ${failed.length - 10} more` : '')
+      );
+    }
   };
 
   const [indiaSelectedCases, setIndiaSelectedCases] = useState({});
@@ -3282,8 +3381,7 @@ function Dashboard({ userEmail, onSignOut }) {
       );
       if (!sheetName) {
         setWipImportMsg('❌ No sheet named "WIP_Tracker" found in this file.');
-        setWipImportBusy(false);
-        return;
+        return; // the "finally" below still resets the screen
       }
 
       const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], {
@@ -3314,15 +3412,34 @@ function Dashboard({ userEmail, onSignOut }) {
         });
       });
 
+      if (parsed.length === 0) {
+        setWipImportMsg(
+          '❌ The WIP_Tracker sheet was found, but no rows with a Case Number (column B) and Description (column D) were found from row 7 down.'
+        );
+        return;
+      }
+
       setWipImportRows(parsed);
       setWipImportMsg(
         `Found ${parsed.length} row(s). Checking against the app...`
       );
       await validateWipImport(parsed);
-    } catch (err) {}
-
-    setWipImportBusy(false);
-    e.target.value = '';
+    } catch (err) {
+      // FIX: previously this was empty, so failures were silent.
+      const msg = (err && err.message) || String(err);
+      setWipImportMsg(
+        '❌ WIP import failed: ' +
+          msg +
+          '\n\nNothing was imported. Please check the file and try again.'
+      );
+      setWipImportRows([]);
+      setWipImportValidating(false);
+      alert('WIP import failed:\n\n' + msg);
+    } finally {
+      // Always runs, so the screen never stays stuck on "busy".
+      setWipImportBusy(false);
+      e.target.value = '';
+    }
   };
   const validateWipImport = async (rows) => {
     setWipImportValidating(true);
@@ -5952,11 +6069,7 @@ function Dashboard({ userEmail, onSignOut }) {
                                                                   followUpDates[
                                                                     w.id
                                                                   ] ||
-                                                                  new Date()
-                                                                    .toISOString()
-                                                                    .split(
-                                                                      'T'
-                                                                    )[0]
+                                                                  toLocalDateStr(new Date())
                                                                 }
                                                                 onChange={(e) =>
                                                                   setFollowUpDates(
@@ -8164,7 +8277,7 @@ function Dashboard({ userEmail, onSignOut }) {
                       </tbody>
                     </table>
 
-                    <div className="pagination">
+              <div className="pagination">
                       <button
                         onClick={() =>
                           setCurrentPage((prev) => Math.max(1, prev - 1))
@@ -8175,6 +8288,16 @@ function Dashboard({ userEmail, onSignOut }) {
                         ← Previous
                       </button>
                       <span style={{ color: '#64748b', fontSize: '13px' }}>
+                        {sortedCases.length === 0
+                          ? 'Showing 0 cases'
+                          : `Showing ${(
+                              (currentPage - 1) * pageSize +
+                              1
+                            ).toLocaleString()}–${Math.min(
+                              currentPage * pageSize,
+                              sortedCases.length
+                            ).toLocaleString()} of ${sortedCases.length.toLocaleString()} cases`}
+                        {'  ·  '}
                         Page {currentPage} of {totalPages || 1}
                       </span>
                       <button
@@ -8188,7 +8311,7 @@ function Dashboard({ userEmail, onSignOut }) {
                         }
                         className="btn-page"
                       >
-                        Next →
+                         Next →
                       </button>
                     </div>
                   </>
@@ -8833,9 +8956,7 @@ function Dashboard({ userEmail, onSignOut }) {
                                             type="date"
                                             value={
                                               followUpDates[r.wip_id] ||
-                                              new Date()
-                                                .toISOString()
-                                                .split('T')[0]
+                                              toLocalDateStr(new Date())
                                             }
                                             onChange={(ev) =>
                                               setFollowUpDates((p) => ({
@@ -8889,9 +9010,7 @@ function Dashboard({ userEmail, onSignOut }) {
                                               type="date"
                                               value={
                                                 followUpDates[jKey] ||
-                                                new Date()
-                                                  .toISOString()
-                                                  .split('T')[0]
+                                                toLocalDateStr(new Date())
                                               }
                                               onChange={(ev) =>
                                                 setFollowUpDates((p) => ({
